@@ -61,6 +61,12 @@ Game.prototype = {
             //callback for when a snake is destroyed
             snake.addDestroyedCallback(this.snakeDestroyed, this);
         }
+
+        // --- Minimap setup ---
+        this.minimapSize = 180; // px
+        this.minimapPadding = 16; // px from screen edge
+        this.minimapGraphics = this.game.add.graphics(0, 0);
+        this.minimapGraphics.fixedToCamera = true;
     },
     /**
      * Main update loop
@@ -74,6 +80,9 @@ Game.prototype = {
             var f = this.foodGroup.children[i];
             f.food.update();
         }
+
+        // --- Minimap update ---
+        this.drawMinimap();
     },
     /**
      * Create a piece of food at a point
@@ -96,6 +105,53 @@ Game.prototype = {
                 snake.headPath[i].x + Util.randomInt(-10,10),
                 snake.headPath[i].y + Util.randomInt(-10,10)
             );
+        }
+    },
+    drawMinimap: function() {
+        // Clear previous minimap
+        this.minimapGraphics.clear();
+
+        // Minimap position and size
+        var size = this.minimapSize;
+        var pad = this.minimapPadding;
+        var x = this.game.width - size - pad;
+        var y = pad;
+
+        // World bounds
+        var bounds = this.game.world.bounds;
+
+        // Draw minimap background
+        this.minimapGraphics.beginFill(0x222222, 0.7);
+        this.minimapGraphics.drawRect(x, y, size, size);
+        this.minimapGraphics.endFill();
+
+        // Draw world border
+        this.minimapGraphics.lineStyle(2, 0xffffff, 1);
+        this.minimapGraphics.drawRect(x, y, size, size);
+
+        // Draw food
+        for (var i = 0; i < this.foodGroup.children.length; i++) {
+            var foodSprite = this.foodGroup.children[i];
+            var fx = x + ((foodSprite.x - bounds.x) / bounds.width) * size;
+            var fy = y + ((foodSprite.y - bounds.y) / bounds.height) * size;
+            this.minimapGraphics.beginFill(0xffff00, 1); // yellow for food
+            this.minimapGraphics.drawCircle(fx, fy, 3);
+            this.minimapGraphics.endFill();
+        }
+
+        // Draw snakes (player and bots)
+        for (var i = 0; i < this.game.snakes.length; i++) {
+            var snake = this.game.snakes[i];
+            var head = snake.head;
+            var color = (i === 0) ? 0x00ff00 : 0xff0000; // Player is green, bots red
+
+            // Map world position to minimap
+            var mx = x + ((head.x - bounds.x) / bounds.width) * size;
+            var my = y + ((head.y - bounds.y) / bounds.height) * size;
+
+            this.minimapGraphics.beginFill(color, 1);
+            this.minimapGraphics.drawCircle(mx, my, 6);
+            this.minimapGraphics.endFill();
         }
     }
 };
