@@ -49,11 +49,14 @@ Game.prototype = {
         var snake = new PlayerSnake(this.game, 'circle', 0, 0);
         this.game.camera.follow(snake.head);
 
-        //create bots
-        new BotSnake(this.game, 'circle', -200, 0);
-        new BotSnake(this.game, 'circle', 200, 0);
-        new BotSnake(this.game, 'circle', -400, 0);
-        new BotSnake(this.game, 'circle', 400, 0);
+        // --- Create bots at random positions ---
+        var botCount = 20; // or any number you want
+        var bounds = this.game.world.bounds;
+        for (var i = 0; i < botCount; i++) {
+            var bx = Util.randomInt(bounds.x, bounds.x + bounds.width);
+            var by = Util.randomInt(bounds.y, bounds.y + bounds.height);
+            new BotSnake(this.game, 'circle', bx, by);
+        }
 
         //initialize snake groups and collision
         for (var i = 0 ; i < this.game.snakes.length ; i++) {
