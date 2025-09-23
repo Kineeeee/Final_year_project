@@ -17,9 +17,8 @@ Game.prototype = {
         var width = this.game.width;   // chiều rộng của canvas (màn hình hiển thị)
         var height = this.game.height; // chiều cao của canvas
 
-
         this.game.world.setBounds(-width*4, -height*4, width*8, height*8);
-    	this.game.stage.backgroundColor = '#444';
+        this.game.stage.backgroundColor = '#444';
 
         //add tilesprite background
         var background = this.game.add.tileSprite(
@@ -36,9 +35,12 @@ Game.prototype = {
         this.snakeHeadCollisionGroup = this.game.physics.p2.createCollisionGroup();
         this.foodCollisionGroup = this.game.physics.p2.createCollisionGroup();
 
-        //add food randomly
-        for (var i = 0 ; i < 100 ; i++) {
-            this.initFood(Util.randomInt(-width, width), Util.randomInt(-height, height));
+        // --- FIX: add food randomly across the entire world bounds ---
+        var bounds = this.game.world.bounds;
+        for (var i = 0 ; i < 350 ; i++) {
+            var fx = Util.randomInt(bounds.x, bounds.x + bounds.width);
+            var fy = Util.randomInt(bounds.y, bounds.y + bounds.height);
+            this.initFood(fx, fy);
         }
 
         this.game.snakes = [];
@@ -79,6 +81,18 @@ Game.prototype = {
         for (var i = this.foodGroup.children.length - 1 ; i >= 0 ; i--) {
             var f = this.foodGroup.children[i];
             f.food.update();
+        }
+
+        // --- Auto fill food if below threshold ---
+        var minFoodCount = 350;
+        if (this.foodGroup.children.length < minFoodCount) {
+            var bounds = this.game.world.bounds;
+            var toAdd = minFoodCount - this.foodGroup.children.length;
+            for (var i = 0; i < toAdd; i++) {
+                var fx = Util.randomInt(bounds.x, bounds.x + bounds.width);
+                var fy = Util.randomInt(bounds.y, bounds.y + bounds.height);
+                this.initFood(fx, fy);
+            }
         }
 
         // --- Minimap update ---
