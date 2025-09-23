@@ -142,16 +142,12 @@ Game.prototype = {
         this.minimapGraphics.drawRect(x, y, size, size);
         this.minimapGraphics.endFill();
 
-        // Draw world border
-        this.minimapGraphics.lineStyle(2, 0xffffff, 1);
-        this.minimapGraphics.drawRect(x, y, size, size);
-
-        // Draw food
+        // Draw every single food as a white dot
         for (var i = 0; i < this.foodGroup.children.length; i++) {
             var foodSprite = this.foodGroup.children[i];
             var fx = x + ((foodSprite.x - bounds.x) / bounds.width) * size;
             var fy = y + ((foodSprite.y - bounds.y) / bounds.height) * size;
-            this.minimapGraphics.beginFill(0xffff00, 1); // yellow for food
+            this.minimapGraphics.beginFill(0xffffff, 1); // white for food
             this.minimapGraphics.drawCircle(fx, fy, 3);
             this.minimapGraphics.endFill();
         }
@@ -170,5 +166,9 @@ Game.prototype = {
             this.minimapGraphics.drawCircle(mx, my, 6);
             this.minimapGraphics.endFill();
         }
+
+        // Draw world border LAST to ensure it's always visible
+        this.minimapGraphics.lineStyle(2, 0xffffff, 1);
+        this.minimapGraphics.drawRect(x, y, size, size);
     }
 };
