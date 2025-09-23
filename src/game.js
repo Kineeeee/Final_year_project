@@ -14,15 +14,21 @@ Game.prototype = {
         this.game.load.image('food', 'asset/hex.png');
     },
     create: function() {
-        var width = this.game.width;
-        var height = this.game.height;
+        var width = this.game.width;   // chiều rộng của canvas (màn hình hiển thị)
+        var height = this.game.height; // chiều cao của canvas
 
-        this.game.world.setBounds(-width, -height, width*2, height*2);
+
+        this.game.world.setBounds(-width*4, -height*4, width*8, height*8);
     	this.game.stage.backgroundColor = '#444';
 
         //add tilesprite background
-        var background = this.game.add.tileSprite(-width, -height,
-            this.game.world.width, this.game.world.height, 'background');
+        var background = this.game.add.tileSprite(
+            this.game.world.bounds.x,
+            this.game.world.bounds.y,
+            this.game.world.bounds.width,
+            this.game.world.bounds.height,
+            'background'
+        );
 
         //initialize physics and groups
         this.game.physics.startSystem(Phaser.Physics.P2JS);
@@ -44,6 +50,8 @@ Game.prototype = {
         //create bots
         new BotSnake(this.game, 'circle', -200, 0);
         new BotSnake(this.game, 'circle', 200, 0);
+        new BotSnake(this.game, 'circle', -400, 0);
+        new BotSnake(this.game, 'circle', 400, 0);
 
         //initialize snake groups and collision
         for (var i = 0 ; i < this.game.snakes.length ; i++) {
