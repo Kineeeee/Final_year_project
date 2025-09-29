@@ -84,14 +84,7 @@ Snake.prototype = {
             //add a point to the head path so that the section stays there
             this.headPath.push(new Phaser.Point(x,y));
         }
-
     },
-    /**
-     * Add a section to the snake at a given position
-     * @param  {Number} x coordinate
-     * @param  {Number} y coordinate
-     * @return {Phaser.Sprite}   new section
-     */
     addSectionAtPosition: function(x, y) {
         //initialize a new section
         var sec = this.game.add.sprite(x, y, this.spriteKey);
@@ -280,22 +273,34 @@ Snake.prototype = {
      * Destroy the snake
      */
     destroy: function() {
-        this.game.snakes.splice(this.game.snakes.indexOf(this), 1);
-        //remove constraints
-        this.game.physics.p2.removeConstraint(this.edgeLock);
-        this.edge.destroy();
-        //destroy food that is constrained to the snake head
-        for (var i = this.food.length - 1 ; i >= 0 ; i--) {
-            this.food[i].destroy();
+        // Remove from game.snakes array if present
+        if (this.game && this.game.snakes) {
+            var idx = this.game.snakes.indexOf(this);
+            if (idx !== -1) {
+                this.game.snakes.splice(idx, 1);
+            }
         }
-        //destroy everything else
-        this.sections.forEach(function(sec, index) {
-            sec.destroy();
-        });
-        this.eyes.destroy();
-        this.shadow.destroy();
+        // Remove constraints
+        if (this.game.physics && this.game.physics.p2 && this.edgeLock) {
+            this.game.physics.p2.removeConstraint(this.edgeLock);
+        }
+        if (this.edge) this.edge.destroy();
+        // Destroy food that is constrained to the snake head
+        if (this.food) {
+            for (var i = this.food.length - 1 ; i >= 0 ; i--) {
+                if (this.food[i] && this.food[i].destroy) this.food[i].destroy();
+            }
+        }
+        // Destroy everything else
+        if (this.sections) {
+            this.sections.forEach(function(sec, index) {
+                if (sec && sec.destroy) sec.destroy();
+            });
+        }
+        if (this.eyes && this.eyes.destroy) this.eyes.destroy();
+        if (this.shadow && this.shadow.destroy) this.shadow.destroy();
 
-        //call this snake's destruction callbacks
+        // Call this snake's destruction callbacks
         for (var i = 0 ; i < this.onDestroyedCallbacks.length ; i++) {
             if (typeof this.onDestroyedCallbacks[i] == "function") {
                 this.onDestroyedCallbacks[i].apply(

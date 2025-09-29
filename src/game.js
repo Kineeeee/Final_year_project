@@ -13,6 +13,9 @@ Game.prototype = {
 
         this.game.load.image('food', 'asset/hex.png');
     },
+    init: function(playerName) {
+        this.playerName = playerName || ('Player' + Math.floor(Math.random() * 10000));
+    },
     create: function() {
         var width = this.game.width;
         var height = this.game.height;
@@ -84,8 +87,12 @@ Game.prototype = {
 
         this.game.snakes = [];
 
+        // Leaderboard data
+        this.leaderboard = [];
+
         //create player
         var snake = new PlayerSnake(this.game, 'circle', 0, 0);
+        snake.playerName = this.playerName;
         this.game.camera.follow(snake.head);
 
         // --- Create bots at random positions ---
@@ -94,7 +101,8 @@ Game.prototype = {
         for (var i = 0; i < botCount; i++) {
             var bx = Util.randomInt(bounds.x, bounds.x + bounds.width);
             var by = Util.randomInt(bounds.y, bounds.y + bounds.height);
-            new BotSnake(this.game, 'circle', bx, by);
+            var botSnake = new BotSnake(this.game, 'circle', bx, by);
+            botSnake.playerName = 'Bot' + (i+1);
         }
 
         //initialize snake groups and collision
@@ -107,6 +115,15 @@ Game.prototype = {
             //callback for when a snake is destroyed
             snake.addDestroyedCallback(this.snakeDestroyed, this);
         }
+
+        // Leaderboard text
+        this.leaderboardText = this.game.add.text(16, 16, '', {
+            font: '20px Arial',
+            fill: '#fff',
+            stroke: '#222',
+            strokeThickness: 2
+        });
+        this.leaderboardText.fixedToCamera = true;
 
         // --- Minimap setup ---
         this.minimapSize = 180; // px
@@ -126,6 +143,32 @@ Game.prototype = {
             var f = this.foodGroup.children[i];
             f.food.update();
         }
+
+        // Update leaderboard
+        this.updateLeaderboard();
+        // ...existing code...
+    },
+
+    updateLeaderboard: function() {
+        // Collect all snakes and their scores
+        var scores = [];
+        for (var i = 0; i < this.game.snakes.length; i++) {
+            var snake = this.game.snakes[i];
+            var name = snake.playerName || ('Bot' + (i+1));
+            var score = Math.round(snake.snakeLength || 0);
+            scores.push({ name: name, score: score });
+        }
+        // Sort by score descending
+        scores.sort(function(a, b) { return b.score - a.score; });
+        // Take top 10
+        var topScores = scores.slice(0, 10);
+        // Build leaderboard string
+        var lbStr = 'LEADERBOARD\n';
+        for (var i = 0; i < topScores.length; i++) {
+            lbStr += (i+1) + '. ' + topScores[i].name + ' - ' + topScores[i].score + '\n';
+        }
+        this.leaderboardText.text = lbStr;
+    // ...existing code...
 
         // --- Remove excess food after 1 minute if more than 350 exist ---
         var minFoodCount = 350;
