@@ -1,6 +1,10 @@
 var MenuState = function(game) {};
 
 MenuState.prototype = {
+    init: function(args) {
+        // Nhận kỷ lục từ state chuyển sang
+        this.lastScore = args && args.lastScore !== undefined ? args.lastScore : null;
+    },
     create: function() {
         // Nền màu gradient đơn giản
         this.game.stage.backgroundColor = '#222';
@@ -9,8 +13,8 @@ MenuState.prototype = {
         bg.drawRect(0, 0, this.game.width, this.game.height);
         bg.endFill();
 
-        var centerX = this.game.world.centerX;
-        var centerY = this.game.world.centerY;
+    var centerX = window.innerWidth / 2;
+    var centerY = window.innerHeight / 2;
 
         // Logo hoặc tiêu đề
         var title = this.game.add.text(centerX, centerY - 100, 'Slither.io Clone', {
@@ -22,6 +26,14 @@ MenuState.prototype = {
         });
         title.anchor.set(0.5);
 
+        // Hiển thị kỷ lục vừa đạt được nếu có
+        if (this.lastScore !== null && this.lastScore !== undefined) {
+            var scoreText = this.game.add.text(centerX, centerY - 60, 'Kỷ lục vừa đạt: ' + this.lastScore, {
+                font: '32px Arial', fill: '#ff0', stroke: '#222', strokeThickness: 3
+            });
+            scoreText.anchor.set(0.5);
+        }
+
         // Ô nhập tên
         var nameLabel = this.game.add.text(centerX, centerY - 20, 'Tên người chơi:', {
             font: '28px Arial', fill: '#fff', stroke: '#00eaff', strokeThickness: 2
@@ -32,8 +44,8 @@ MenuState.prototype = {
         nameInput.type = 'text';
         nameInput.placeholder = 'Nhập tên hoặc để trống';
         nameInput.style.position = 'absolute';
-        nameInput.style.left = (centerX - 120) + 'px';
-        nameInput.style.top = (centerY + 10) + 'px';
+    nameInput.style.left = (window.innerWidth / 2 - 120) + 'px';
+    nameInput.style.top = (window.innerHeight / 2 + 10) + 'px';
         nameInput.style.width = '240px';
         nameInput.style.height = '32px';
         nameInput.style.fontSize = '22px';

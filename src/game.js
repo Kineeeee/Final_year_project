@@ -28,10 +28,15 @@ Game.prototype = {
 
         // Add border to fit background
         var thickness = 40; // Thickness of the border walls
-        var bgWidth = this.game.world.bounds.width - 60;
-        var bgHeight = this.game.world.bounds.height - 60;
-        var bgX = this.game.world.bounds.x + 30;
-        var bgY = this.game.world.bounds.y + 30;
+    var bgWidth = this.game.world.bounds.width - 60;
+    var bgHeight = this.game.world.bounds.height - 60;
+    var bgX = this.game.world.bounds.x + 30;
+    var bgY = this.game.world.bounds.y + 30;
+    // Store background bounds as object properties for use in update
+    this.bgX = bgX;
+    this.bgY = bgY;
+    this.bgWidth = bgWidth;
+    this.bgHeight = bgHeight;
 
         // Vẽ border màu đỏ quanh background
         var borderGraphics = this.game.add.graphics(0, 0);
@@ -77,11 +82,10 @@ Game.prototype = {
         this.snakeHeadCollisionGroup = this.game.physics.p2.createCollisionGroup();
         this.foodCollisionGroup = this.game.physics.p2.createCollisionGroup();
 
-        // --- FIX: add food randomly across the entire world bounds ---
-        var bounds = this.game.world.bounds;
+        // --- Add food randomly within the background area ---
         for (var i = 0 ; i < 350 ; i++) {
-            var fx = Util.randomInt(bounds.x, bounds.x + bounds.width);
-            var fy = Util.randomInt(bounds.y, bounds.y + bounds.height);
+            var fx = Util.randomInt(bgX, bgX + bgWidth);
+            var fy = Util.randomInt(bgY, bgY + bgHeight);
             this.initFood(fx, fy);
         }
 
@@ -95,12 +99,11 @@ Game.prototype = {
         snake.playerName = this.playerName;
         this.game.camera.follow(snake.head);
 
-        // --- Create bots at random positions ---
+        // --- Create bots at random positions within background ---
         var botCount = 20; // or any number you want
-        var bounds = this.game.world.bounds;
         for (var i = 0; i < botCount; i++) {
-            var bx = Util.randomInt(bounds.x, bounds.x + bounds.width);
-            var by = Util.randomInt(bounds.y, bounds.y + bounds.height);
+            var bx = Util.randomInt(bgX, bgX + bgWidth);
+            var by = Util.randomInt(bgY, bgY + bgHeight);
             var botSnake = new BotSnake(this.game, 'circle', bx, by);
             botSnake.playerName = 'Bot' + (i+1);
         }
@@ -199,11 +202,13 @@ Game.prototype = {
 
         // --- Auto fill food if below threshold ---
         if (this.foodGroup.children.length < minFoodCount) {
-            var bounds = this.game.world.bounds;
             var toAdd = minFoodCount - this.foodGroup.children.length;
+            // Limit food added per frame to avoid freeze
+            var maxAddPerFrame = 10;
+            toAdd = Math.min(toAdd, maxAddPerFrame);
             for (var i = 0; i < toAdd; i++) {
-                var fx = Util.randomInt(bounds.x, bounds.x + bounds.width);
-                var fy = Util.randomInt(bounds.y, bounds.y + bounds.height);
+                var fx = Util.randomInt(this.bgX, this.bgX + this.bgWidth);
+                var fy = Util.randomInt(this.bgY, this.bgY + this.bgHeight);
                 this.initFood(fx, fy);
             }
         }
@@ -234,6 +239,11 @@ Game.prototype = {
                 snake.headPath[i].x + Util.randomInt(-10,10),
                 snake.headPath[i].y + Util.randomInt(-10,10)
             );
+        }
+        // Nếu là người chơi thì quay về menu, truyền kỷ lục vừa đạt được
+        if (snake instanceof PlayerSnake) {
+            var lastScore = Math.round(snake.snakeLength || 0);
+            this.game.state.start('Menu', true, false, { lastScore: lastScore });
         }
     },
     drawMinimap: function() {
