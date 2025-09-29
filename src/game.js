@@ -7,6 +7,8 @@ Game.prototype = {
         this.game.load.image('circle','asset/circle.png');
     	this.game.load.image('shadow', 'asset/white-shadow.png');
     	this.game.load.image('background', 'asset/tile.png');
+        this.game.load.image('hex_background', 'asset/hex_background.png');
+        this.game.load.image('tile_green', 'asset/tile_green.png');
 
     	this.game.load.image('eye-white', 'asset/eye-white.png');
     	this.game.load.image('eye-black', 'asset/eye-black.png');
@@ -14,7 +16,14 @@ Game.prototype = {
         this.game.load.image('food', 'asset/hex.png');
     },
     init: function(playerName) {
-        this.playerName = playerName || ('Player' + Math.floor(Math.random() * 10000));
+        // Hỗ trợ nhận object truyền vào
+        if (typeof playerName === 'object' && playerName !== null) {
+            this.playerName = playerName.playerName || ('Player' + Math.floor(Math.random() * 10000));
+            this.mapKey = playerName.mapKey || 'tile';
+        } else {
+            this.playerName = playerName || ('Player' + Math.floor(Math.random() * 10000));
+            this.mapKey = 'tile';
+        }
     },
     create: function() {
         var width = this.game.width;
@@ -74,7 +83,7 @@ Game.prototype = {
             bgY,
             bgWidth,
             bgHeight,
-            'background'
+            this.mapKey
         );
 
         //initialize physics and groups

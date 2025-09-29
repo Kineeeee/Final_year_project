@@ -1,9 +1,15 @@
-var MenuState = function(game) {};
+var MenuState = function() {};
+
+MenuState.selectedMap = null;
 
 MenuState.prototype = {
     init: function(args) {
         // Nhận kỷ lục từ state chuyển sang
         this.lastScore = args && args.lastScore !== undefined ? args.lastScore : null;
+        // Nếu có mapKey truyền về thì lưu lại
+        if (args && args.mapKey) {
+            MenuState.selectedMap = args.mapKey;
+        }
     },
     create: function() {
         // Nền màu gradient đơn giản
@@ -74,13 +80,58 @@ MenuState.prototype = {
             playButton.scale.set(1);
         });
 
+        // --- Map selection UI ---
+        var mapOptions = [
+            { key: 'background', name: 'Cơ bản' },
+            { key: 'hex_background', name: 'Tổ ong' },
+            { key: 'tile_green', name: 'Gạch xanh' }
+        ];
+        // Sử dụng lựa chọn trước đó nếu có
+        var selectedMap = MenuState.selectedMap || mapOptions[0].key;
+        var mapText = this.game.add.text(centerX, window.innerHeight - 80, 'Chọn map:', {
+            font: '28px Arial', fill: '#fff', stroke: '#00eaff', strokeThickness: 2
+        });
+        mapText.anchor.set(0.5);
+
+        var buttonSpacing = 160;
+        var mapButtons = [];
+        for (var i = 0; i < mapOptions.length; i++) {
+            var btn = this.game.add.text(centerX + (i - 1) * buttonSpacing, window.innerHeight - 40, mapOptions[i].name, {
+                font: 'bold 26px Arial', fill: '#ff4444', stroke: '#fff', strokeThickness: 3
+            });
+            btn.anchor.set(0.5);
+            btn.inputEnabled = true;
+            btn.input.useHandCursor = true;
+            btn.mapKey = mapOptions[i].key;
+            btn.events.onInputUp.add(function(b) {
+                selectedMap = b.mapKey;
+                MenuState.selectedMap = selectedMap;
+                for (var j = 0; j < mapButtons.length; j++) {
+                    mapButtons[j].fill = '#ff4444';
+                }
+                b.fill = '#00eaff';
+            }, this, 0, btn);
+            mapButtons.push(btn);
+        }
+        // Đảm bảo highlight đúng nút đã chọn khi quay lại menu
+        for (var i = 0; i < mapButtons.length; i++) {
+            if (mapButtons[i].mapKey === selectedMap) {
+                mapButtons[i].fill = '#00eaff';
+            } else {
+                mapButtons[i].fill = '#ff4444';
+            }
+        }
+
+        // Sửa lại sự kiện nút PLAY để truyền mapKey
+        playButton.events.onInputUp.removeAll();
         playButton.events.onInputUp.add(function() {
             var playerName = nameInput.value.trim();
             if (!playerName) {
                 playerName = 'Player' + Math.floor(Math.random() * 10000);
             }
             nameInput.parentNode.removeChild(nameInput);
-            this.game.state.start('Game', true, false, playerName);
+            MenuState.selectedMap = selectedMap;
+            this.game.state.start('Game', true, false, { playerName: playerName, mapKey: selectedMap });
         }, this);
 
         // Thêm hướng dẫn nhỏ
