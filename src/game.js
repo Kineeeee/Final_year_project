@@ -23,41 +23,49 @@ Game.prototype = {
         this.game.world.setBounds(-width*4, -height*4, width*8, height*8);
         this.game.stage.backgroundColor = '#444';
 
-        // --- REMOVE border wall creation code below ---
-        // var bounds = this.game.world.bounds;
-        // var thickness = 40; // Thickness of the border walls
+        // Add border to fit background
+        var thickness = 40; // Thickness of the border walls
+        var bgWidth = this.game.world.bounds.width - 60;
+        var bgHeight = this.game.world.bounds.height - 60;
+        var bgX = this.game.world.bounds.x + 30;
+        var bgY = this.game.world.bounds.y + 30;
 
-        // // Left border
-        // var leftWall = this.game.add.sprite(bounds.x - thickness/2, bounds.y + bounds.height/2, null);
-        // this.game.physics.p2.enable(leftWall, false);
-        // leftWall.body.static = true;
-        // leftWall.body.setRectangle(thickness, bounds.height + thickness);
+        // Vẽ border màu đỏ quanh background
+        var borderGraphics = this.game.add.graphics(0, 0);
+        borderGraphics.lineStyle(thickness, 0xff0000, 1); // thickness là độ dày, 0xff0000 là màu đỏ
+        borderGraphics.drawRect(bgX, bgY, bgWidth, bgHeight);
+        borderGraphics.endFill();
 
-        // // Right border
-        // var rightWall = this.game.add.sprite(bounds.x + bounds.width + thickness/2, bounds.y + bounds.height/2, null);
-        // this.game.physics.p2.enable(rightWall, false);
-        // rightWall.body.static = true;
-        // rightWall.body.setRectangle(thickness, bounds.height + thickness);
+        // Left border
+        var leftWall = this.game.add.sprite(bgX - thickness/2, bgY + bgHeight/2, null);
+        this.game.physics.p2.enable(leftWall, false);
+        leftWall.body.static = true;
+        leftWall.body.setRectangle(thickness, bgHeight + thickness);
 
-        // // Top border
-        // var topWall = this.game.add.sprite(bounds.x + bounds.width/2, bounds.y - thickness/2, null);
-        // this.game.physics.p2.enable(topWall, false);
-        // topWall.body.static = true;
-        // topWall.body.setRectangle(bounds.width + thickness, thickness);
+        // Right border
+        var rightWall = this.game.add.sprite(bgX + bgWidth + thickness/2, bgY + bgHeight/2, null);
+        this.game.physics.p2.enable(rightWall, false);
+        rightWall.body.static = true;
+        rightWall.body.setRectangle(thickness, bgHeight + thickness);
 
-        // // Bottom border
-        // var bottomWall = this.game.add.sprite(bounds.x + bounds.width/2, bounds.y + bounds.height + thickness/2, null);
-        // this.game.physics.p2.enable(bottomWall, false);
-        // bottomWall.body.static = true;
-        // bottomWall.body.setRectangle(bounds.width + thickness, thickness);
-        // --- END REMOVE ---
+        // Top border
+        var topWall = this.game.add.sprite(bgX + bgWidth/2, bgY - thickness/2, null);
+        this.game.physics.p2.enable(topWall, false);
+        topWall.body.static = true;
+        topWall.body.setRectangle(bgWidth + thickness, thickness);
 
-        //add tilesprite background
+        // Bottom border
+        var bottomWall = this.game.add.sprite(bgX + bgWidth/2, bgY + bgHeight + thickness/2, null);
+        this.game.physics.p2.enable(bottomWall, false);
+        bottomWall.body.static = true;
+        bottomWall.body.setRectangle(bgWidth + thickness, thickness);
+
+        //add tilesprite background nhỏ hơn world map 60px mỗi cạnh và căn giữa
         var background = this.game.add.tileSprite(
-            this.game.world.bounds.x,
-            this.game.world.bounds.y,
-            this.game.world.bounds.width,
-            this.game.world.bounds.height,
+            bgX,
+            bgY,
+            bgWidth,
+            bgHeight,
             'background'
         );
 
@@ -159,22 +167,6 @@ Game.prototype = {
 
         // --- Minimap update ---
         this.drawMinimap();
-
-        // --- Constrain all snake heads inside world bounds ---
-        var bounds = this.game.world.bounds;
-        for (var i = 0; i < this.game.snakes.length; i++) {
-            var snake = this.game.snakes[i];
-            var head = snake.head;
-            // Clamp X
-            if (head.x < bounds.x) head.x = bounds.x;
-            if (head.x > bounds.x + bounds.width) head.x = bounds.x + bounds.width;
-            // Clamp Y
-            if (head.y < bounds.y) head.y = bounds.y;
-            if (head.y > bounds.y + bounds.height) head.y = bounds.y + bounds.height;
-            // Also clamp physics body position
-            head.body.x = head.x;
-            head.body.y = head.y;
-        }
     },
     /**
      * Create a piece of food at a point
