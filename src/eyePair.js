@@ -4,7 +4,7 @@
  * @param  {Phaser.Sprite} head  Snake head sprite
  * @param  {Number} scale scale of eyes
  */
-EyePair = function(game, head, scale) {
+var EyePair = function(game, head, scale) {
     this.game = game;
     this.head = head;
     this.scale = scale;

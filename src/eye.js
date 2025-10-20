@@ -4,7 +4,7 @@
  * @param  {Phaser.Sprite} head  snake head sprite
  * @param  {Number} scale scale of the new eye
  */
-Eye = function(game, head, scale) {
+var Eye = function(game, head, scale) {
     this.game = game;
     this.head = head;
     this.scale = scale;
@@ -117,7 +117,7 @@ Eye.prototype = {
     destroy: function() {
         this.whiteCircle.destroy();
         this.blackCircle.destroy();
-        this.game.physics.p2.removeConstraint(this.lock);
-        this.game.physics.p2.removeConstraint(this.dist);
+        if (this.lock) this.game.physics.p2.removeConstraint(this.lock);
+        if (this.dist) this.game.physics.p2.removeConstraint(this.dist);
     }
 };

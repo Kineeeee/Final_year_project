@@ -148,6 +148,7 @@ MenuState.prototype = {
             if (nameInput && nameInput.parentNode) {
                 nameInput.parentNode.removeChild(nameInput);
             }
+            nameInput = null;
         });
     }
 };

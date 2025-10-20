@@ -4,7 +4,7 @@
  * @param  {Array} sections Array of snake section sprites
  * @param  {Number} scale    scale of the shadow
  */
-Shadow = function(game, sections, scale) {
+var Shadow = function(game, sections, scale) {
     this.game = game;
     this.sections = sections;
     this.scale = scale;

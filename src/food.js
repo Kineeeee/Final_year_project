@@ -5,7 +5,7 @@
  * @param  {Number} x    coordinate
  * @param  {Number} y    coordinate
  */
-Food = function(game, x, y) {
+var Food = function(game, x, y) {
     this.game = game;
     this.debug = false;
     this.sprite = this.game.add.sprite(x, y, 'food');
@@ -25,16 +25,15 @@ Food = function(game, x, y) {
 
 Food.prototype = {
     onBeginContact: function(phaserBody, p2Body) {
-        if (phaserBody && phaserBody.sprite.name == "head" && this.constraint === null) {
+        if (phaserBody && phaserBody.sprite.name === "head" && this.constraint === null) {
             this.sprite.body.collides([]);
-            //Create constraint between the food and the snake head that
-            //it collided with. The food is then brought to the center of
-            //the head sprite
             this.constraint = this.game.physics.p2.createRevoluteConstraint(
                 this.sprite.body, [0,0], phaserBody, [0,0]
             );
             this.head = phaserBody.sprite;
-            this.head.snake.food.push(this);
+            if (this.head.snake.food) {
+                this.head.snake.food.push(this);
+            }
         }
     },
     /**
@@ -56,7 +55,10 @@ Food.prototype = {
         if (this.head) {
             this.game.physics.p2.removeConstraint(this.constraint);
             this.sprite.destroy();
-            this.head.snake.food.splice(this.head.snake.food.indexOf(this), 1);
+            var idx = this.head.snake.food.indexOf(this);
+            if (idx !== -1) {
+                this.head.snake.food.splice(idx, 1);
+            }
             this.head = null;
         }
     }

@@ -5,7 +5,7 @@
  * @param  {Number} x         coordinate
  * @param  {Number} y         coordinate
  */
-Snake = function(game, spriteKey, x, y) {
+var Snake = function(game, spriteKey, x, y) {
     this.game = game;
     //create an array of snakes in the game object and add this snake
     if (!this.game.snakes) {

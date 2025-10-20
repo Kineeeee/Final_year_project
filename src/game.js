@@ -1,4 +1,4 @@
-Game = function(game) {}
+var Game = function(game) {}
 
 Game.prototype = {
     preload: function() {
@@ -149,11 +149,14 @@ Game.prototype = {
     update: function() {
         //update game components
         for (var i = this.game.snakes.length - 1 ; i >= 0 ; i--) {
-            this.game.snakes[i].update();
+            var snake = this.game.snakes[i];
+            // Kiểm tra snake và head còn tồn tại
+            if (!snake || !snake.head || !snake.head.body) continue;
+            snake.update();
         }
         for (var i = this.foodGroup.children.length - 1 ; i >= 0 ; i--) {
             var f = this.foodGroup.children[i];
-            f.food.update();
+            if (f.food && typeof f.food.update === 'function') f.food.update();
         }
 
         // Update leaderboard
