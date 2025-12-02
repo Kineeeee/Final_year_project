@@ -61,6 +61,9 @@ export class Snake {
 
         // Shadow
         this.shadow = new Shadow(scene, this);
+        
+        // Temp vector for calculations
+        this._tempVector = new PhaserMath.Vector2();
     }
 
     generateTextures(scene) {
@@ -109,7 +112,20 @@ export class Snake {
         bodyPart.setTint(this.color); // Match head color
         this.body.push(bodyPart);
         this.bodyGroup.add(bodyPart);
+
+        this.updateScale();
+
     }
+    updateScale() {
+        // Optional: Slightly increase scale based on length
+        let newScale = 0.6 + this.body.length * 0.002;
+        
+        // Limit max scale
+        if (newScale > 1.2) newScale = 1.2;
+        
+        this.setScale(newScale);
+    }
+    
 
     shrink() {
         // Keep a minimum size, e.g., 3 body parts
@@ -130,11 +146,11 @@ export class Snake {
         if (!this.alive) return;
 
         // Movement logic (Head)
-        const velocity = new PhaserMath.Vector2();
-        this.scene.physics.velocityFromRotation(this.head.rotation, this.speed * (delta / 1000), velocity);
+        // Use temp vector to avoid GC
+        this.scene.physics.velocityFromRotation(this.head.rotation, this.speed * (delta / 1000), this._tempVector);
 
-        this.head.x += velocity.x;
-        this.head.y += velocity.y;
+        this.head.x += this._tempVector.x;
+        this.head.y += this._tempVector.y;
 
         // Update Eyes
         if (this.eyes) {
@@ -185,6 +201,10 @@ export class Snake {
         this.head.setScale(scale);
         this.body.forEach(part => part.setScale(scale));
         // Shadow handles its own scale reading from snake.scale
+    }
+
+    getLookAngle() {
+        return this.head.rotation;
     }
 
     incrementSize() {

@@ -22,30 +22,15 @@ export class Eye {
     }
 
     update() {
-        // Calculate angle to mouse relative to head rotation
-        // We want the pupils to look at the mouse (for Player) or just forward/target (for Bot)
-        // The reference Eye.js uses mouse position for ALL eyes?
-        // "var mousePosX = this.game.input.activePointer.worldX;"
-        // Yes, even for bots? 
-        // In the reference, BotSnake extends Snake. Snake creates Eyes.
-        // Eye.update() uses input.activePointer.
-        // So even bots look at the player's mouse? That's funny.
-        // Let's replicate that behavior if it's in the reference, or maybe make it smarter.
-        // Actually, for a clone, usually bots look at their target.
-        // But the reference code literally says `this.game.input.activePointer`.
-        // I will stick to that for now as requested "based on the files".
+        // Calculate look angle
+        let lookAngle = this.head.rotation;
+        if (this.head.snake && typeof this.head.snake.getLookAngle === 'function') {
+            lookAngle = this.head.snake.getLookAngle();
+        }
         
-        const pointer = this.scene.input.activePointer;
-        const angleToMouse = PhaserMath.Angle.Between(
-            this.head.x, this.head.y, 
-            pointer.worldX, pointer.worldY
-        );
-        
-        const relativeAngle = angleToMouse - this.head.rotation;
+        const relativeAngle = lookAngle - this.head.rotation;
         
         // Constraint distance (based on eye size)
-        // Original used whiteCircle.width * 0.25
-        // My texture 'snake-eye' is 12px.
         const limit = (this.whiteCircle.width * this.scale) * 0.25;
 
         this.blackCircle.x = this.baseX + Math.cos(relativeAngle) * limit;

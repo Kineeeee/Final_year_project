@@ -28,23 +28,31 @@ export class PlayerSnake extends Snake {
 
     handleInput(delta) {
         const pointer = this.scene.input.activePointer;
-        const targetAngle = PhaserMath.Angle.Between(
-            this.head.x, this.head.y,
-            pointer.worldX, pointer.worldY
-        );
+        const cam = this.scene.cameras.main;
 
-        // Smooth rotation
-        let currentAngle = this.head.rotation;
-        if (targetAngle - currentAngle > Math.PI) currentAngle += Math.PI * 2;
-        else if (currentAngle - targetAngle > Math.PI) currentAngle -= Math.PI * 2;
+        // Use Screen Coordinates for steering
+        // This prevents the "stale world position" bug where the snake turns around
+        // if the mouse is stationary but the camera moves.
+        
+        // Get Head position on screen
+        // Reuse _tempVector from base class to avoid GC
+        // Manually calculate screen position: (WorldPos - ScrollPos) * Zoom
+        const headScreenX = (this.head.x - cam.scrollX) * cam.zoom;
+        const headScreenY = (this.head.y - cam.scrollY) * cam.zoom;
+        
+        // Calculate distance in screen space
+        const dist = PhaserMath.Distance.Between(headScreenX, headScreenY, pointer.x, pointer.y);
+        
+        if (dist > 20) {
+            // Calculate angle relative to screen
+            const targetAngle = PhaserMath.Angle.Between(
+                headScreenX, headScreenY,
+                pointer.x, pointer.y
+            );
 
-        const maxRotation = this.rotationSpeed * (delta / 2000); // Slower rotation for player
-        const diff = targetAngle - currentAngle;
-
-        if (Math.abs(diff) < maxRotation) {
-            this.head.rotation = targetAngle;
-        } else {
-            this.head.rotation += (diff > 0 ? maxRotation : -maxRotation);
+            // Use Phaser's built-in RotateTo for robust shortest-path rotation
+            const turnSpeed = this.rotationSpeed * (delta / 2000);
+            this.head.rotation = PhaserMath.Angle.RotateTo(this.head.rotation, targetAngle, turnSpeed);
         }
 
         // Speed Boost
@@ -79,5 +87,19 @@ export class PlayerSnake extends Snake {
                 }
             }
         }
+    }
+
+    getLookAngle() {
+        const pointer = this.scene.input.activePointer;
+        const cam = this.scene.cameras.main;
+        
+        // Manually calculate screen position: (WorldPos - ScrollPos) * Zoom
+        const headScreenX = (this.head.x - cam.scrollX) * cam.zoom;
+        const headScreenY = (this.head.y - cam.scrollY) * cam.zoom;
+        
+        return PhaserMath.Angle.Between(
+            headScreenX, headScreenY,
+            pointer.x, pointer.y
+        );
     }
 }

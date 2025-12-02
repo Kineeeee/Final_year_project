@@ -17,13 +17,18 @@ export class Game extends Scene {
         // Create a tiled background
         this.add.tileSprite(0, 0, 3000, 3000, 'background').setOrigin(0);
 
-        // Set camera bounds
-        this.cameras.main.setBounds(0, 0, 3000, 3000);
+        // Set camera bounds - REMOVED to fix control issues at edges
+        // When camera stops at edge, snake gets too close to mouse pointer, causing erratic movement
+        // this.cameras.main.setBounds(0, 0, 3000, 3000);
+        
         // Reference game.js: this.game.stage.backgroundColor = '#444';
         this.cameras.main.setBackgroundColor(0x444444);
 
         this.snakes = [];
-        this.foodGroup = this.add.group(); 
+        this.foodGroup = this.add.group({
+            classType: Food,
+            runChildUpdate: true
+        }); 
 
         // Create Player
         this.player = new PlayerSnake(this, 1500, 1500);
@@ -70,8 +75,10 @@ export class Game extends Scene {
             graphics.generateTexture('food', 20, 20);
         }
 
-        const food = new Food(this, x, y, color);
-        this.foodGroup.add(food);
+        const food = this.foodGroup.get(x, y);
+        if (food) {
+            food.onSpawn(x, y, color);
+        }
     }
 
     update(time, delta) {
@@ -94,6 +101,25 @@ export class Game extends Scene {
         if (this.foodGroup.countActive() < 100) {
             this.spawnFood();
         }
+
+        this.updateCamera();
+    }
+
+    updateCamera() {
+        if (!this.player || !this.player.alive) return;
+
+        // Calculate target zoom based on player scale
+        // As player gets bigger (scale increases), zoom out (zoom value decreases)
+        // Base scale 0.6 -> Zoom 1.0
+        let targetZoom = 0.6 / this.player.scale;
+
+        // Limit zoom (min 0.5, max 1.0)
+        targetZoom = Phaser.Math.Clamp(targetZoom, 0.5, 1.0);
+
+        // Smoothly interpolate current zoom to target zoom
+        this.cameras.main.setZoom(
+            Phaser.Math.Linear(this.cameras.main.zoom, targetZoom, 0.05)
+        );
     }
 
     checkCollisions(snake) {

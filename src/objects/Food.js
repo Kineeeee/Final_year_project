@@ -54,6 +54,33 @@ export class Food extends Phaser.GameObjects.Image {
              this.target.snake.grow();
         }
         
-        this.destroy();
+        this.target = null; // Clear target immediately
+        this.setActive(false);
+        this.setVisible(false);
+        if (this.body) {
+            this.body.stop(); // Stop velocity
+            this.body.enable = false;
+        }
+    }
+
+    onSpawn(x, y, color) {
+        this.setActive(true);
+        this.setVisible(true);
+        
+        if (this.body) {
+            this.body.enable = true;
+            this.body.reset(x, y); // Reset position and velocity
+        } else {
+            this.setPosition(x, y);
+        }
+
+        this.target = null;
+        
+        if (color === undefined) {
+            const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x00ffff, 0xff00ff];
+            this.setTint(colors[Math.floor(Math.random() * colors.length)]);
+        } else {
+            this.setTint(color);
+        }
     }
 }
