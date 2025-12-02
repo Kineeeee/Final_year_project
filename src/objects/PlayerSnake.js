@@ -38,7 +38,7 @@ export class PlayerSnake extends Snake {
         if (targetAngle - currentAngle > Math.PI) currentAngle += Math.PI * 2;
         else if (currentAngle - targetAngle > Math.PI) currentAngle -= Math.PI * 2;
 
-        const maxRotation = this.rotationSpeed * (delta / 1000);
+        const maxRotation = this.rotationSpeed * (delta / 2000); // Slower rotation for player
         const diff = targetAngle - currentAngle;
 
         if (Math.abs(diff) < maxRotation) {

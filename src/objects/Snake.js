@@ -51,7 +51,7 @@ export class Snake {
         
         // Path history for body to follow
         this.movePath = [];
-        this.sectionLength = 8; // Distance between body parts (in frames/updates approx)
+        this.sectionLength = 4; // Distance between body parts (in frames/updates approx)
         
         // Growth Queue
         this.queuedSections = 0;
