@@ -10,6 +10,12 @@ export class Game extends Scene {
         super('Game');
     }
 
+    init(data) {
+        data = data || {};
+        this.myColor = data.color; // If undefined, will use server random color
+        this.myName = data.name; // Use server generated name if not provided
+    }
+
     create() {
         Logger.info('Game', 'Game Scene Created');
         const WIDTH_WORLD = 5000;
@@ -37,7 +43,16 @@ export class Game extends Scene {
         }); 
 
         // Socket Connection
-        this.socket = io('http://192.168.5.13:3000', { forceNew: true });
+        this.socket = io('http://172.20.10.2:3000', { forceNew: true });
+
+        // Send initialization data (color, name) immediately upon connection
+        this.socket.on('connect', () => {
+            const initData = {};
+            if (this.myColor !== undefined) initData.color = this.myColor;
+            if (this.myName) initData.name = this.myName;
+            
+            this.socket.emit('initPlayer', initData);
+        });
 
         // Handle Scene Shutdown
         this.events.on('shutdown', this.shutdown, this);
@@ -114,6 +129,22 @@ export class Game extends Scene {
         this.socket.on('playerDied', (playerId) => {
             if (this.player && this.player.playerId === playerId) {
                 this.scene.start('GameOver');
+            }
+        });
+
+        // Listen for property updates (like color changes)
+        this.socket.on('playerProperties', (data) => {
+            // data = { id, color, name }
+            let snake;
+            if (this.player && this.player.playerId === data.id) {
+                snake = this.player;
+            } else if (this.otherSnakes.has(data.id)) {
+                snake = this.otherSnakes.get(data.id);
+            }
+
+            if (snake) {
+                if (data.color) snake.setColor(data.color);
+                if (data.name) snake.setName(data.name);
             }
         });
 

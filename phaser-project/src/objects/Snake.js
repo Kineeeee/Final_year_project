@@ -56,7 +56,8 @@ export class Snake {
 
         // Path history for body to follow
         this.movePath = [];
-        this.sectionLength = 4; // Distance between body parts (in frames/updates approx)
+        this.pixelsPerSegment = 12; // Distance-based spacing (independent of frame rate)
+        this.totalDistance = 0; // Track total distance traveled
         
         // Growth Queue
         this.queuedSections = 0;
@@ -69,6 +70,17 @@ export class Snake {
         
         // Temp vector for calculations
         this._tempVector = new PhaserMath.Vector2();
+    }
+
+    setColor(color) {
+        this.color = color;
+        // Update Head (First child of container)
+        const headSprite = this.head.getAt(0);
+        if (headSprite) {
+            headSprite.setTint(color);
+        }
+        // Update Body
+        this.bodyGroup.children.each(segment => segment.setTint(color));
     }
 
     setName(name) {
@@ -196,22 +208,37 @@ export class Snake {
                 }
             }
         } else {
-            // Interpolation for Remote Snakes (and Player controlled by Server)
+            // DEAD RECKONING: Always move forward based on current velocity
+            // This ensures the snake never stops moving even if packets are lost
+            const moveAmount = this.speed * (delta / 1000);
+            this.head.x += Math.cos(this.head.rotation) * moveAmount;
+            this.head.y += Math.sin(this.head.rotation) * moveAmount;
+
+            // RECONCILIATION: Smoothly correct position based on Server data
             if (this.targetX !== undefined && this.targetY !== undefined) {
-                // Interpolation factor (0.1 to 0.3 is usually good for 60fps)
-                // Adjust this value: Lower = smoother but more lag, Higher = snappier but jerkier
-                const t = 0.3; 
+                const dist = PhaserMath.Distance.Between(this.head.x, this.head.y, this.targetX, this.targetY);
                 
-                this.head.x = PhaserMath.Linear(this.head.x, this.targetX, t);
-                this.head.y = PhaserMath.Linear(this.head.y, this.targetY, t);
-                
-                if (this.targetRotation !== undefined) {
-                     // Interpolate rotation correctly (handling the -PI to PI wrap)
-                     // Use delta time for frame-rate independent rotation speed
-                     // 5 rad/s is slightly faster than server's 4.2 rad/s (0.07 * 60)
-                     const rotationSpeed = 5 * (delta / 1000);
-                    this.head.rotation = PhaserMath.Angle.RotateTo(this.head.rotation, this.targetRotation, rotationSpeed);
+                if (dist > 2) {
+                    // Increase lerp factor to 0.2 (20% per frame at 60fps) for faster catch-up
+                    // Scale by delta to ensure consistency across frame rates
+                    let t = 0.2 * (delta / 16.66);
+                    if (t > 1) t = 1;
+                    
+                    this.head.x = PhaserMath.Linear(this.head.x, this.targetX, t);
+                    this.head.y = PhaserMath.Linear(this.head.y, this.targetY, t);
                 }
+            }
+            
+            // Rotation Interpolation
+            if (this.targetRotation !== undefined) {
+                 let diff = this.targetRotation - this.head.rotation;
+                 while (diff > Math.PI) diff -= Math.PI * 2;
+                 while (diff < -Math.PI) diff += Math.PI * 2;
+                 
+                 // Slightly faster rotation smoothing
+                 let rotT = 0.15 * (delta / 16.66);
+                 if (rotT > 1) rotT = 1;
+                 this.head.rotation += diff * rotT;
             }
         }
 
@@ -221,36 +248,65 @@ export class Snake {
         }
 
         // Store position history
-        this.movePath.unshift({ x: this.head.x, y: this.head.y });
+        // Calculate distance moved since last frame
+        let distMoved = 0;
+        if (this.movePath.length > 0) {
+            distMoved = PhaserMath.Distance.Between(this.head.x, this.head.y, this.movePath[0].x, this.movePath[0].y);
+        }
+        this.totalDistance += distMoved;
+
+        this.movePath.unshift({ x: this.head.x, y: this.head.y, totalDist: this.totalDistance });
 
         // Limit path history length
         // We need enough history for all body parts
-        // sectionLength is roughly "frames per section"
-        const neededHistory = (this.body.length + this.queuedSections) * this.sectionLength + 100;
-        if (this.movePath.length > neededHistory) {
+        const neededHistoryDist = (this.body.length + this.queuedSections + 5) * this.pixelsPerSegment;
+        
+        // Prune path points that are too old
+        while (this.movePath.length > 1 && this.totalDistance - this.movePath[this.movePath.length - 1].totalDist > neededHistoryDist) {
             this.movePath.pop();
         }
 
         // Handle Growth
         if (this.queuedSections > 0) {
-            // Add one section per few frames or just one per update?
-            // Let's add one per update if we have path history
-            const targetIndex = (this.body.length + 1) * this.sectionLength;
-            if (this.movePath.length > targetIndex) {
-                this.grow();
-                this.queuedSections--;
-            }
+             const currentLen = this.body.length;
+             const neededDist = (currentLen + 1) * this.pixelsPerSegment;
+             // If we have enough history to place the new part
+             if (this.movePath.length > 0 && this.totalDistance - this.movePath[this.movePath.length - 1].totalDist >= neededDist) {
+                 this.grow();
+                 this.queuedSections--;
+             }
         }
 
         // Move body parts
-        let pathIndex = this.sectionLength;
+        let pathIndex = 0;
         for (let i = 0; i < this.body.length; i++) {
             const part = this.body[i];
-            if (this.movePath[pathIndex]) {
-                part.x = this.movePath[pathIndex].x;
-                part.y = this.movePath[pathIndex].y;
+            const targetDist = this.totalDistance - (i + 1) * this.pixelsPerSegment;
+            
+            // Find the segment containing targetDist
+            while (pathIndex < this.movePath.length - 1 && this.movePath[pathIndex + 1].totalDist > targetDist) {
+                pathIndex++;
             }
-            pathIndex += this.sectionLength;
+            
+            if (pathIndex < this.movePath.length - 1) {
+                const p1 = this.movePath[pathIndex];
+                const p2 = this.movePath[pathIndex + 1];
+                
+                // Interpolate
+                const span = p1.totalDist - p2.totalDist;
+                let t = 0;
+                if (span > 0.001) {
+                    t = (p1.totalDist - targetDist) / span;
+                }
+                
+                part.x = p1.x + (p2.x - p1.x) * t;
+                part.y = p1.y + (p2.y - p1.y) * t;
+            } else {
+                // Fallback
+                const p = this.movePath[pathIndex];
+                part.x = p.x;
+                part.y = p.y;
+            }
         }
 
         // Update Shadow

@@ -98,6 +98,7 @@ io.on('connection', function (socket) {
         team: (Math.floor(Math.random() * 2) == 0) ? 'red' : 'blue',
         score: 0, // Initial score/length
         path: [], // History of positions for body collision
+        totalDistance: 0, // Track total distance for accurate path pruning
         name: "Player " + Math.floor(Math.random() * 1000),
         color: Math.floor(Math.random() * 0xFFFFFF)
     };
@@ -136,6 +137,25 @@ io.on('connection', function (socket) {
             console.error('Error handling playerInput:', error);
         }
     });
+
+    // Handle player initialization (name, color)
+    socket.on('initPlayer', function (data) {
+        if (players[socket.id]) {
+            if (data.color) {
+                players[socket.id].color = data.color;
+            }
+            if (data.name) {
+                players[socket.id].name = data.name;
+            }
+            
+            // Broadcast the updated properties to everyone so they see the new color
+            io.emit('playerProperties', {
+                id: socket.id,
+                color: players[socket.id].color,
+                name: players[socket.id].name
+            });
+        }
+    });
 });
 
 // Server Game Loop (60 FPS)
@@ -157,7 +177,8 @@ function createBot() {
         path: [],
         isBot: true,
         color: Math.floor(Math.random() * 0xFFFFFF),
-        name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)]
+        name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
+        totalDistance: 0
     };
     io.emit('newPlayer', players[id]);
 }
@@ -215,14 +236,14 @@ function getPlayerScale(score) {
 }
 
 function getPlayerRadius(score) {
-    return 15 * getPlayerScale(score);
+    // Reduced hitbox (80% of visual) to be more forgiving with lag
+    return 12 * getPlayerScale(score);
 }
-
 setInterval(() => {
-    const baseSpeed = 3; 
-    const boostSpeed = 6; // Double speed when boosting
+    const baseSpeed = 6; 
+    const boostSpeed = 12; // Double speed when boosting
     const foodRadius = 10; 
-    const segmentLength = 4;
+    const segmentLength = 2; // Reduced for better precision near head
     
     // Spawn Bots
     const currentBotCount = Object.values(players).filter(p => p.isBot).length;
@@ -252,7 +273,7 @@ setInterval(() => {
             // Burn mass logic
             // Decrease score every X frames? Or probabilistic?
             // Reduced from 0.05 (3/sec) to 0.02 (~1.2/sec) to make shrinking slower
-            if (Math.random() < 0.02) {
+            if (Math.random() < 0.03) {
                 player.score = Math.max(0, player.score - 1);
                 
                 // Spawn food behind
@@ -274,11 +295,19 @@ setInterval(() => {
         player.y += Math.sin(player.rotation) * currentSpeed;
 
         // Update Path for Body Collision
-        player.path.unshift({x: player.x, y: player.y});
-        // Limit path length based on score
-        // Base length (head) + score * segmentLength + buffer
-        const neededLength = (player.score + 10) * segmentLength + 20; 
-        if (player.path.length > neededLength) {
+        // Use Distance-Based Pruning to match Client rendering exactly (Fixes Ghost Tail)
+        player.totalDistance += currentSpeed;
+        player.path.unshift({
+            x: player.x, 
+            y: player.y,
+            d: player.totalDistance
+        });
+        
+        // Limit path length based on distance (Score * 12px per segment)
+        const pixelsPerSegment = 12;
+        const neededDist = (player.score + 5) * pixelsPerSegment + 50; // +Buffer
+        
+        while (player.path.length > 1 && player.totalDistance - player.path[player.path.length - 1].d > neededDist) {
             player.path.pop();
         }
 
@@ -299,7 +328,8 @@ setInterval(() => {
             // Check against other's body segments
             // We iterate through the path at intervals to simulate body segments
             // Start from index segmentLength (skip head area to avoid head-to-head instant death if close)
-            for (let i = segmentLength; i < other.path.length; i += segmentLength) {
+            // Increased precision: Check every 2 points instead of segmentLength (4)
+            for (let i = segmentLength; i < other.path.length; i += 2) {
                 const point = other.path[i];
                 const dist = Math.hypot(player.x - point.x, player.y - point.y);
                 if (dist < myRadius + otherRadius) { // Collision radius (Head radius + Body radius)
@@ -341,9 +371,23 @@ setInterval(() => {
         // For simplicity, let's just let them roam.
     });
 
+    // Prepare lightweight update packet to reduce bandwidth
+    const updatePacket = {};
+    Object.keys(players).forEach(id => {
+        const p = players[id];
+        updatePacket[id] = {
+            x: Math.round(p.x),
+            y: Math.round(p.y),
+            rotation: parseFloat(p.rotation.toFixed(2)),
+            score: p.score,
+            isBoosting: p.isBoosting,
+            name: p.name // Keep for leaderboard
+        };
+    });
+
     // Emit the updated state to all players
-    io.emit('playerUpdates', players);
-}, 1000 / 60);
+    io.emit('playerUpdates', updatePacket);
+}, 1000 / 30); // Reduced to 30 FPS for better performance
 
 function killPlayer(playerId) {
     const player = players[playerId];

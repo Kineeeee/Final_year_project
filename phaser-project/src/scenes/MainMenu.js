@@ -30,18 +30,15 @@ export class MainMenu extends Scene {
         // ------------------------------
         // NÚT START GAME (Đặt ở giữa phần dưới)
         // ------------------------------
-        const startBtn = this.createButton(centerX, centerY + 100, 'Start Game');
-        startBtn.on('pointerdown', () => {
+        this.createButton(centerX, centerY + 50, 'Play Now', () => {
             Logger.info('MainMenu', 'Start Game clicked');
             this.scene.start('Game');
         });
 
-
         // ------------------------------
         // NÚT CUSTOMIZE SNAKE (Đặt dưới nút Start)
         // ------------------------------
-        const customBtn = this.createButton(centerX, centerY + 180, 'Customize Snake');
-        customBtn.on('pointerdown', () => {
+        this.createButton(centerX, centerY + 150, 'Customize Snake', () => {
             Logger.info('MainMenu', 'Customize clicked');
             this.scene.start('CustomizeScene');
         });
@@ -51,7 +48,7 @@ export class MainMenu extends Scene {
     // ---------------------------------------
     // REUSABLE BUTTON FUNCTION
     // ---------------------------------------
-    createButton(x, y, text) {
+    createButton(x, y, text, callback) {
         const btn = this.add.rectangle(x, y, 280, 70, 0x1e90ff)
             .setStrokeStyle(4, 0xffffff)
             .setInteractive({ useHandCursor: true });
@@ -76,16 +73,14 @@ export class MainMenu extends Scene {
             btnText.setScale(1.0);
         });
 
-        // Trả về container hoặc group nếu muốn quản lý tốt hơn, 
-        // nhưng ở đây trả về btn (rectangle) để gán sự kiện click là đủ.
-        // Lưu ý: btnText không nhận sự kiện click trong code cũ, chỉ có btn nhận.
-        // Để tốt hơn, ta nên gán sự kiện cho cả text hoặc dùng Container.
-        
-        // Hack nhỏ để text cũng click được (nếu người dùng click trúng chữ)
-        btnText.setInteractive({ useHandCursor: true });
-        btnText.on('pointerdown', () => btn.emit('pointerdown'));
-        btnText.on('pointerover', () => btn.emit('pointerover'));
-        btnText.on('pointerout', () => btn.emit('pointerout'));
+        if (callback) {
+            btn.on('pointerdown', callback);
+            // Hack nhỏ để text cũng click được
+            btnText.setInteractive({ useHandCursor: true });
+            btnText.on('pointerdown', callback);
+            btnText.on('pointerover', () => btn.emit('pointerover'));
+            btnText.on('pointerout', () => btn.emit('pointerout'));
+        }
 
         return btn;
     }
