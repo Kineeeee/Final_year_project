@@ -1,0 +1,312 @@
+import { Math as PhaserMath } from 'phaser';
+import { EyePair } from './EyePair';
+import { Shadow } from './Shadow';
+import { Logger } from '../utils/Logger';
+
+export class Snake {
+    constructor(scene, x, y, color, spriteKey = 'snake-circle') {
+        this.scene = scene;
+        this.body = [];
+        this.headPosition = new PhaserMath.Vector2(x, y);
+        this.alive = true;
+
+        Logger.debug('Snake', 'Creating new snake at', x, y);
+
+        // Server runs at 60fps. Base speed 3px/frame = 180px/s. Boost 6px/frame = 360px/s.
+        this.slowSpeed = 180;
+        this.fastSpeed = 360;
+        this.speed = this.slowSpeed;
+        this.rotationSpeed = 2 * Math.PI; // Radians per second
+        this.scale = 0.6; // Starting scale (similar to reference)
+
+        // Generate textures
+        this.generateTextures(scene);
+
+        // Create Container for the head
+        this.head = scene.add.container(x, y);
+        this.head.setDepth(10);
+        this.head.snake = this; // Reference for Food
+        this.head.setScale(this.scale);
+
+        // 1. Head Circle (Base)
+        // Reference uses 'circle' for both head and body.
+        // I'll use 'snake-circle' (white) and tint it.
+        const headSprite = scene.add.image(0, 0, spriteKey);
+        // Random tint for variety, or specific if passed?
+        // Reference doesn't show tinting logic, but for a clone, we usually want colors.
+        // I'll assign a random color to this snake instance.
+        this.color = color !== undefined ? color : Phaser.Display.Color.RandomRGB().color;
+        headSprite.setTint(this.color);
+        this.head.add(headSprite);
+        
+        // Physics for head (for collision)
+        scene.physics.add.existing(this.head);
+        // Match Server Radius: 15 * scale
+        const radius = 15 * this.scale;
+        this.head.body.setCircle(radius); 
+        this.head.body.setOffset(-radius, -radius); // Center the body
+
+        // 2. Eyes (Using EyePair)
+        this.eyes = new EyePair(scene, this.head, 1); // Scale handled by container
+
+        // Initialize body
+        this.bodyGroup = scene.add.group();
+        
+        this.score = 0; // Track score/length locally
+
+        // Path history for body to follow
+        this.movePath = [];
+        this.sectionLength = 4; // Distance between body parts (in frames/updates approx)
+        
+        // Growth Queue
+        this.queuedSections = 0;
+        
+        // Initial length
+        this.addSections(10);
+
+        // Shadow
+        this.shadow = new Shadow(scene, this);
+        
+        // Temp vector for calculations
+        this._tempVector = new PhaserMath.Vector2();
+    }
+
+    setName(name) {
+        if (this.nameText) this.nameText.destroy();
+        this.nameText = this.scene.add.text(this.head.x, this.head.y - 25, name, {
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(20);
+    }
+
+    generateTextures(scene) {
+        if (!scene.textures.exists('snake-circle')) {
+            const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+
+            // Circle (White) - Used for Head and Body
+            graphics.fillStyle(0xffffff, 1);
+            graphics.fillCircle(15, 15, 15);
+            graphics.generateTexture('snake-circle', 30, 30);
+            graphics.clear();
+
+            // Eye (White Circle)
+            graphics.fillStyle(0xffffff, 1);
+            graphics.fillCircle(6, 6, 6);
+            graphics.generateTexture('snake-eye', 12, 12);
+            graphics.clear();
+
+            // Pupil (Black Circle)
+            graphics.fillStyle(0x000000, 1);
+            graphics.fillCircle(3, 3, 3);
+            graphics.generateTexture('snake-pupil', 6, 6);
+            graphics.clear();
+
+            // Shadow (White blurred circle)
+            if (!scene.textures.exists('snake-shadow')) {
+                graphics.fillStyle(0xffffff, 1);
+                graphics.fillCircle(15, 15, 15);
+                graphics.generateTexture('snake-shadow', 30, 30);
+            }
+        }
+    }
+
+    addSections(amount) {
+        this.queuedSections += amount;
+    }
+
+    grow() {
+        Logger.debug('Snake', 'Growing snake');
+        const bodyPart = this.scene.add.image(this.head.x, this.head.y, 'snake-circle');
+        this.scene.physics.add.existing(bodyPart);
+        
+        // Match Server Radius
+        const radius = 15 * this.scale;
+        bodyPart.body.setCircle(radius);
+        
+        bodyPart.setDepth(5);
+        bodyPart.setScale(this.scale);
+        bodyPart.setTint(this.color); // Match head color
+        this.body.push(bodyPart);
+        this.bodyGroup.add(bodyPart);
+
+        this.updateScale();
+
+    }
+    updateScale() {
+        // Use score if available (synced from server), otherwise fallback to body length
+        // Server formula: 0.6 + (10 + score) * 0.005
+        // Client fallback: 0.6 + (10 + body.length) * 0.005 (approx)
+        // Note: Server uses (10 + score), client previously used body.length.
+        // Let's match server exactly.
+        
+        const score = this.score !== undefined ? this.score : this.body.length;
+        let newScale = 0.6 + (10 + score) * 0.005;
+        
+        // Limit max scale
+        if (newScale > 1.2) newScale = 1.2;
+        
+        this.setScale(newScale);
+    }
+    
+
+    shrink() {
+        // Keep a minimum size, e.g., 3 body parts
+        if (this.body.length <= 3) return null;
+
+        Logger.debug('Snake', 'Shrinking snake');
+        const lastPart = this.body.pop();
+        const position = { x: lastPart.x, y: lastPart.y };
+        
+        // Remove from group and destroy
+        this.bodyGroup.remove(lastPart);
+        lastPart.destroy();
+        
+        this.updateScale();
+
+        return position;
+    }
+
+    update(time, delta) {
+        if (!this.alive) return;
+
+        // Movement logic (Head)
+        // Use temp vector to avoid GC
+        if (!this.isRemote) {
+            this.scene.physics.velocityFromRotation(this.head.rotation, this.speed * (delta / 1000), this._tempVector);
+
+            this.head.x += this._tempVector.x;
+            this.head.y += this._tempVector.y;
+
+            // Soft Server Reconciliation
+            // If we have a server target, gently nudge towards it to prevent drift
+            if (this.targetX !== undefined && this.targetY !== undefined) {
+                const dist = PhaserMath.Distance.Between(this.head.x, this.head.y, this.targetX, this.targetY);
+                
+                // If drift is small (> 5px), lerp slowly (0.05)
+                // If drift is large (> 50px), lerp faster (0.1) or snap
+                if (dist > 50) {
+                    this.head.x = PhaserMath.Linear(this.head.x, this.targetX, 0.1);
+                    this.head.y = PhaserMath.Linear(this.head.y, this.targetY, 0.1);
+                } else if (dist > 5) {
+                    this.head.x = PhaserMath.Linear(this.head.x, this.targetX, 0.05);
+                    this.head.y = PhaserMath.Linear(this.head.y, this.targetY, 0.05);
+                }
+            }
+        } else {
+            // Interpolation for Remote Snakes (and Player controlled by Server)
+            if (this.targetX !== undefined && this.targetY !== undefined) {
+                // Interpolation factor (0.1 to 0.3 is usually good for 60fps)
+                // Adjust this value: Lower = smoother but more lag, Higher = snappier but jerkier
+                const t = 0.3; 
+                
+                this.head.x = PhaserMath.Linear(this.head.x, this.targetX, t);
+                this.head.y = PhaserMath.Linear(this.head.y, this.targetY, t);
+                
+                if (this.targetRotation !== undefined) {
+                     // Interpolate rotation correctly (handling the -PI to PI wrap)
+                     // Use delta time for frame-rate independent rotation speed
+                     // 5 rad/s is slightly faster than server's 4.2 rad/s (0.07 * 60)
+                     const rotationSpeed = 5 * (delta / 1000);
+                    this.head.rotation = PhaserMath.Angle.RotateTo(this.head.rotation, this.targetRotation, rotationSpeed);
+                }
+            }
+        }
+
+        // Update Eyes
+        if (this.eyes) {
+            this.eyes.update();
+        }
+
+        // Store position history
+        this.movePath.unshift({ x: this.head.x, y: this.head.y });
+
+        // Limit path history length
+        // We need enough history for all body parts
+        // sectionLength is roughly "frames per section"
+        const neededHistory = (this.body.length + this.queuedSections) * this.sectionLength + 100;
+        if (this.movePath.length > neededHistory) {
+            this.movePath.pop();
+        }
+
+        // Handle Growth
+        if (this.queuedSections > 0) {
+            // Add one section per few frames or just one per update?
+            // Let's add one per update if we have path history
+            const targetIndex = (this.body.length + 1) * this.sectionLength;
+            if (this.movePath.length > targetIndex) {
+                this.grow();
+                this.queuedSections--;
+            }
+        }
+
+        // Move body parts
+        let pathIndex = this.sectionLength;
+        for (let i = 0; i < this.body.length; i++) {
+            const part = this.body[i];
+            if (this.movePath[pathIndex]) {
+                part.x = this.movePath[pathIndex].x;
+                part.y = this.movePath[pathIndex].y;
+            }
+            pathIndex += this.sectionLength;
+        }
+
+        // Update Shadow
+        if (this.shadow) {
+            this.shadow.update();
+        }
+
+        // Update Name Text
+        if (this.nameText) {
+            this.nameText.setPosition(this.head.x, this.head.y - 25);
+        }
+    }
+    
+    setScale(scale) {
+        this.scale = scale;
+        this.head.setScale(scale);
+        
+        // Update Head Physics Body
+        const radius = 15 * scale;
+        if (this.head.body) {
+            this.head.body.setCircle(radius);
+            this.head.body.setOffset(-radius, -radius);
+        }
+
+        this.body.forEach(part => {
+            part.setScale(scale);
+            // Update Body Part Physics
+            if (part.body) {
+                part.body.setCircle(radius);
+                // Images are centered by default, but setCircle might need offset if origin is 0.5
+                // For Image with origin 0.5, body is top-left aligned to (x - w/2, y - h/2)
+                // setCircle(r) sets it relative to that top-left.
+                // If we want it centered, and width is 30*scale, and 2*r is 30*scale, offset is 0.
+                // But let's be safe.
+            }
+        });
+        // Shadow handles its own scale reading from snake.scale
+    }
+
+    getLookAngle() {
+        return this.head.rotation;
+    }
+
+    incrementSize() {
+        this.addSections(1);
+        // Optional: Increase scale slightly every X foods
+        // this.setScale(this.scale + 0.001);
+    }
+    
+    destroy() {
+        this.alive = false;
+        if (this.nameText) this.nameText.destroy();
+        if (this.head) this.head.destroy();
+        if (this.eyes) this.eyes.destroy();
+        if (this.shadow) this.shadow.destroy();
+        if (this.body) this.body.forEach(part => part.destroy());
+        if (this.bodyGroup) this.bodyGroup.destroy();
+    }
+}
