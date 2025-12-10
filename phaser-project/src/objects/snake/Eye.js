@@ -24,8 +24,16 @@ export class Eye {
     update() {
         // Calculate look angle
         let lookAngle = this.head.rotation;
-        if (this.head.snake && typeof this.head.snake.getLookAngle === 'function') {
+        
+        // Check for mobile
+        const isMobile = !this.scene.sys.game.device.os.desktop || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        if (!isMobile && this.head.snake && typeof this.head.snake.getLookAngle === 'function') {
+            // Only use getLookAngle (mouse pointer) on Desktop
             lookAngle = this.head.snake.getLookAngle();
+        } else {
+            // On Mobile, or for other snakes, look forward (same as head rotation)
+            lookAngle = this.head.rotation;
         }
         
         const relativeAngle = lookAngle - this.head.rotation;

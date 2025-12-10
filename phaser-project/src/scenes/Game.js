@@ -1,9 +1,10 @@
 import { Scene } from 'phaser';
 import io from 'socket.io-client';
-import { PlayerSnake } from '../objects/PlayerSnake';
-import { Snake } from '../objects/Snake';
+import { PlayerSnake } from '../objects/snake/PlayerSnake';
+import { Snake } from '../objects/snake/Snake';
 import { Food } from '../objects/Food';
 import { Logger } from '../utils/Logger';
+import { CONFIG } from '../config/constants';
 
 export class Game extends Scene {
     constructor() {
@@ -18,8 +19,13 @@ export class Game extends Scene {
 
     create() {
         Logger.info('Game', 'Game Scene Created');
-        const WIDTH_WORLD = 5000;
-        const HEIGHT_WORLD = 5000;
+        
+        // Detect device
+        const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        this.isMobile = !this.sys.game.device.os.desktop || isMobileUA;
+
+        const WIDTH_WORLD = CONFIG.WORLD_WIDTH;
+        const HEIGHT_WORLD = CONFIG.WORLD_HEIGHT;
 
         // Set world bounds
         this.physics.world.setBounds(0, 0, WIDTH_WORLD, HEIGHT_WORLD);
@@ -34,6 +40,11 @@ export class Game extends Scene {
         this.scene.launch('UIScene');
         this.scene.bringToTop('UIScene');
 
+        // --- CAMERA ZOOM LOGIC ---
+        this.baseZoom = 1.0;
+        this.handleCameraZoom();
+        this.scale.on('resize', this.handleCameraZoom, this);
+
         this.snakes = [];
         this.otherSnakes = new Map(); // Map<playerId, Snake>
 
@@ -43,7 +54,7 @@ export class Game extends Scene {
         }); 
 
         // Socket Connection
-        this.socket = io('http://172.20.10.2:3000', { forceNew: true });
+        this.socket = io(CONFIG.SERVER_URL, { forceNew: true });
 
         // Send initialization data (color, name) immediately upon connection
         this.socket.on('connect', () => {
@@ -287,9 +298,31 @@ export class Game extends Scene {
 
         // Send Input
         if (this.player && this.player.alive) {
-            const angle = this.player.getLookAngle();
-            // Check for boost input (Space or Click)
-            const isBoosting = (this.player.spaceKey.isDown || this.input.activePointer.isDown);
+            let angle;
+            let isBoosting = false;
+
+            if (this.isMobile) {
+                // MOBILE: Only use Joystick input
+                // Default to current rotation if no input
+                angle = this.player.rotation;
+
+                // Get input from UIScene
+                const uiScene = this.scene.get('UIScene');
+                if (uiScene && uiScene.getMobileInput) {
+                    const mobileInput = uiScene.getMobileInput();
+                    if (mobileInput) {
+                        if (mobileInput.angle !== null) {
+                            angle = mobileInput.angle;
+                        }
+                        isBoosting = mobileInput.isBoosting;
+                    }
+                }
+            } else {
+                // DESKTOP: Mouse + Space/Click
+                angle = this.player.getLookAngle();
+                isBoosting = (this.player.spaceKey.isDown || this.input.activePointer.isDown);
+            }
+            
             this.socket.emit('playerInput', { angle: angle, isBoosting: isBoosting });
             
             // Visual feedback for local player immediately
@@ -321,21 +354,37 @@ export class Game extends Scene {
         if (!this.player || !this.player.alive) return;
 
         // Calculate target zoom based on player scale
-        // As player gets bigger (scale increases), zoom out (zoom value decreases)
-        // Base scale 0.6 -> Zoom 1.0
-        
-        // Adjusted formula to be less aggressive:
-        // Instead of dropping to 0.5 at max scale, we drop to ~0.75
         const scaleDiff = this.player.scale - 0.6;
-        let targetZoom = 1.0 - (scaleDiff * 0.4); 
+        
+        // Use calculated baseZoom instead of fixed 1.0
+        let targetZoom = this.baseZoom - (scaleDiff * 0.4); 
 
-        // Limit zoom (min 0.5, max 1.0)
-        targetZoom = Phaser.Math.Clamp(targetZoom, 0.5, 1.0);
+        // Limit zoom relative to baseZoom
+        // Min zoom is half of baseZoom
+        targetZoom = Phaser.Math.Clamp(targetZoom, this.baseZoom * 0.5, this.baseZoom);
 
         // Smoothly interpolate current zoom to target zoom
         this.cameras.main.setZoom(
             Phaser.Math.Linear(this.cameras.main.zoom, targetZoom, 0.05)
         );
+    }
+
+    handleCameraZoom() {
+        const width = this.scale.width;
+        // Target width is roughly what we expect on a standard desktop (e.g., 1440)
+        // If the screen is smaller (mobile), we zoom out (reduce zoom value) to show more world.
+        const targetWidth = 1440; 
+        
+        let zoom = width / targetWidth;
+        
+        // Clamp zoom to reasonable limits
+        // Min 0.5 (Mobile view) - Max 1.0 (Desktop view)
+        this.baseZoom = Phaser.Math.Clamp(zoom, 0.5, 1.0);
+        
+        // Apply immediately if player not spawned yet
+        if (!this.player) {
+            this.cameras.main.setZoom(this.baseZoom);
+        }
     }
 
     // checkCollisions removed for Server Authoritative Fairness

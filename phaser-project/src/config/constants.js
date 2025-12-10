@@ -1,0 +1,8 @@
+export const CONFIG = {
+    WIDTH: 1280,
+    HEIGHT: 720,
+    BACKGROUND_COLOR: '#028af8',
+    WORLD_WIDTH: 5000,
+    WORLD_HEIGHT: 5000,
+    SERVER_URL: 'http://172.20.10.2:3000'
+};

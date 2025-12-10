@@ -43,6 +43,7 @@ export class Preloader extends Scene {
         this.load.image('snake-eye', 'eye-white.png');
         this.load.image('snake-pupil', 'eye-black.png');
         this.load.image('snake-shadow', 'white-shadow.png');
+        this.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
     }
 
     create() {

@@ -1,6 +1,6 @@
 import { Snake } from './Snake';
 import { Math as PhaserMath } from 'phaser';
-import { Logger } from '../utils/Logger';
+import { Logger } from '../../utils/Logger';
 
 export class PlayerSnake extends Snake {
     constructor(scene, x, y, color) {
@@ -27,6 +27,13 @@ export class PlayerSnake extends Snake {
     }
 
     handleInput(delta) {
+        // Check for mobile
+        const isMobile = !this.scene.sys.game.device.os.desktop || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // On mobile, input is handled by Game.js -> UIScene. 
+        // We skip local input handling here to avoid conflicts (e.g. touching joystick triggering boost).
+        if (isMobile) return;
+
         // Only handle Boost input locally for visual feedback/state
         // Rotation is handled by Server (via Game.js sending input and receiving updates)
         
@@ -51,6 +58,18 @@ export class PlayerSnake extends Snake {
     }
 
     getLookAngle() {
+        // Check for mobile
+        const isMobile = !this.scene.sys.game.device.os.desktop || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        if (isMobile) {
+            // On mobile, look angle is determined by the joystick (handled in Game.js)
+            // or defaults to current rotation if no input.
+            // We return the current rotation so the eyes look forward by default.
+            // If Game.js overrides the angle with joystick input, the eyes will update naturally
+            // because the head rotates to that angle.
+            return this.rotation;
+        }
+
         const pointer = this.scene.input.activePointer;
         const cam = this.scene.cameras.main;
         
