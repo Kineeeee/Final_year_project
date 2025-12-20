@@ -7,30 +7,40 @@ class FoodManager {
         this.foodIdCounter = 0;
     }
 
-    spawnFood(x, y, color) {
-        // If coordinates are provided (death/boost), ignore the limit.
-        // Otherwise (random spawn), respect the limit.
-        if ((x !== undefined && y !== undefined) || Object.keys(this.food).length < MAX_FOOD) {
-            const id = this.foodIdCounter++;
-            this.food[id] = {
-                id: id,
-                x: x !== undefined ? x : Math.floor(Math.random() * WORLD_SIZE),
-                y: y !== undefined ? y : Math.floor(Math.random() * WORLD_SIZE),
-                color: color !== undefined ? color : Math.floor(Math.random() * 0xFFFFFF)
-            };
-            return this.food[id];
+    spawnFood(x, y, color, type = 'regular', value = 1) {
+        const id = Date.now() + Math.random();
+        if (x === undefined) x = Math.floor(Math.random() * WORLD_SIZE);
+        if (y === undefined) y = Math.floor(Math.random() * WORLD_SIZE);
+        // Nếu là Coin thì mặc định màu vàng
+        if (type === 'coin') {
+            color = 0xFFD700; // Gold color
+            value = 10; // 1 Coin = 10 điểm tiền (hoặc tùy bạn chỉnh)
+        } else if (color === undefined) {
+            color = Math.floor(Math.random() * 0xFFFFFF);
         }
-        return null;
+        this.food[id] = { 
+            id, 
+            x, 
+            y, 
+            color, 
+            type, // 'regular' hoặc 'coin'
+            value 
+        };
+        this.foodCount++;
+        return this.food[id];
     }
 
-    spawnInitialFood(count = 50) {
+    spawnInitialFood(count = MAX_FOOD) {
         for (let i = 0; i < count; i++) {
             this.spawnFood();
         }
     }
 
     removeFood(id) {
+        if (this.food[id]) {
         delete this.food[id];
+        this.foodCount--;
+        }
     }
 
     getAllFood() {
@@ -39,6 +49,33 @@ class FoodManager {
     
     getFood(id) {
         return this.food[id];
+    }
+
+    refillFood() {
+        const TARGET = MAX_FOOD;
+        let ids = Object.keys(this.food);
+
+        // Nếu thừa thì xóa bớt ngẫu nhiên
+        if (ids.length > TARGET) {
+            // Xóa bớt cho đúng số lượng
+            const toRemove = ids.length - TARGET;
+            // Lấy ngẫu nhiên các id để xóa
+            for (let i = 0; i < toRemove; i++) {
+                const idx = Math.floor(Math.random() * ids.length);
+                const id = ids[idx];
+                delete this.food[id];
+                ids.splice(idx, 1);
+            }
+        }
+        // Nếu thiếu thì spawn thêm
+        else if (ids.length < TARGET) {
+            const need = TARGET - ids.length;
+            for (let i = 0; i < need; i++) {
+                this.spawnFood();
+            }
+        }
+        // Gửi cập nhật cho client
+        this.io.emit('currentFood', this.food);
     }
 }
 

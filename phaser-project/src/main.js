@@ -5,7 +5,7 @@ import { GameOver } from './scenes/GameOver';
 import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
 import { CustomizeScene } from './scenes/CustomizeScene';
-
+import {Logger} from './utils/Logger';
 
 // --- LOGIN LOGIC ---
 const loginOverlay = document.getElementById('login-overlay');
@@ -29,7 +29,12 @@ const authAction = async (endpoint) => {
     const username = usernameInput.value.trim();
     const password = passwordInput.value.trim();
 
+    Logger.info('Auth', `Calling API: ${endpoint} with username: ${username}`);
+    
+    
+
     if (!username || !password) {
+        Logger.warn('Auth', 'Username or password is empty');
         showMessage('Please enter username and password');
         return;
     }
@@ -40,15 +45,18 @@ const authAction = async (endpoint) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
+        Logger.info('Auth', `API Response Status: ${response.status}`);
+
 
         const data = await response.json();
 
         if (!response.ok) {
             throw new Error(data.message || 'Something went wrong');
         }
-
+        Logger.info('Auth','API call successful', data);
         return data;
     } catch (error) {
+        Logger.error('Auth', 'API call failed', error);
         showMessage(error.message);
         return null;
     }
@@ -62,6 +70,12 @@ btnLogin.addEventListener('click', async () => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('username', data.username);
         localStorage.setItem('coins', data.coins);
+
+
+        // lưu màu từ server về
+        if (data.color) {
+            localStorage.setItem('preferredColor', data.color);
+        }
         
         // 2. Ẩn form login
         loginOverlay.style.display = 'none';

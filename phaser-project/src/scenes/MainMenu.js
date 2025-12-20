@@ -48,8 +48,16 @@ export class MainMenu extends Scene {
         // ------------------------------
         this.createButton(centerX, centerY + 100, 'Play Now', () => {
             Logger.info('MainMenu', 'Start Game clicked');
-            // Bắt đầu trò chơi, truyền tên người chơi
-            this.scene.start('Game', {name: username});
+
+            const gameData = { name: username };
+
+            const savedColor = localStorage.getItem('preferredColor');
+            if (savedColor) {
+                gameData.color = parseInt(savedColor);
+            }
+
+            // Bắt đầu trò chơi, truyền data người chơi
+            this.scene.start('Game', gameData);
         });
 
         // ------------------------------

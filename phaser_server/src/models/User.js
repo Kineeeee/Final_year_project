@@ -6,6 +6,7 @@ const UserSchema = new mongoose.Schema({
   coins: { type: Number, default: 0 }, // Tiền để mua skin
   ownedSkins: { type: [String], default: ['default'] }, // Danh sách skin đã mua
   currentSkin: { type: String, default: 'default' }, // Skin đang dùng
+  color: { type: Number, default: null }, // Màu sắc của rắn
   highScore: { type: Number, default: 0 }
 });
 

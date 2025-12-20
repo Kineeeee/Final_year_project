@@ -1,5 +1,5 @@
 export class Logger {
-    static enabled = true;
+    static enabled = false;
     static showTimestamp = true;
 
     // Log levels

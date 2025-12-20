@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
@@ -12,6 +13,24 @@ const SpawnManager = require('./src/managers/SpawnManager');
 
 const app = express();
 
+// --- cấu hình rate limit ---
+// giới hạn toàn bộ API để tránh spam request
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 phút
+    max: 100, // giới hạn mỗi IP mỗi cửa sổ thời gian
+    standardHeaders: true, // gửi thông tin giới hạn trong header `RateLimit-*`
+    legacyHeaders: false, // không gửi header `X-RateLimit-*`
+    message: 'Quá nhiều yêu cầu từ địa chỉ IP này, vui lòng thử lại sau 15 phút.'
+});
+app.use('/api/', limiter);
+// --- giới hạn cho login và đăng ký ---
+const authLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 giờ
+    max: 10, // giới hạn mỗi IP mỗi cửa sổ thời gian
+    message: 'too many login/signup attempts from this IP, please try again after an hour' 
+});
+
+
 // 1.Connect to Database
 connectDB();
 
@@ -23,7 +42,7 @@ app.use(express.static(__dirname + '/public'));
 
 
 // 3.Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 
 app.get('/', function (req, res) {
     res.send('Server is running');
@@ -109,6 +128,16 @@ setInterval(() => {
     // Emit the updated state to all players
     io.emit('playerUpdates', updatePacket);
 }, 1000 / FPS);
+
+setInterval(() => {
+    count = Object.keys(foodManager.getAllFood()).length;
+    console.log('Current food count:', count);
+},10000); // Every 10 seconds
+
+setInterval(() => {
+    foodManager.refillFood();
+}, 60000); // Every 60 seconds
+
 
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

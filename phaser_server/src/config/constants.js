@@ -1,7 +1,7 @@
 module.exports = {
     PORT: 3000,
-    WORLD_SIZE: 5000,
-    MAX_FOOD: 500,
+    WORLD_SIZE: 10000,
+    MAX_FOOD: 350,
     FPS: 30,
     SAFE_SPAWN_RADIUS: 300,
     FOOD_RADIUS: 10,

@@ -119,21 +119,43 @@ export class Game extends Scene {
             this.foodGroup.clear(true, true);
 
             Object.keys(foodData).forEach((id) => {
-                const foodInfo = foodData[id];
-                this.spawnFood(foodInfo.x, foodInfo.y, foodInfo.color, foodInfo.id);
+                const f = foodData[id];
+                this.spawnFood(f.x, f.y, f.color, f.id, f.type);
             });
         });
 
-        this.socket.on('newFood', (foodInfo) => {
-            this.spawnFood(foodInfo.x, foodInfo.y, foodInfo.color, foodInfo.id);
+        this.socket.on('newFood', (f) => {
+            this.spawnFood(f.x, f.y, f.color, f.id, f.type);
+        });
+
+        // Lắng nghe sự kiện cập nhật tiền
+        this.socket.on('updateCoins', (newCoins) => {
+            // Lưu vào localStorage
+            localStorage.setItem('coins', newCoins);
+            // Bắn event để UIScene cập nhật text (nếu có)
+            this.events.emit('coinsChanged', newCoins);
+            Logger.info('Game', `Coins updated: ${newCoins}`);
         });
 
         this.socket.on('foodEaten', (data) => {
             // data = { foodId, playerId, score }
-            // Remove food safely
-            const foodToRemove = this.foodGroup.getChildren().find(food => food.id == data.foodId);
-            if (foodToRemove) {
-                foodToRemove.destroy();
+            const food = this.foodGroup.getChildren().find(f => f.id == data.foodId);
+            if (food) {
+                // Tìm người ăn để bay vào
+                let eater = null;
+                if (this.player && this.player.playerId === data.playerId) {
+                    eater = this.player;
+                } else if (this.otherSnakes.has(data.playerId)) {
+                    eater = this.otherSnakes.get(data.playerId);
+                }
+
+                if (eater && eater.head) {
+                    // Kích hoạt hiệu ứng nam châm bay vào đầu rắn
+                    food.magnetTo(eater.head);
+                } else {
+                    // Nếu không thấy người ăn (hoặc lỗi), xoá ngay lập tức
+                    food.destroy();
+                }
             }
         });
 
@@ -257,7 +279,7 @@ export class Game extends Scene {
         this.snakes.push(otherPlayer);
     }
 
-    spawnFood(x, y, color, id) {
+    spawnFood(x, y, color, id, type = 'regular') {
         // if (x === undefined) x = Phaser.Math.Between(0, 3000);
         // if (y === undefined) y = Phaser.Math.Between(0, 3000);
         
@@ -285,6 +307,16 @@ export class Game extends Scene {
         if (food) {
             food.onSpawn(x, y, color);
             food.id = id; // Assign Server ID
+            food.type = type; // 'regular' hoặc 'coin'
+
+            // nếu là coin thì làm nó nổi bật
+            if (type === 'coin') {
+                food.setScale(1.5);
+                food.setTint(0xFFD700); // Màu vàng
+            }else {
+                food.setScale(1.0);
+                food.setRotation(0);
+            }
         }
     }
 
@@ -335,17 +367,16 @@ export class Game extends Scene {
             }
         }
 
-        // Update Food (for magnet effect)
+        // Kiểm tra khoảng cách để kích hoạt hút (Magnet)
         this.foodGroup.children.each(food => {
-            if (food.active) {
-                food.preUpdate(time, delta);
+            if (food.active && !food.target) { // Chỉ hút nếu chưa bị hút
+                const dist = Phaser.Math.Distance.Between(this.player.head.x, this.player.head.y, food.x, food.y);
+                if (dist < 50) { // Khoảng cách hút (ví dụ 50px)
+                    food.magnetTo(this.player.head);
+                }
             }
         });
         
-        // Respawn food if too low
-        // if (this.foodGroup.countActive() < 100) {
-        //     this.spawnFood();
-        // }
 
         this.updateCamera();
     }

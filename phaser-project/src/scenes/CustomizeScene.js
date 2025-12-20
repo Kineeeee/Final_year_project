@@ -11,6 +11,7 @@ export class CustomizeScene extends Scene {
 
         const { width, height } = this.scale;
 
+
         // Background - Dark Hexagon Pattern (Simulated with dark color for now)
         this.add.rectangle(width / 2, height / 2, width, height, 0x1a1a2e); // Dark blue/black background
         this.add.image(width / 2, height / 2, 'background').setAlpha(0.2).setTint(0x000000); // Subtle texture
@@ -150,7 +151,23 @@ export class CustomizeScene extends Scene {
             0xecf0f1, // White
             0x34495e  // Dark Blue
         ];
-        let currentColorIndex = 0;
+        // lấy màu đã lưu
+        const savedColor = localStorage.getItem('preferredColor');
+
+        // xác định màu khởi tạo cho con rắn preview
+        this.selectedColor = savedColor ? parseInt(savedColor) : colors[0];
+
+        // tìm chỉ mục của màu hiện tại
+        let currentColorIndex = colors.indexOf(this.selectedColor);
+
+        // nếu màu lưu không có trong danh sách
+        if (currentColorIndex === -1) {
+            currentColorIndex = 0;
+            this.selectedColor = colors[0];
+        }
+        
+        // Cập nhật màu preview ban đầu
+        this.updatePreviewColor(this.selectedColor);
 
         const changeColor = (direction) => {
             if (direction === 'next') {
@@ -188,7 +205,27 @@ export class CustomizeScene extends Scene {
         .setInteractive({ useHandCursor: true });
         
         saveBtn.on('pointerdown', () => {
-            this.scene.start('Game', { color: this.selectedColor });
+            const username = localStorage.getItem('username') || 'Guest';
+
+            // Save selected color to localStorage
+            localStorage.setItem('preferredColor', this.selectedColor);
+
+            // nếu không phải Guest thì cập nhật màu lên server
+            if (username !== 'Guest' && !username.startsWith('Guest_')) {
+                fetch('http://localhost:3000/api/update-color', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: username, color: this.selectedColor })
+                }).catch(err => {
+                    Logger.error('CustomizeScene', 'Failed to update color on server', err);
+
+                });
+            }
+
+            this.scene.start('Game', { 
+                name: username,
+                color: this.selectedColor });
         });
 
         saveBtn.on('pointerover', () => saveBtn.setStyle({ backgroundColor: '#45a049' }));

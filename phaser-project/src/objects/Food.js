@@ -16,13 +16,19 @@ export class Food extends Phaser.GameObjects.Image {
         }
 
         this.target = null;
-        this.speed = 400;
-        this.magnetDistance = 5; // Distance to be considered "eaten"
+        this.speed = 800;
+        this.magnetDistance = 15; // Distance to be considered "eaten"
     }
 
     preUpdate(time, delta) {
         // If we have a target (snake head), move towards it
-        if (this.target && this.target.active) {
+        if (this.target) {
+            // Nếu mục tiêu (đầu rắn) đã bị huỷ (ví dụ rắn chết), thì xoá thức ăn luôn
+            if (!this.target.active) {
+                this.destroy();
+                return;
+            }
+
             const angle = PhaserMath.Angle.Between(this.x, this.y, this.target.x, this.target.y);
             const velocity = new PhaserMath.Vector2();
             this.scene.physics.velocityFromRotation(angle, this.speed, velocity);
@@ -36,6 +42,27 @@ export class Food extends Phaser.GameObjects.Image {
                 this.eat();
             }
         }
+
+        if (this.type === 'coin') {
+            // 1. Xoay tròn
+            this.rotation += 0.05;
+
+            // 2. Lấp lánh (Thay đổi độ sáng/alpha hoặc scale nhẹ)
+            this.shineTimer += delta;
+            
+            // Tạo hiệu ứng nhấp nháy scale nhẹ (Pulse)
+            const scalePulse = 1.5 + Math.sin(this.shineTimer * 0.005) * 0.1;
+            this.setScale(scalePulse);
+
+            // Hoặc hiệu ứng đổi màu nhẹ (nếu muốn)
+            // const tint = Phaser.Display.Color.Interpolate.ColorWithColor(
+            //     Phaser.Display.Color.ValueToColor(0xFFD700), // Vàng
+            //     Phaser.Display.Color.ValueToColor(0xFFFFFF), // Trắng
+            //     100,
+            //     Math.floor(Math.abs(Math.sin(this.shineTimer * 0.005)) * 100)
+            // );
+            // this.setTint(Phaser.Display.Color.GetColor(tint.r, tint.g, tint.b));
+        }
     }
 
     magnetTo(head) {
@@ -45,6 +72,9 @@ export class Food extends Phaser.GameObjects.Image {
             this.body.enable = false;
         }
     }
+
+
+
 
     eat() {
         Logger.debug('Food', 'Food eaten');

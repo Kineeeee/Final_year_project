@@ -8,6 +8,7 @@ const {
     PIXELS_PER_SEGMENT,
     FOOD_RADIUS
 } = require('../config/constants');
+const User = require('../models/User');
 
 class PlayerManager {
     constructor(io, foodManager) {
@@ -72,17 +73,22 @@ class PlayerManager {
         console.log('Player died:', playerId);
 
         // Convert body to food
-        // Iterate through path and spawn food
-        const segmentLength = 4;
-        // Spawn food every 2nd segment to avoid too much food
         if (player.path) {
-            for (let i = 0; i < player.path.length; i += segmentLength * 2) {
+            for (let i = 0; i < player.path.length; i += 4 * 2) { // Giữ nguyên logic cũ
                 const point = player.path[i];
-                // Add some randomness to position
                 const fx = point.x + (Math.random() * 20 - 10);
                 const fy = point.y + (Math.random() * 20 - 10);
                 
-                const newFood = this.foodManager.spawnFood(fx, fy); 
+                // TỈ LỆ RƠI COIN: 50% cơ hội mỗi đốt thân sẽ biến thành Coin
+                const isCoin = Math.random() < 0.5; 
+                
+                let newFood;
+                if (isCoin) {
+                    newFood = this.foodManager.spawnFood(fx, fy, null, 'coin', 10);
+                } else {
+                    newFood = this.foodManager.spawnFood(fx, fy);
+                }
+
                 if (newFood) {
                     this.io.emit('newFood', newFood);
                 }
@@ -186,12 +192,12 @@ class PlayerManager {
     }
 
     getPlayerRadius(score) {
-        // Reduced hitbox (80% of visual) to be more forgiving with lag
-        return 12 * this.getPlayerScale(score);
+        // Reduced hitbox (90% of visual) to be more forgiving with lag
+        return 14 * this.getPlayerScale(score);
     }
 
     update() {
-        const segmentLength = 2; // Reduced for better precision near head
+        const segmentLength = 1; // Reduced for better precision near head
         
         // Spawn Bots
         const currentBotCount = Object.values(this.players).filter(p => p.isBot).length;
@@ -277,7 +283,7 @@ class PlayerManager {
                 // Start from index segmentLength (skip head area to avoid head-to-head instant death if close)
                 // Increased precision: Check every 2 points instead of segmentLength (4)
                 if (other.path) {
-                    for (let i = segmentLength; i < other.path.length; i += 2) {
+                    for (let i = segmentLength; i < other.path.length; i ++) {
                         const point = other.path[i];
                         const dist = Math.hypot(player.x - point.x, player.y - point.y);
                         if (dist < myRadius + otherRadius) { // Collision radius (Head radius + Body radius)
@@ -290,7 +296,7 @@ class PlayerManager {
 
             // Check collision with food
             const allFood = this.foodManager.getAllFood();
-            Object.keys(allFood).forEach(foodId => {
+            Object.keys(allFood).forEach(async foodId => {
                 const f = allFood[foodId];
                 const dx = player.x - f.x;
                 const dy = player.y - f.y;
@@ -298,19 +304,47 @@ class PlayerManager {
                 
                 const myRadius = this.getPlayerRadius(player.score);
 
-                if (distance < myRadius + FOOD_RADIUS) {
+                const MAGNET_RADIUS = 50;
+
+                if (distance < myRadius + MAGNET_RADIUS) {
                     // Eat food
                     this.foodManager.removeFood(foodId);
-                    player.score += 1; // Increase score/length
+                    
+                    //xử lý ăn coin
+                    if (f.type === 'coin') {
+                        // !bot -> thêm tiền
+                        if (!player.isBot) {
+                            try {
+                                // Tìm user theo username (vì trong player object có lưu name)
+                                // Lưu ý: player.name có thể là "Guest_..." hoặc tên thật.
+                                // Tốt nhất là lưu username gốc vào player object lúc init.
+                                // Giả sử player.username là tên đăng nhập chuẩn.
+                                if (player.username && !player.username.startsWith('Guest_')) {
+                                    await User.findOneAndUpdate(
+                                        { username: player.username },
+                                        { $inc: { coins: f.value } } // Cộng dồn tiền
+                                    );
+                                    // Gửi event báo cho Client biết tiền mới
+                                    const updatedUser = await User.findOne({ username: player.username });
+                                    this.io.to(id).emit('updateCoins', updatedUser.coins);
+                                }
+                            } catch (err) {
+                                console.error('Error updating coins:', err);
+                            }
+                        }
+                    } else {
+                        // Ăn thức ăn thường -> Tăng điểm
+                        player.score += 1;
+                    }
                     
                     // Emit event to remove food and update score
                     // Use f.id to ensure we send a number, not the string key from Object.keys
-                    this.io.emit('foodEaten', { foodId: f.id, playerId: id, score: player.score });
+                    this.io.emit('foodEaten', { foodId: f.id, playerId: id, score: player.score, type: f.type });
                     
                     // Spawn new food
-                    const newFood = this.foodManager.spawnFood();
-                    if (newFood) {
-                        this.io.emit('newFood', newFood);
+                    if (f.type !== 'coin') {
+                        const newFood = this.foodManager.spawnFood();
+                        if (newFood) this.io.emit('newFood', newFood);
                     }
                 }
             });

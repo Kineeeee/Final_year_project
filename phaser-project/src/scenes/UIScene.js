@@ -24,6 +24,8 @@ export class UIScene extends Scene {
             backgroundColor: '#00000088', padding: padding
         });
 
+        
+
         // Ping (Top Right)
         this.pingText = this.add.text(this.cameras.main.width - safeMargin, safeMargin, 'Ping: 0ms', {
             fontFamily: 'Arial', fontSize: isMobile ? '16px' : '14px', color: '#00ff00',
