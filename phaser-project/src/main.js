@@ -6,6 +6,98 @@ import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
 import { CustomizeScene } from './scenes/CustomizeScene';
 
+
+// --- LOGIN LOGIC ---
+const loginOverlay = document.getElementById('login-overlay');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const btnLogin = document.getElementById('btn-login');
+const btnRegister = document.getElementById('btn-register');
+const loginMessage = document.getElementById('login-message');
+const btnGuest = document.getElementById('btn-guest');
+
+const API_URL = 'http://localhost:3000/api/auth'; // Địa chỉ server của bạn
+
+// Hàm hiển thị thông báo lỗi/thành công
+const showMessage = (msg, isError = true) => {
+    loginMessage.textContent = msg;
+    loginMessage.style.color = isError ? '#ff4444' : '#00ff00';
+};
+
+// Hàm gọi API
+const authAction = async (endpoint) => {
+    const username = usernameInput.value.trim();
+    const password = passwordInput.value.trim();
+
+    if (!username || !password) {
+        showMessage('Please enter username and password');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Something went wrong');
+        }
+
+        return data;
+    } catch (error) {
+        showMessage(error.message);
+        return null;
+    }
+};
+
+// Xử lý Đăng nhập
+btnLogin.addEventListener('click', async () => {
+    const data = await authAction('login');
+    if (data) {
+        // 1. Lưu token vào localStorage để dùng sau này
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('username', data.username);
+        localStorage.setItem('coins', data.coins);
+        
+        // 2. Ẩn form login
+        loginOverlay.style.display = 'none';
+        
+        // 3. Khởi động game
+        startGame();
+    }
+});
+
+// Xử lý Đăng ký
+btnRegister.addEventListener('click', async () => {
+    const data = await authAction('register');
+    if (data) {
+        showMessage('Registration successful! Please login.', false);
+        // Xóa password để người dùng nhập lại cho chắc
+        passwordInput.value = '';
+    }
+});
+
+if (btnGuest) {
+    btnGuest.addEventListener('click', () => {
+        // Tạo tên ngẫu nhiên
+        const guestName = 'Guest_' + Math.floor(Math.random() * 10000);
+        
+        // Lưu thông tin giả vào localStorage
+        localStorage.setItem('username', guestName);
+        localStorage.setItem('coins', '0');
+        localStorage.removeItem('token'); // Xóa token cũ nếu có để tránh lỗi xác thực sau này
+        
+        // Ẩn form và vào game
+        if (loginOverlay) loginOverlay.style.display = 'none';
+        startGame();
+    });
+}
+// --- END LOGIN LOGIC ---
+
 // Detect Mobile Device
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -78,4 +170,20 @@ const config = {
   ]
 };
 
-export default new Phaser.Game(config);
+function startGame() {
+    // Kiểm tra xem game đã được tạo chưa để tránh tạo trùng
+    if (!window.game) {
+        window.game = new Phaser.Game(config);
+    }
+}
+
+// Tự động đăng nhập nếu đã có token (Optional)
+const savedToken = localStorage.getItem('token');
+if (savedToken) {
+    // Nếu muốn tự động vào game luôn:
+    if (loginOverlay) loginOverlay.style.display = 'none';
+    startGame();
+}
+
+// Export hàm startGame nếu cần dùng ở nơi khác (không bắt buộc)
+export { startGame };

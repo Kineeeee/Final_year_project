@@ -1,18 +1,111 @@
 body {
     margin: 0;
     padding: 0;
-    background-color: #000000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    overflow: hidden;
+    background-color: #000;
+    overflow: hidden; /* Ngăn cuộn trang */
 }
-
+canvas {
+    display: block;
+    touch-action: none;
+    /* Cải thiện độ sắc nét trên một số trình duyệt */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
 #game-container {
+    width: 100vw;
+    height: 100vh;
+}
+/* --- LOGIN STYLES --- */
+#login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
+    background: rgba(0, 0, 0, 0.85); /* Nền tối mờ */
     display: flex;
     justify-content: center;
     align-items: center;
+    z-index: 1000; /* Luôn nằm trên cùng */
+}
+
+.login-box {
+    background: #1a1a1a;
+    padding: 40px;
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+    text-align: center;
+    width: 300px;
+    border: 2px solid #4a4a4a;
+}
+
+.login-box h2 {
+    color: #00ff00;
+    margin-bottom: 30px;
+    font-size: 2em;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.login-box input {
+    width: 100%;
+    padding: 12px;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 5px;
+    color: white;
+    font-size: 16px;
+    box-sizing: border-box; /* Để padding không làm vỡ layout */
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.login-box input:focus {
+    border-color: #00ff00;
+}
+
+.login-box button {
+    width: 100%;
+    padding: 12px;
+    background: #00cc00;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 10px;
+    transition: transform 0.1s, background 0.3s;
+}
+
+.login-box button:hover {
+    background: #00ff00;
+    transform: scale(1.02);
+}
+
+.login-box button:active {
+    transform: scale(0.98);
+}
+
+.login-box .secondary-btn {
+    background: transparent;
+    border: 2px solid #555;
+    color: #aaa;
+}
+
+.login-box .secondary-btn:hover {
+    border-color: #fff;
+    color: #fff;
+    background: transparent;
+}
+
+#login-message {
+    color: #ff4444;
+    margin-top: 15px;
+    font-size: 14px;
+    min-height: 20px;
 }

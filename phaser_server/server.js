@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const connectDB = require('./src/config/db');
+const authRoutes = require('./src/routers/authRouters.js');
 
 const { PORT, FPS } = require('./src/config/constants');
 const PlayerManager = require('./src/managers/PlayerManager');
@@ -9,8 +11,19 @@ const FoodManager = require('./src/managers/FoodManager');
 const SpawnManager = require('./src/managers/SpawnManager');
 
 const app = express();
+
+// 1.Connect to Database
+connectDB();
+
+
+// 2.Middleware
 app.use(cors());
+app.use(express.json());
 app.use(express.static(__dirname + '/public'));
+
+
+// 3.Routes
+app.use('/api/auth', authRoutes);
 
 app.get('/', function (req, res) {
     res.send('Server is running');
