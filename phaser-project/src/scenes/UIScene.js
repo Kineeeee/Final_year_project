@@ -10,10 +10,10 @@ export class UIScene extends Scene {
 
     create() {
         const isMobile = !this.sys.game.device.os.desktop;
-        
+
         // Safe Area Margin (for notch/rounded corners)
         const safeMargin = isMobile ? 60 : 10;
-        
+
         // Font Size (Larger on mobile because of HD resolution scaling)
         const fontSize = isMobile ? '20px' : '16px';
         const padding = { x: 10, y: 10 };
@@ -24,7 +24,7 @@ export class UIScene extends Scene {
             backgroundColor: '#00000088', padding: padding
         });
 
-        
+
 
         // Ping (Top Right)
         this.pingText = this.add.text(this.cameras.main.width - safeMargin, safeMargin, 'Ping: 0ms', {
@@ -34,10 +34,18 @@ export class UIScene extends Scene {
 
         // Get reference to Game Scene to listen for updates
         const gameScene = this.scene.get('Game');
-        
+
         // Listen for events from Game Scene
         gameScene.events.on('updateLeaderboard', this.updateLeaderboard, this);
         gameScene.events.on('updatePing', this.updatePing, this);
+        gameScene.events.on('coinsChanged', this.updateCoins, this);
+
+        // Coin Display (Below Leaderboard)
+        const savedCoins = localStorage.getItem('coins') || 0;
+        this.coinText = this.add.text(safeMargin, safeMargin + 200, `Coins: ${savedCoins}`, {
+            fontFamily: 'Arial', fontSize: fontSize, color: '#FFD700',
+            backgroundColor: '#00000088', padding: padding
+        });
 
         // MOBILE CONTROLS
         // Check if mobile device
@@ -60,7 +68,7 @@ export class UIScene extends Scene {
         const joyRadius = 130;
         const joyX = joyRadius + safeMarginX;
         const joyY = height - (joyRadius + safeMarginY);
-        
+
         const btnRadius = 90;
         const btnX = width - (btnRadius + safeMarginX);
         const btnY = height - (btnRadius + safeMarginY);
@@ -86,17 +94,17 @@ export class UIScene extends Scene {
             .setInteractive()
             .setDepth(100); // Ensure button is on top
 
-        this.boostBtn.on('pointerdown', () => { 
-            this.isBoostingMobile = true; 
+        this.boostBtn.on('pointerdown', () => {
+            this.isBoostingMobile = true;
             this.boostBtn.setAlpha(1); // Visual feedback
         });
-        this.boostBtn.on('pointerup', () => { 
-            this.isBoostingMobile = false; 
-            this.boostBtn.setAlpha(0.5); 
+        this.boostBtn.on('pointerup', () => {
+            this.isBoostingMobile = false;
+            this.boostBtn.setAlpha(0.5);
         });
-        this.boostBtn.on('pointerout', () => { 
-            this.isBoostingMobile = false; 
-            this.boostBtn.setAlpha(0.5); 
+        this.boostBtn.on('pointerout', () => {
+            this.isBoostingMobile = false;
+            this.boostBtn.setAlpha(0.5);
         });
     }
 
@@ -119,5 +127,9 @@ export class UIScene extends Scene {
         if (latency < 100) this.pingText.setColor('#00ff00');
         else if (latency < 200) this.pingText.setColor('#ffff00');
         else this.pingText.setColor('#ff0000');
+    }
+
+    updateCoins(coins) {
+        this.coinText.setText(`Coins: ${coins}`);
     }
 }

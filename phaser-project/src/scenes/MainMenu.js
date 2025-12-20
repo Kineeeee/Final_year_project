@@ -34,11 +34,19 @@ export class MainMenu extends Scene {
         
 
         // Thông tin người chơi (Đặt dưới tiêu đề một chút)
-        this.add.text(centerX, centerY + 10, `Welcome back, ${username}! You have ${coins} coins.`, {
-            fontFamily: 'Arial',
-            fontSize: 24,
-            color: '#00ff00'
-        }).setOrigin(0.5);
+        if (username && !username.startsWith('Guest_')) {
+            this.add.text(centerX, centerY + 10, `Welcome back, ${username}! You have ${coins} coins.`, {
+                fontFamily: 'Arial',
+                fontSize: 24,
+                color: '#00ff00'
+            }).setOrigin(0.5);
+        }else{
+            this.add.text(centerX, centerY + 10, `Welcome back, Guest! You have ${coins} coins. Please login to keep your coins!`,  {
+                fontFamily: 'Arial',
+                fontSize: 24,
+                color: '#00ff00'
+            }).setOrigin(0.5);
+        }
 
 
 

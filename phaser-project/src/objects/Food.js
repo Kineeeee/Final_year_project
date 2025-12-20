@@ -32,7 +32,7 @@ export class Food extends Phaser.GameObjects.Image {
             const angle = PhaserMath.Angle.Between(this.x, this.y, this.target.x, this.target.y);
             const velocity = new PhaserMath.Vector2();
             this.scene.physics.velocityFromRotation(angle, this.speed, velocity);
-            
+
             this.x += velocity.x * (delta / 1000);
             this.y += velocity.y * (delta / 1000);
 
@@ -49,7 +49,7 @@ export class Food extends Phaser.GameObjects.Image {
 
             // 2. Lấp lánh (Thay đổi độ sáng/alpha hoặc scale nhẹ)
             this.shineTimer += delta;
-            
+
             // Tạo hiệu ứng nhấp nháy scale nhẹ (Pulse)
             const scalePulse = 1.5 + Math.sin(this.shineTimer * 0.005) * 0.1;
             this.setScale(scalePulse);
@@ -78,12 +78,9 @@ export class Food extends Phaser.GameObjects.Image {
 
     eat() {
         Logger.debug('Food', 'Food eaten');
-        if (this.target && this.target.parentContainer && this.target.parentContainer.snake) {
-             this.target.parentContainer.snake.grow();
-        } else if (this.target && this.target.snake) {
-             this.target.snake.grow();
-        }
-        
+        // REMOVED LOCAL GROWTH: Growth is handled by Game.js upon receiving Server Score Update
+
+
         this.target = null; // Clear target immediately
         this.setActive(false);
         this.setVisible(false);
@@ -96,7 +93,7 @@ export class Food extends Phaser.GameObjects.Image {
     onSpawn(x, y, color) {
         this.setActive(true);
         this.setVisible(true);
-        
+
         if (this.body) {
             this.body.enable = true;
             this.body.reset(x, y); // Reset position and velocity
@@ -105,7 +102,7 @@ export class Food extends Phaser.GameObjects.Image {
         }
 
         this.target = null;
-        
+
         if (color === undefined) {
             const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x00ffff, 0xff00ff];
             this.setTint(colors[Math.floor(Math.random() * colors.length)]);

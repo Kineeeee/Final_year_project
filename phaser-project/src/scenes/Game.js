@@ -3,6 +3,7 @@ import io from 'socket.io-client';
 import { PlayerSnake } from '../objects/snake/PlayerSnake';
 import { Snake } from '../objects/snake/Snake';
 import { Food } from '../objects/Food';
+import { Coin } from '../objects/Coin';
 import { Logger } from '../utils/Logger';
 import { CONFIG } from '../config/constants';
 
@@ -19,7 +20,7 @@ export class Game extends Scene {
 
     create() {
         Logger.info('Game', 'Game Scene Created');
-        
+
         // Detect device
         const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         this.isMobile = !this.sys.game.device.os.desktop || isMobileUA;
@@ -32,7 +33,7 @@ export class Game extends Scene {
 
         // Create a tiled background
         this.add.tileSprite(0, 0, WIDTH_WORLD, HEIGHT_WORLD, 'background').setOrigin(0);
-        
+
         // Reference game.js: this.game.stage.backgroundColor = '#444';
         this.cameras.main.setBackgroundColor(0x444444);
 
@@ -46,12 +47,13 @@ export class Game extends Scene {
         this.scale.on('resize', this.handleCameraZoom, this);
 
         this.snakes = [];
+        this.coinsCollected = 0; // Track coins for this session
         this.otherSnakes = new Map(); // Map<playerId, Snake>
 
         this.foodGroup = this.add.group({
             classType: Food,
             runChildUpdate: true
-        }); 
+        });
 
         // Socket Connection
         this.socket = io(CONFIG.SERVER_URL, { forceNew: true });
@@ -61,7 +63,11 @@ export class Game extends Scene {
             const initData = {};
             if (this.myColor !== undefined) initData.color = this.myColor;
             if (this.myName) initData.name = this.myName;
-            
+
+            // Send saved coins for guest session
+            const savedCoins = localStorage.getItem('coins');
+            if (savedCoins) initData.coins = savedCoins;
+
             this.socket.emit('initPlayer', initData);
         });
 
@@ -152,6 +158,11 @@ export class Game extends Scene {
                 if (eater && eater.head) {
                     // Kích hoạt hiệu ứng nam châm bay vào đầu rắn
                     food.magnetTo(eater.head);
+
+                    // Track coins collected by local player
+                    if (eater === this.player && data.type === 'coin') {
+                        this.coinsCollected += 10; // Value matches Server (10)
+                    }
                 } else {
                     // Nếu không thấy người ăn (hoặc lỗi), xoá ngay lập tức
                     food.destroy();
@@ -161,7 +172,7 @@ export class Game extends Scene {
 
         this.socket.on('playerDied', (playerId) => {
             if (this.player && this.player.playerId === playerId) {
-                this.scene.start('GameOver');
+                this.scene.start('GameOver', { score: this.player.score, coins: this.coinsCollected });
             }
         });
 
@@ -196,7 +207,7 @@ export class Game extends Scene {
                     this.player.targetX = players[id].x;
                     this.player.targetY = players[id].y;
                     this.player.targetRotation = players[id].rotation; // Sync rotation from server
-                    
+
                     // Sync Score/Length
                     if (players[id].score > this.player.score) {
                         this.player.addSections(players[id].score - this.player.score);
@@ -204,8 +215,17 @@ export class Game extends Scene {
                     } else if (players[id].score < this.player.score) {
                         // Handle shrinking (e.g. boosting cost)
                         const diff = this.player.score - players[id].score;
-                        for(let i=0; i<diff; i++) this.player.shrink();
+                        for (let i = 0; i < diff; i++) this.player.shrink();
                         this.player.score = players[id].score;
+                    }
+
+                    // Sync Boosting Visuals (Server Authoritative)
+                    if (players[id].isBoosting) {
+                        if (this.player.shadow) this.player.shadow.setLightingUp(true);
+                        this.player.speed = this.player.fastSpeed;
+                    } else {
+                        if (this.player.shadow) this.player.shadow.setLightingUp(false);
+                        this.player.speed = this.player.slowSpeed;
                     }
                 } else {
                     if (this.otherSnakes.has(id)) {
@@ -221,10 +241,10 @@ export class Game extends Scene {
                         } else if (players[id].score < otherSnake.score) {
                             // Handle shrinking
                             const diff = otherSnake.score - players[id].score;
-                            for(let i=0; i<diff; i++) otherSnake.shrink();
+                            for (let i = 0; i < diff; i++) otherSnake.shrink();
                             otherSnake.score = players[id].score;
                         }
-                        
+
                         // Sync Boosting Visuals
                         if (players[id].isBoosting) {
                             if (otherSnake.shadow) otherSnake.shadow.setLightingUp(true);
@@ -252,7 +272,7 @@ export class Game extends Scene {
         this.player.isRemote = true; // Server decides position (Interpolation)
         this.player.playerId = playerInfo.playerId; // Store ID
         if (playerInfo.name) this.player.setName(playerInfo.name);
-        
+
         // Sync initial score
         if (playerInfo.score > 0) {
             this.player.addSections(playerInfo.score);
@@ -282,11 +302,11 @@ export class Game extends Scene {
     spawnFood(x, y, color, id, type = 'regular') {
         // if (x === undefined) x = Phaser.Math.Between(0, 3000);
         // if (y === undefined) y = Phaser.Math.Between(0, 3000);
-        
+
         if (!this.textures.exists('food')) {
             const graphics = this.make.graphics({ x: 0, y: 0, add: false });
             graphics.fillStyle(0xff0000, 1);
-            
+
             // Reference food.js uses 'asset/hex.png'.
             // Let's draw a hexagon.
             // Radius 10 approx.
@@ -303,20 +323,19 @@ export class Game extends Scene {
             graphics.generateTexture('food', 20, 20);
         }
 
+        if (type === 'coin') {
+            const coin = new Coin(this, x, y, id);
+            this.foodGroup.add(coin);
+            return;
+        }
+
         const food = this.foodGroup.get(x, y);
         if (food) {
             food.onSpawn(x, y, color);
             food.id = id; // Assign Server ID
-            food.type = type; // 'regular' hoặc 'coin'
-
-            // nếu là coin thì làm nó nổi bật
-            if (type === 'coin') {
-                food.setScale(1.5);
-                food.setTint(0xFFD700); // Màu vàng
-            }else {
-                food.setScale(1.0);
-                food.setRotation(0);
-            }
+            food.type = type; // 'regular'
+            food.setScale(1.0);
+            food.setRotation(0);
         }
     }
 
@@ -354,29 +373,15 @@ export class Game extends Scene {
                 angle = this.player.getLookAngle();
                 isBoosting = (this.player.spaceKey.isDown || this.input.activePointer.isDown);
             }
-            
+
+
             this.socket.emit('playerInput', { angle: angle, isBoosting: isBoosting });
-            
-            // Visual feedback for local player immediately
-            if (isBoosting && this.player.score > 2) {
-                 if (this.player.shadow) this.player.shadow.setLightingUp(true);
-                 this.player.speed = this.player.fastSpeed;
-            } else {
-                 if (this.player.shadow) this.player.shadow.setLightingUp(false);
-                 this.player.speed = this.player.slowSpeed;
-            }
+
+            // REMOVED LOCAL PREDICTION: Visuals now updated via Server State in playerUpdates
         }
 
-        // Kiểm tra khoảng cách để kích hoạt hút (Magnet)
-        this.foodGroup.children.each(food => {
-            if (food.active && !food.target) { // Chỉ hút nếu chưa bị hút
-                const dist = Phaser.Math.Distance.Between(this.player.head.x, this.player.head.y, food.x, food.y);
-                if (dist < 50) { // Khoảng cách hút (ví dụ 50px)
-                    food.magnetTo(this.player.head);
-                }
-            }
-        });
-        
+
+
 
         this.updateCamera();
     }
@@ -386,9 +391,9 @@ export class Game extends Scene {
 
         // Calculate target zoom based on player scale
         const scaleDiff = this.player.scale - 0.6;
-        
+
         // Use calculated baseZoom instead of fixed 1.0
-        let targetZoom = this.baseZoom - (scaleDiff * 0.4); 
+        let targetZoom = this.baseZoom - (scaleDiff * 0.4);
 
         // Limit zoom relative to baseZoom
         // Min zoom is half of baseZoom
@@ -404,14 +409,14 @@ export class Game extends Scene {
         const width = this.scale.width;
         // Target width is roughly what we expect on a standard desktop (e.g., 1440)
         // If the screen is smaller (mobile), we zoom out (reduce zoom value) to show more world.
-        const targetWidth = 1440; 
-        
+        const targetWidth = 1440;
+
         let zoom = width / targetWidth;
-        
+
         // Clamp zoom to reasonable limits
         // Min 0.5 (Mobile view) - Max 1.0 (Desktop view)
         this.baseZoom = Phaser.Math.Clamp(zoom, 0.5, 1.0);
-        
+
         // Apply immediately if player not spawned yet
         if (!this.player) {
             this.cameras.main.setZoom(this.baseZoom);
@@ -424,17 +429,17 @@ export class Game extends Scene {
     killSnake(snake) {
         if (!snake.alive) return;
         snake.alive = false;
-        
+
         Logger.info('Game', `Snake died. Is Player: ${snake === this.player}`);
 
         // In Online Mode, we don't spawn food locally when dying (Server handles it)
         // But we do destroy the snake object to stop it from moving/rendering
-        
+
         snake.destroy();
         this.snakes = this.snakes.filter(s => s !== snake);
 
         if (snake === this.player) {
-            this.scene.start('GameOver');
+            this.scene.start('GameOver', { score: this.player.score, coins: this.coinsCollected });
         } else {
             // Remove from otherSnakes map if it's a remote snake
             if (snake.playerId && this.otherSnakes.has(snake.playerId)) {
@@ -443,3 +448,4 @@ export class Game extends Scene {
         }
     }
 }
+

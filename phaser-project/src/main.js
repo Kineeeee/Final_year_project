@@ -5,7 +5,8 @@ import { GameOver } from './scenes/GameOver';
 import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
 import { CustomizeScene } from './scenes/CustomizeScene';
-import {Logger} from './utils/Logger';
+import { Logger } from './utils/Logger';
+import { CONFIG } from './config/constants';
 
 // --- LOGIN LOGIC ---
 const loginOverlay = document.getElementById('login-overlay');
@@ -16,7 +17,7 @@ const btnRegister = document.getElementById('btn-register');
 const loginMessage = document.getElementById('login-message');
 const btnGuest = document.getElementById('btn-guest');
 
-const API_URL = 'http://localhost:3000/api/auth'; // Địa chỉ server của bạn
+const API_URL = `${CONFIG.SERVER_URL}/api/auth`; // Use configured Server URL (IP)
 
 // Hàm hiển thị thông báo lỗi/thành công
 const showMessage = (msg, isError = true) => {
@@ -30,8 +31,8 @@ const authAction = async (endpoint) => {
     const password = passwordInput.value.trim();
 
     Logger.info('Auth', `Calling API: ${endpoint} with username: ${username}`);
-    
-    
+
+
 
     if (!username || !password) {
         Logger.warn('Auth', 'Username or password is empty');
@@ -53,7 +54,7 @@ const authAction = async (endpoint) => {
         if (!response.ok) {
             throw new Error(data.message || 'Something went wrong');
         }
-        Logger.info('Auth','API call successful', data);
+        Logger.info('Auth', 'API call successful', data);
         return data;
     } catch (error) {
         Logger.error('Auth', 'API call failed', error);
@@ -76,10 +77,10 @@ btnLogin.addEventListener('click', async () => {
         if (data.color) {
             localStorage.setItem('preferredColor', data.color);
         }
-        
+
         // 2. Ẩn form login
         loginOverlay.style.display = 'none';
-        
+
         // 3. Khởi động game
         startGame();
     }
@@ -99,12 +100,12 @@ if (btnGuest) {
     btnGuest.addEventListener('click', () => {
         // Tạo tên ngẫu nhiên
         const guestName = 'Guest_' + Math.floor(Math.random() * 10000);
-        
+
         // Lưu thông tin giả vào localStorage
         localStorage.setItem('username', guestName);
         localStorage.setItem('coins', '0');
         localStorage.removeItem('token'); // Xóa token cũ nếu có để tránh lỗi xác thực sau này
-        
+
         // Ẩn form và vào game
         if (loginOverlay) loginOverlay.style.display = 'none';
         startGame();
@@ -133,14 +134,14 @@ if (isMobile) {
     // Get actual screen dimensions
     const w = window.innerWidth;
     const h = window.innerHeight;
-    
+
     // Ensure we calculate based on Landscape orientation
     const landscapeWidth = Math.max(w, h);
     const landscapeHeight = Math.min(w, h);
-    
+
     // Calculate Aspect Ratio
     const aspectRatio = landscapeWidth / landscapeHeight;
-    
+
     // Set HD Resolution (Base Height = 720p)
     // Width is calculated to match device aspect ratio (No black bars)
     const hdHeight = 720;
@@ -155,33 +156,33 @@ if (isMobile) {
 }
 
 const config = {
-  type: Phaser.AUTO,
-  // High DPI support for sharper visuals on mobile
-  resolution: resolution,
-  render: {
-    antialias: true,
-    pixelArt: false,
-    roundPixels: false
-  },
-  // Use the dynamic scale config
-  scale: scaleConfig,
-  parent: 'game-container',
-  backgroundColor: '#028af8',
-  physics: {
-    default: 'arcade',
-    arcade: {
-      debug: false
-    }
-  },
-  scene: [
-    Boot,
-    Preloader,
-    MainMenu,
-    CustomizeScene,
-    Game,
-    UIScene,
-    GameOver
-  ]
+    type: Phaser.AUTO,
+    // High DPI support for sharper visuals on mobile
+    resolution: resolution,
+    render: {
+        antialias: true,
+        pixelArt: false,
+        roundPixels: false
+    },
+    // Use the dynamic scale config
+    scale: scaleConfig,
+    parent: 'game-container',
+    backgroundColor: '#028af8',
+    physics: {
+        default: 'arcade',
+        arcade: {
+            debug: false
+        }
+    },
+    scene: [
+        Boot,
+        Preloader,
+        MainMenu,
+        CustomizeScene,
+        Game,
+        UIScene,
+        GameOver
+    ]
 };
 
 function startGame() {
@@ -191,10 +192,16 @@ function startGame() {
     }
 }
 
-// Tự động đăng nhập nếu đã có token (Optional)
+// Tự động đăng nhập nếu đã có token hoặc là Guest cũ
 const savedToken = localStorage.getItem('token');
+const savedUsername = localStorage.getItem('username');
+
 if (savedToken) {
-    // Nếu muốn tự động vào game luôn:
+    // Nếu muốn tự động vào game luôn (User đã đăng nhập):
+    if (loginOverlay) loginOverlay.style.display = 'none';
+    startGame();
+} else if (savedUsername && savedUsername.startsWith('Guest_')) {
+    // Resume Guest Session
     if (loginOverlay) loginOverlay.style.display = 'none';
     startGame();
 }
