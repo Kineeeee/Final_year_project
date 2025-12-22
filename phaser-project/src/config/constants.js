@@ -4,5 +4,6 @@ export const CONFIG = {
     BACKGROUND_COLOR: '#028af8',
     WORLD_WIDTH: 10000,
     WORLD_HEIGHT: 10000,
-    SERVER_URL: 'http://192.168.5.13:3000'
+    INITIAL_LENGTH: 5,
+    SERVER_URL: 'http://10.25.193.148:3000'
 };

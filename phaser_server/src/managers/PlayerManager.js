@@ -6,7 +6,8 @@ const {
     BOOST_SPEED,
     TURN_SPEED,
     PIXELS_PER_SEGMENT,
-    FOOD_RADIUS
+    FOOD_RADIUS,
+    INITIAL_LENGTH
 } = require('../config/constants');
 const User = require('../models/User');
 
@@ -196,7 +197,7 @@ class PlayerManager {
     }
 
     getPlayerScale(score) {
-        let scale = 0.6 + (10 + score) * 0.005;
+        let scale = 0.6 + (INITIAL_LENGTH + score) * 0.005;
         if (scale > 1.2) scale = 1.2;
         return scale;
     }
@@ -282,7 +283,8 @@ class PlayerManager {
             // Client uses distance-based history.
             // Need history for (score) body parts * PIXELS_PER_SEGMENT
             // Add some buffer (+5 parts)
-            const neededHistoryDist = (player.score + 5) * PIXELS_PER_SEGMENT;
+            // FIXED: Include INITIAL_LENGTH (10) in calculation so server tracks enough history for the full visual body
+            const neededHistoryDist = (player.score + INITIAL_LENGTH + 5) * PIXELS_PER_SEGMENT;
 
             // Prune old points
             // path[last].d is the totalDistance at that point.
@@ -318,11 +320,21 @@ class PlayerManager {
 
                 // Check against other's body segments
                 // We iterate through the path at intervals to simulate body segments
+                // FIX GHOST TAIL: Calculate valid visual length
+                const validCollisionDistance = (other.score + INITIAL_LENGTH) * PIXELS_PER_SEGMENT;
+
                 // Start from index segmentLength (skip head area to avoid head-to-head instant death if close)
                 // Increased precision: Check every 2 points instead of segmentLength (4)
                 if (other.path) {
                     for (let i = segmentLength; i < other.path.length; i++) {
                         const point = other.path[i];
+
+                        // FIX GHOST TAIL: Stop checking if we are past the visible tail
+                        // point.d is totalDistance at that point. other.totalDistance is current total.
+                        // age = other.totalDistance - point.d
+                        const distFromHead = other.totalDistance - point.d;
+                        if (distFromHead > validCollisionDistance) break;
+
                         const dist = Math.hypot(player.x - point.x, player.y - point.y);
                         if (dist < myRadius + otherRadius) { // Collision radius (Head radius + Body radius)
                             this.removePlayer(id);

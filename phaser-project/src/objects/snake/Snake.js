@@ -2,6 +2,7 @@ import { Math as PhaserMath } from 'phaser';
 import { EyePair } from './EyePair';
 import { Shadow } from './Shadow';
 import { Logger } from '../../utils/Logger';
+import { CONFIG } from '../../config/constants';
 
 export class Snake {
     constructor(scene, x, y, color, spriteKey = 'snake-circle') {
@@ -38,12 +39,12 @@ export class Snake {
         this.color = color !== undefined ? color : Phaser.Display.Color.RandomRGB().color;
         headSprite.setTint(this.color);
         this.head.add(headSprite);
-        
+
         // Physics for head (for collision)
         scene.physics.add.existing(this.head);
         // Match Server Radius: 15 * scale
         const radius = 15 * this.scale;
-        this.head.body.setCircle(radius); 
+        this.head.body.setCircle(radius);
         this.head.body.setOffset(-radius, -radius); // Center the body
 
         // 2. Eyes (Using EyePair)
@@ -51,23 +52,23 @@ export class Snake {
 
         // Initialize body
         this.bodyGroup = scene.add.group();
-        
+
         this.score = 0; // Track score/length locally
 
         // Path history for body to follow
         this.movePath = [];
         this.pixelsPerSegment = 12; // Distance-based spacing (independent of frame rate)
         this.totalDistance = 0; // Track total distance traveled
-        
+
         // Growth Queue
         this.queuedSections = 0;
-        
+
         // Initial length
-        this.addSections(10);
+        this.addSections(CONFIG.INITIAL_LENGTH);
 
         // Shadow
         this.shadow = new Shadow(scene, this);
-        
+
         // Temp vector for calculations
         this._tempVector = new PhaserMath.Vector2();
     }
@@ -133,11 +134,11 @@ export class Snake {
         Logger.debug('Snake', 'Growing snake');
         const bodyPart = this.scene.add.image(this.head.x, this.head.y, 'snake-circle');
         this.scene.physics.add.existing(bodyPart);
-        
+
         // Match Server Radius
         const radius = 15 * this.scale;
         bodyPart.body.setCircle(radius);
-        
+
         bodyPart.setDepth(5);
         bodyPart.setScale(this.scale);
         bodyPart.setTint(this.color); // Match head color
@@ -153,29 +154,30 @@ export class Snake {
         // Client fallback: 0.6 + (10 + body.length) * 0.005 (approx)
         // Note: Server uses (10 + score), client previously used body.length.
         // Let's match server exactly.
-        
+
         const score = this.score !== undefined ? this.score : this.body.length;
-        let newScale = 0.6 + (10 + score) * 0.005;
-        
+        let newScale = 0.6 + (CONFIG.INITIAL_LENGTH + score) * 0.005;
+
         // Limit max scale
         if (newScale > 1.2) newScale = 1.2;
-        
+
         this.setScale(newScale);
     }
-    
+
 
     shrink() {
-        // Keep a minimum size, e.g., 3 body parts
-        if (this.body.length <= 3) return null;
+        // AUTHORTY SHIFT: Server controls when to shrink.
+        // Server ensures score >= 0, so total length >= INITIAL_LENGTH.
+        // We blindly execute the shrink command here.
 
         Logger.debug('Snake', 'Shrinking snake');
         const lastPart = this.body.pop();
         const position = { x: lastPart.x, y: lastPart.y };
-        
+
         // Remove from group and destroy
         this.bodyGroup.remove(lastPart);
         lastPart.destroy();
-        
+
         this.updateScale();
 
         return position;
@@ -196,7 +198,7 @@ export class Snake {
             // If we have a server target, gently nudge towards it to prevent drift
             if (this.targetX !== undefined && this.targetY !== undefined) {
                 const dist = PhaserMath.Distance.Between(this.head.x, this.head.y, this.targetX, this.targetY);
-                
+
                 // If drift is small (> 5px), lerp slowly (0.05)
                 // If drift is large (> 50px), lerp faster (0.1) or snap
                 if (dist > 50) {
@@ -217,28 +219,28 @@ export class Snake {
             // RECONCILIATION: Smoothly correct position based on Server data
             if (this.targetX !== undefined && this.targetY !== undefined) {
                 const dist = PhaserMath.Distance.Between(this.head.x, this.head.y, this.targetX, this.targetY);
-                
+
                 if (dist > 2) {
                     // Increase lerp factor to 0.2 (20% per frame at 60fps) for faster catch-up
                     // Scale by delta to ensure consistency across frame rates
                     let t = 0.2 * (delta / 16.66);
                     if (t > 1) t = 1;
-                    
+
                     this.head.x = PhaserMath.Linear(this.head.x, this.targetX, t);
                     this.head.y = PhaserMath.Linear(this.head.y, this.targetY, t);
                 }
             }
-            
+
             // Rotation Interpolation
             if (this.targetRotation !== undefined) {
-                 let diff = this.targetRotation - this.head.rotation;
-                 while (diff > Math.PI) diff -= Math.PI * 2;
-                 while (diff < -Math.PI) diff += Math.PI * 2;
-                 
-                 // Slightly faster rotation smoothing
-                 let rotT = 0.15 * (delta / 16.66);
-                 if (rotT > 1) rotT = 1;
-                 this.head.rotation += diff * rotT;
+                let diff = this.targetRotation - this.head.rotation;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+
+                // Slightly faster rotation smoothing
+                let rotT = 0.15 * (delta / 16.66);
+                if (rotT > 1) rotT = 1;
+                this.head.rotation += diff * rotT;
             }
         }
 
@@ -260,7 +262,7 @@ export class Snake {
         // Limit path history length
         // We need enough history for all body parts
         const neededHistoryDist = (this.body.length + this.queuedSections + 5) * this.pixelsPerSegment;
-        
+
         // Prune path points that are too old
         while (this.movePath.length > 1 && this.totalDistance - this.movePath[this.movePath.length - 1].totalDist > neededHistoryDist) {
             this.movePath.pop();
@@ -268,13 +270,13 @@ export class Snake {
 
         // Handle Growth
         if (this.queuedSections > 0) {
-             const currentLen = this.body.length;
-             const neededDist = (currentLen + 1) * this.pixelsPerSegment;
-             // If we have enough history to place the new part
-             if (this.movePath.length > 0 && this.totalDistance - this.movePath[this.movePath.length - 1].totalDist >= neededDist) {
-                 this.grow();
-                 this.queuedSections--;
-             }
+            const currentLen = this.body.length;
+            const neededDist = (currentLen + 1) * this.pixelsPerSegment;
+            // If we have enough history to place the new part
+            if (this.movePath.length > 0 && this.totalDistance - this.movePath[this.movePath.length - 1].totalDist >= neededDist) {
+                this.grow();
+                this.queuedSections--;
+            }
         }
 
         // Move body parts
@@ -282,23 +284,23 @@ export class Snake {
         for (let i = 0; i < this.body.length; i++) {
             const part = this.body[i];
             const targetDist = this.totalDistance - (i + 1) * this.pixelsPerSegment;
-            
+
             // Find the segment containing targetDist
             while (pathIndex < this.movePath.length - 1 && this.movePath[pathIndex + 1].totalDist > targetDist) {
                 pathIndex++;
             }
-            
+
             if (pathIndex < this.movePath.length - 1) {
                 const p1 = this.movePath[pathIndex];
                 const p2 = this.movePath[pathIndex + 1];
-                
+
                 // Interpolate
                 const span = p1.totalDist - p2.totalDist;
                 let t = 0;
                 if (span > 0.001) {
                     t = (p1.totalDist - targetDist) / span;
                 }
-                
+
                 part.x = p1.x + (p2.x - p1.x) * t;
                 part.y = p1.y + (p2.y - p1.y) * t;
             } else {
@@ -319,11 +321,11 @@ export class Snake {
             this.nameText.setPosition(this.head.x, this.head.y - 25);
         }
     }
-    
+
     setScale(scale) {
         this.scale = scale;
         this.head.setScale(scale);
-        
+
         // Update Head Physics Body
         const radius = 15 * scale;
         if (this.head.body) {
@@ -355,7 +357,7 @@ export class Snake {
         // Optional: Increase scale slightly every X foods
         // this.setScale(this.scale + 0.001);
     }
-    
+
     destroy() {
         this.alive = false;
         if (this.nameText) this.nameText.destroy();
