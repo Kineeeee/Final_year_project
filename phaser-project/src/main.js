@@ -5,6 +5,7 @@ import { GameOver } from './scenes/GameOver';
 import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
 import { CustomizeScene } from './scenes/CustomizeScene';
+import { ShopScene } from './scenes/ShopScene';
 import { Logger } from './utils/Logger';
 import { CONFIG } from './config/constants';
 
@@ -71,6 +72,7 @@ btnLogin.addEventListener('click', async () => {
         localStorage.setItem('token', data.token);
         localStorage.setItem('username', data.username);
         localStorage.setItem('coins', data.coins);
+        localStorage.setItem('highScore', data.highScore);
 
 
         // lưu màu từ server về
@@ -181,6 +183,7 @@ const config = {
         CustomizeScene,
         Game,
         UIScene,
+        ShopScene,
         GameOver
     ]
 };

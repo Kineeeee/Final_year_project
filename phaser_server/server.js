@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const connectDB = require('./src/config/db');
 const authRoutes = require('./src/routers/authRouters.js');
+const Logger = require('./src/utils/Logger');
 
 const { PORT, FPS } = require('./src/config/constants');
 const PlayerManager = require('./src/managers/PlayerManager');
@@ -27,7 +28,7 @@ app.use('/api/', limiter);
 const authLimiter = rateLimit({
     windowMs: 60 * 60 * 1000, // 1 giờ
     max: 10, // giới hạn mỗi IP mỗi cửa sổ thời gian
-    message: 'too many login/signup attempts from this IP, please try again after an hour' 
+    message: 'too many login/signup attempts from this IP, please try again after an hour'
 });
 
 
@@ -51,7 +52,7 @@ app.get('/', function (req, res) {
 const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
-        origin: "*", 
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
@@ -68,24 +69,24 @@ playerManager.setSpawnManager(spawnManager);
 foodManager.spawnInitialFood();
 
 io.on('connection', (socket) => {
-    console.log('a user connected: ', socket.id);
+    Logger.info('Server', `User connected: ${socket.id}`);
 
     // Find safe spawn
     const spawnPos = spawnManager.getSafeSpawnPosition();
-    
+
     // Create player
     const player = playerManager.addPlayer(socket, spawnPos);
-    
+
     // Send initial state to this player
     socket.emit('currentPlayers', playerManager.getAllPlayers());
     socket.emit('currentFood', foodManager.getAllFood());
-    
+
     // Broadcast new player to others
     socket.broadcast.emit('newPlayer', player);
 
     // Handle Disconnect
     socket.on('disconnect', () => {
-        console.log('user disconnected: ', socket.id);
+        Logger.info('Server', `User disconnected: ${socket.id}`);
         playerManager.removePlayer(socket.id);
     });
 
@@ -102,6 +103,14 @@ io.on('connection', (socket) => {
     // Handle Init Player (Name/Color)
     socket.on('initPlayer', (data) => {
         playerManager.handleInitPlayer(socket.id, data);
+    });
+
+    socket.on('buyItem', (itemId) => {
+        playerManager.handleBuyItem(socket.id, itemId);
+    });
+
+    socket.on('useItem', (itemId) => {
+        playerManager.handleUseItem(socket.id, itemId);
     });
 });
 
@@ -131,14 +140,14 @@ setInterval(() => {
 
 setInterval(() => {
     count = Object.keys(foodManager.getAllFood()).length;
-    console.log('Current food count:', count);
-},10000); // Every 10 seconds
+    Logger.info('Server', `Current food count: ${count}`);
+}, 10000); // Every 10 seconds
 
 setInterval(() => {
     foodManager.refillFood();
-}, 60000); // Every 60 seconds
+}, 15000); // Every 15 seconds
 
 
 server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    Logger.info('Server', `Server is running on port ${PORT}`);
 });

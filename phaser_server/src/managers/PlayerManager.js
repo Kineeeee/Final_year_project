@@ -7,19 +7,32 @@ const {
     TURN_SPEED,
     PIXELS_PER_SEGMENT,
     FOOD_RADIUS,
-    INITIAL_LENGTH
+    INITIAL_LENGTH,
+    ITEMS
 } = require('../config/constants');
 const User = require('../models/User');
+const Item = require('../models/Item');
+const Logger = require('../utils/Logger');
 
 class PlayerManager {
     constructor(io, foodManager) {
         this.io = io;
         this.foodManager = foodManager;
         this.players = {};
-        // We need a way to spawn bots, which requires spawn position.
-        // Since SpawnManager depends on PlayerManager, we can't inject SpawnManager in constructor easily if circular.
-        // We will set spawnManager later or pass it to methods.
-        this.spawnManager = null;
+        this.shopItems = []; // Cache for shop items
+        this.spawnManager = null; // Will be set later
+
+        // Load Items from DB immediately
+        this.loadShopItems();
+    }
+
+    async loadShopItems() {
+        try {
+            this.shopItems = await Item.find({});
+            Logger.info('PlayerManager', `Loaded ${this.shopItems.length} items from DB.`);
+        } catch (e) {
+            Logger.error('PlayerManager', 'Failed to load items:', e);
+        }
     }
 
     setSpawnManager(spawnManager) {
@@ -41,7 +54,9 @@ class PlayerManager {
             color: Math.floor(Math.random() * 0xFFFFFF),
             isBoosting: false,
             wantsToBoost: false,
-            coins: 0 // Track session coins for Guest/Economy
+            coins: 0, // Track session coins for Guest/Economy
+            inventory: {}, // itemId -> count
+            activeEffects: {} // itemId -> expireTime (ms)
         };
         return this.players[socket.id];
     }
@@ -67,7 +82,10 @@ class PlayerManager {
             name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
             totalDistance: 0,
             isBoosting: false,
-            wantsToBoost: false
+            wantsToBoost: false,
+            activeEffects: {},
+            coins: 0,
+            inventory: {}
         };
         this.io.emit('newPlayer', this.players[id]);
     }
@@ -75,11 +93,12 @@ class PlayerManager {
     removePlayer(playerId) {
         const player = this.players[playerId];
         if (!player) return;
-
-        console.log('Player died:', playerId);
+        
+        Logger.info('PlayerManager', `Player died: ${playerId}`);
 
         // Convert body to food
         if (player.path) {
+            const foodBatch = [];
             for (let i = 0; i < player.path.length; i += 4 * 2) { // Giữ nguyên logic cũ
                 const point = player.path[i];
                 const fx = point.x + (Math.random() * 20 - 10);
@@ -96,8 +115,12 @@ class PlayerManager {
                 }
 
                 if (newFood) {
-                    this.io.emit('newFood', newFood);
+                    foodBatch.push(newFood);
                 }
+            }
+
+            if (foodBatch.length > 0) {
+                this.io.emit('batchFood', foodBatch);
             }
         }
 
@@ -107,6 +130,32 @@ class PlayerManager {
         // Notify the dead player specifically (so they see Game Over)
         if (!player.isBot) {
             this.io.to(playerId).emit('playerDied', playerId);
+
+            // Update High Score if logged in
+            if (player.username && !player.username.startsWith('Guest_')) {
+                User.findOne({ username: player.username }).then(user => {
+                    if (user) {
+                        // Check global high score
+                        // Logger.info('PlayerManager', `[High Score Debug] Checking for ${user.username}. Current: ${player.score}, Best: ${user.highScore}`);
+                        if (player.score > user.highScore) {
+                            // Logger.info('PlayerManager', `[High Score Debug] New Record! Updating...`);
+                            user.highScore = player.score;
+                            user.save().then(() => {
+                                Logger.info('PlayerManager', `New High Score Saved: ${user.highScore}`);
+                                // Notify client to update localStorage
+                                this.io.to(playerId).emit('updateHighScore', user.highScore);
+                            }).catch(err => Logger.error('PlayerManager', "Save High Score Error:", err));
+                        } else {
+                            // Logger.info('PlayerManager', `[High Score Debug] No new record.`);
+                        }
+
+                        // Economy: Save coins one last time just in case
+                        // (Coins are usually saved on pickup, but checking high score is good time to sync if needed)
+                    }
+                });
+            } else {
+                // Guest: Check local high score (Client handles this usually)
+            }
         }
 
         // Notify everyone else that this player is gone (so they remove the snake)
@@ -122,7 +171,7 @@ class PlayerManager {
                 this.players[id].wantsToBoost = inputData.isBoosting;
             }
         } catch (error) {
-            console.error('Error handling playerInput:', error);
+            Logger.error('PlayerManager', 'Error handling playerInput:', error);
         }
     }
 
@@ -136,8 +185,53 @@ class PlayerManager {
                 // Fix Economy: Assign username from name so coins can be saved
                 this.players[id].username = data.name;
             }
-            if (data.coins) {
-                this.players[id].coins = parseInt(data.coins);
+            // Inventory Logic: Priority to DB for logged-in users
+            const isGuest = !this.players[id].username || this.players[id].username.startsWith('Guest_');
+
+            if (!isGuest) {
+                Logger.info('PlayerManager', `handleInitPlayer: Loading DB for ${this.players[id].username}`);
+                // Load from DB if verified user
+                User.findOne({ username: this.players[id].username }).then(user => {
+                    if (user) {
+                        Logger.info('PlayerManager', `Found user in DB: ${user.username}, coins: ${user.coins}`);
+                        this.players[id].coins = user.coins;
+
+                        // Load Inventory (Array -> Object)
+                        if (user.inventory && Array.isArray(user.inventory)) {
+                            this.players[id].inventory = {};
+                            user.inventory.forEach(item => {
+                                this.players[id].inventory[item.itemId] = item.quantity;
+                            });
+                        }
+
+                        // Emit updates
+                        this.io.to(id).emit('updateCoins', this.players[id].coins);
+                        this.io.to(id).emit('updateInventory', this.players[id].inventory);
+
+                        this.io.to(id).emit('playerState', {
+                            coins: this.players[id].coins,
+                            inventory: this.players[id].inventory,
+                            id: id,
+                            color: this.players[id].color,
+                            name: this.players[id].name,
+                            highScore: user.highScore
+                        });
+
+                        // Send Shop Items from DB
+                        this.io.to(id).emit('shopItems', this.shopItems);
+
+                    } else {
+                        Logger.warn('PlayerManager', `User not found in DB: ${this.players[id].username}`);
+                    }
+                }).catch(err => Logger.error('PlayerManager', `DB Error: ${err}`));
+            } else {
+                // Guest: Use client sent data
+                if (data.inventory) {
+                    this.players[id].inventory = data.inventory;
+                }
+                if (data.coins) {
+                    this.players[id].coins = parseInt(data.coins);
+                }
             }
 
             // Broadcast the updated properties to everyone so they see the new color
@@ -146,6 +240,124 @@ class PlayerManager {
                 color: this.players[id].color,
                 name: this.players[id].name
             });
+        }
+    }
+
+    async handleBuyItem(id, itemId) {
+        Logger.info('PlayerManager', `handleBuyItem called for player ${id}, item: ${itemId}`);
+        const player = this.players[id];
+        if (!player) {
+            Logger.warn('PlayerManager', `Player not found: ${id}`);
+            return;
+        }
+
+        // Fetch Item from DB (Single Source of Truth)
+        let item;
+        try {
+            item = await Item.findOne({ id: itemId });
+        } catch (e) {
+            Logger.error('PlayerManager', 'Error fetching item:', e);
+        }
+
+        if (!item) {
+            // Fallback to constants if DB fails or empty, but prefer DB
+            item = Object.values(ITEMS).find(i => i.id === itemId);
+            Logger.warn('PlayerManager', 'Using fallback item config.');
+        }
+
+        if (!item) {
+            Logger.warn('PlayerManager', `Item not found: ${itemId}`);
+            return;
+        }
+
+        // Re-check player existence after async operation
+        if (!this.players[id]) {
+            Logger.info('PlayerManager', `Player ${id} disconnected during purchase.`);
+            return;
+        }
+
+        Logger.info('PlayerManager', `Price: ${item.price}`);
+
+        if (player.coins >= item.price) {
+            player.coins -= item.price;
+            // Update Runtime State (Object)
+            player.inventory[itemId] = (player.inventory[itemId] || 0) + 1;
+            Logger.info('PlayerManager', `Purchased. New Coins: ${player.coins}`);
+
+            // Save to DB
+            if (player.username && !player.username.startsWith('Guest_')) {
+                try {
+                    const user = await User.findOne({ username: player.username });
+                    if (user) {
+                        user.coins = player.coins;
+
+                        // Sync Inventory Array
+                        // Find if item exists in user.inventory (array)
+                        // Note: user.inventory is a Mongoose Array of Subdocuments
+                        const existingItem = user.inventory.find(i => i.itemId === itemId);
+                        if (existingItem) {
+                            existingItem.quantity = player.inventory[itemId];
+                        } else {
+                            user.inventory.push({ itemId: itemId, quantity: player.inventory[itemId] });
+                        }
+
+                        // Mark as modified just in case
+                        user.markModified('inventory');
+                        await user.save();
+                        Logger.info('PlayerManager', 'User Data Saved Successfully.');
+                    }
+                } catch (err) {
+                    Logger.error('PlayerManager', "Buy item DB error:", err);
+                }
+            }
+
+            this.io.to(id).emit('updateCoins', player.coins);
+            this.io.to(id).emit('updateInventory', player.inventory);
+            // Also emit playerState for consistency
+            this.io.to(id).emit('playerState', {
+                coins: player.coins,
+                inventory: player.inventory
+            });
+        } else {
+            Logger.info('PlayerManager', `Not enough coins!`);
+        }
+    }
+
+    handleUseItem(id, itemId) {
+        const player = this.players[id];
+        if (!player) return;
+
+        if (player.inventory[itemId] > 0) {
+            player.inventory[itemId]--;
+
+            // Use cached shopItems for properties like duration
+            const item = this.shopItems.find(i => i.id === itemId);
+            if (item) {
+                // Set/Extend active effect
+                const now = Date.now();
+                player.activeEffects[itemId] = now + item.duration;
+            }
+
+            // Save to DB if logged in (inventory change)
+            if (player.username && !player.username.startsWith('Guest_')) {
+                User.findOne({ username: player.username }).then(user => {
+                    if (user) {
+                        if (!user.inventory) user.inventory = [];
+                        const existingItem = user.inventory.find(i => i.itemId === itemId);
+                        if (existingItem) {
+                            existingItem.quantity = player.inventory[itemId];
+                        }
+                        user.markModified('inventory');
+                        return user.save();
+                    }
+                }).catch(err => Logger.error('PlayerManager', "Use Item DB Error:", err));
+            }
+
+            this.io.to(id).emit('updateInventory', player.inventory);
+            // Notify client of effect start (for visuals)
+            if (item) {
+                this.io.to(id).emit('itemActivated', { itemId, duration: item.duration });
+            }
         }
     }
 
@@ -242,8 +454,19 @@ class PlayerManager {
                 player.isBoosting = false;
             }
 
+            // Manage Active Effects
+            const now = Date.now();
+            Object.keys(player.activeEffects).forEach(effectId => {
+                if (player.activeEffects[effectId] < now) {
+                    delete player.activeEffects[effectId];
+                    this.io.to(id).emit('itemDeactivated', { itemId: effectId });
+                }
+            });
+
             let currentSpeed = BASE_SPEED;
-            if (player.isBoosting) { // Can only boost if length > 2 (enforced by stop criteria)
+            if (player.activeEffects['speed']) {
+                currentSpeed = BOOST_SPEED;
+            } else if (player.isBoosting) { // Can only boost if length > 2 (enforced by stop criteria)
                 currentSpeed = BOOST_SPEED;
 
                 // Burn mass logic
@@ -302,47 +525,53 @@ class PlayerManager {
             }
 
             // 2. Check Collision with Other Snakes
-            Object.keys(this.players).forEach(otherId => {
-                if (id === otherId) return;
-                const other = this.players[otherId];
+            if (!player.activeEffects['ghost']) {
+                Object.keys(this.players).forEach(otherId => {
+                    if (id === otherId) return;
+                    const other = this.players[otherId];
 
-                const myRadius = this.getPlayerRadius(player.score);
-                const otherRadius = this.getPlayerRadius(other.score);
+                    const myRadius = this.getPlayerRadius(player.score);
+                    const otherRadius = this.getPlayerRadius(other.score);
 
-                // 2a. Head-on-Head Collision
-                // If two heads collide, BOTH die.
-                const distHead = Math.hypot(player.x - other.x, player.y - other.y);
-                if (distHead < myRadius + otherRadius) {
-                    this.removePlayer(id);
-                    this.removePlayer(otherId);
-                    return; // Stop processing this player
-                }
+                    // 2a. Head-on-Head Collision
+                    const distHead = Math.hypot(player.x - other.x, player.y - other.y);
+                    const HITBOX_SENSITIVITY = 1.0;
+                    if (distHead < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
+                        this.removePlayer(id);
+                        this.removePlayer(otherId);
+                        return; // Stop processing this player
+                    }
 
-                // Check against other's body segments
-                // We iterate through the path at intervals to simulate body segments
-                // FIX GHOST TAIL: Calculate valid visual length
-                const validCollisionDistance = (other.score + INITIAL_LENGTH) * PIXELS_PER_SEGMENT;
+                    // Check against other's body segments
+                    // We iterate through the path at intervals to simulate body segments
+                    // FIX GHOST TAIL: Calculate valid visual length
+                    const validCollisionDistance = (other.score + INITIAL_LENGTH) * PIXELS_PER_SEGMENT;
 
-                // Start from index segmentLength (skip head area to avoid head-to-head instant death if close)
-                // Increased precision: Check every 2 points instead of segmentLength (4)
-                if (other.path) {
-                    for (let i = segmentLength; i < other.path.length; i++) {
-                        const point = other.path[i];
+                    // Start from index segmentLength (skip head area to avoid head-to-head instant death if close)
+                    // Increased precision: Check every 2 points instead of segmentLength (4)
+                    if (other.path) {
+                        for (let i = segmentLength; i < other.path.length; i++) {
+                            const point = other.path[i];
 
-                        // FIX GHOST TAIL: Stop checking if we are past the visible tail
-                        // point.d is totalDistance at that point. other.totalDistance is current total.
-                        // age = other.totalDistance - point.d
-                        const distFromHead = other.totalDistance - point.d;
-                        if (distFromHead > validCollisionDistance) break;
+                            // FIX GHOST TAIL: Stop checking if we are past the visible tail
+                            // point.d is totalDistance at that point. other.totalDistance is current total.
+                            // age = other.totalDistance - point.d
+                            const distFromHead = other.totalDistance - point.d;
+                            if (distFromHead > validCollisionDistance) break;
 
-                        const dist = Math.hypot(player.x - point.x, player.y - point.y);
-                        if (dist < myRadius + otherRadius) { // Collision radius (Head radius + Body radius)
-                            this.removePlayer(id);
-                            return;
+                            const dist = Math.hypot(player.x - point.x, player.y - point.y);
+
+                            // HITBOX FIX: Revert to 1.0 (Standard) to ensure collisions register correctly
+                            // User reported bots passing through body (0.9 was too small)
+                            const HITBOX_SENSITIVITY = 1.0;
+                            if (dist < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
+                                this.removePlayer(id);
+                                return;
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
 
             // Check collision with food
             const allFood = this.foodManager.getAllFood();
@@ -354,7 +583,11 @@ class PlayerManager {
 
                 const myRadius = this.getPlayerRadius(player.score);
 
-                const MAGNET_RADIUS = 50;
+
+                let MAGNET_RADIUS = 50;
+                if (player.activeEffects['magnet']) {
+                    MAGNET_RADIUS = 200;
+                }
 
                 if (distance < myRadius + MAGNET_RADIUS) {
                     // Eat food
@@ -385,12 +618,15 @@ class PlayerManager {
                                     this.io.to(id).emit('updateCoins', player.coins);
                                 }
                             } catch (err) {
-                                console.error('Error updating coins:', err);
+                                Logger.error('PlayerManager', 'Error updating coins:', err);
                             }
                         }
                     } else {
                         // Ăn thức ăn thường -> Tăng điểm
                         player.score += 1;
+                        if (!player.isBot) {
+                            // Logger.info('PlayerManager', `[Score Debug] Player ${player.username || id} ate food. New Score: ${player.score}`);
+                        }
                     }
 
                     // Emit event to remove food and update score

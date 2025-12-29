@@ -171,6 +171,7 @@ export class Snake {
         // We blindly execute the shrink command here.
 
         Logger.debug('Snake', 'Shrinking snake');
+        if (this.body.length === 0) return;
         const lastPart = this.body.pop();
         const position = { x: lastPart.x, y: lastPart.y };
 

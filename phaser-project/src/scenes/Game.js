@@ -58,18 +58,49 @@ export class Game extends Scene {
         // Socket Connection
         this.socket = io(CONFIG.SERVER_URL, { forceNew: true });
 
+        // Listen for initial player state to sync High Score immediately
+        this.socket.on('playerState', (state) => {
+            if (state.highScore !== undefined) {
+                Logger.info('Game', `Syncing High Score from Server: ${state.highScore}`);
+                localStorage.setItem('highScore', state.highScore);
+            }
+            if (state.coins !== undefined) {
+                localStorage.setItem('coins', state.coins);
+                this.events.emit('coinsChanged', state.coins); // Sync coins too
+            }
+            if (state.inventory) {
+                localStorage.setItem('inventory', JSON.stringify(state.inventory));
+                this.events.emit('updateInventory', state.inventory);
+            }
+        });
+
         // Send initialization data (color, name) immediately upon connection
         this.socket.on('connect', () => {
-            const initData = {};
-            if (this.myColor !== undefined) initData.color = this.myColor;
-            if (this.myName) initData.name = this.myName;
-
-            // Send saved coins for guest session
-            const savedCoins = localStorage.getItem('coins');
-            if (savedCoins) initData.coins = savedCoins;
+            Logger.info('Game', 'Connected to Server');
+            const initData = {
+                color: this.myColor,
+                name: this.myName
+            };
+            const savedInventory = localStorage.getItem('inventory');
+            if (savedInventory) {
+                try {
+                    initData.inventory = JSON.parse(savedInventory);
+                } catch (e) {
+                    Logger.error('Game', 'Failed to parse inventory', e);
+                }
+            }
 
             this.socket.emit('initPlayer', initData);
         });
+
+        if (this.socket) {
+            // ...
+            this.socket.on('updateHighScore', (newHighScore) => {
+                Logger.info('Game', `New High Score: ${newHighScore}`);
+                localStorage.setItem('highScore', newHighScore);
+            });
+        }
+
 
         // Handle Scene Shutdown
         this.events.on('shutdown', this.shutdown, this);
@@ -134,11 +165,16 @@ export class Game extends Scene {
             this.spawnFood(f.x, f.y, f.color, f.id, f.type);
         });
 
+        this.socket.on('batchFood', (foodArray) => {
+            foodArray.forEach(f => {
+                this.spawnFood(f.x, f.y, f.color, f.id, f.type);
+            });
+        });
+
         // Lắng nghe sự kiện cập nhật tiền
         this.socket.on('updateCoins', (newCoins) => {
             // Lưu vào localStorage
             localStorage.setItem('coins', newCoins);
-            // Bắn event để UIScene cập nhật text (nếu có)
             this.events.emit('coinsChanged', newCoins);
             Logger.info('Game', `Coins updated: ${newCoins}`);
         });
@@ -172,7 +208,13 @@ export class Game extends Scene {
 
         this.socket.on('playerDied', (playerId) => {
             if (this.player && this.player.playerId === playerId) {
-                this.scene.start('GameOver', { score: this.player.score, coins: this.coinsCollected });
+                // Pass socket to GameOver to receive High Score update
+                this.keepSocketAlive = true; // Prevent shutdown from killing socket
+                this.scene.start('GameOver', {
+                    score: this.player.score,
+                    coins: this.coinsCollected,
+                    socket: this.socket // Pass socket
+                });
             }
         });
 
@@ -261,9 +303,16 @@ export class Game extends Scene {
 
     shutdown() {
         if (this.socket) {
-            this.socket.disconnect();
+            // Always remove listeners to prevent them firing on a dead scene (Fixes crash on death)
             this.socket.removeAllListeners();
+
+            if (!this.keepSocketAlive) {
+                this.socket.disconnect();
+            }
         }
+        this.keepSocketAlive = false; // Reset
+        // Don't stop UIScene here if we want it to persist or if it handles its own input, 
+        // but typically UIScene is tied to Game.
         this.scene.stop('UIScene');
     }
 
@@ -445,6 +494,12 @@ export class Game extends Scene {
             if (snake.playerId && this.otherSnakes.has(snake.playerId)) {
                 this.otherSnakes.delete(snake.playerId);
             }
+        }
+    }
+
+    useItem(itemId) {
+        if (this.socket) {
+            this.socket.emit('useItem', itemId);
         }
     }
 }

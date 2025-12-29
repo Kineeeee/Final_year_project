@@ -2,12 +2,20 @@ const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  password: { type: String, required: true }, // Đã mã hóa
-  coins: { type: Number, default: 0 }, // Tiền để mua skin
-  ownedSkins: { type: [String], default: ['default'] }, // Danh sách skin đã mua
-  currentSkin: { type: String, default: 'default' }, // Skin đang dùng
-  color: { type: Number, default: null }, // Màu sắc của rắn
-  highScore: { type: Number, default: 0 }
+  password: { type: String, required: true }, // Encrypted
+  coins: { type: Number, default: 0 },
+  ownedSkins: { type: [String], default: ['default'] },
+  currentSkin: { type: String, default: 'default' },
+  color: { type: Number, default: null },
+  highScore: { type: Number, default: 0 },
+  // Inventory is an array of items
+  inventory: {
+    type: [{
+      itemId: { type: String, required: true },
+      quantity: { type: Number, default: 0 }
+    }],
+    default: []
+  }
 });
 
 module.exports = mongoose.model('User', UserSchema);

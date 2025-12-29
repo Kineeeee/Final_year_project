@@ -38,10 +38,25 @@ export class GameOver extends Scene {
         }).setOrigin(0.5);
 
 
+        // Socket Handling
+        this.socket = data.socket;
+        if (this.socket) {
+            this.socket.on('updateHighScore', (newHighScore) => {
+                Logger.info('GameOver', `New High Score Received: ${newHighScore}`);
+                localStorage.setItem('highScore', newHighScore);
+                // Optional: Update UI to show "New Record!"
+                this.add.text(centerX, centerY + 110, `New Record!`, {
+                    fontFamily: 'Arial', fontSize: 24, color: '#00FF00'
+                }).setOrigin(0.5);
+            });
+        }
+
         this.input.once('pointerdown', () => {
             Logger.info('GameOver', 'Restarting Game');
+            if (this.socket) {
+                this.socket.disconnect(); // Disconnect before going to MainMenu
+            }
             this.scene.start('MainMenu');
-
         });
     }
 }

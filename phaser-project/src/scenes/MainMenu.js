@@ -18,7 +18,8 @@ export class MainMenu extends Scene {
         const username = localStorage.getItem('username') || 'Guest';
         Logger.info('MainMenu', `Welcome back, ${username}!`);
         const coins = localStorage.getItem('coins') || '0';
-        Logger.info('MainMenu', `You have ${coins} coins.`);
+        const highScore = localStorage.getItem('highScore') || '0';
+        Logger.info('MainMenu', `You have ${coins} coins. High Score: ${highScore}`);
 
         // Logo (Đặt ở 1/3 phía trên)
         this.add.image(centerX, centerY - 150, 'logo').setScale(0.1);
@@ -31,7 +32,16 @@ export class MainMenu extends Scene {
             stroke: '#000000',
             strokeThickness: 8
         }).setOrigin(0.5);
-        
+
+        // High Score
+        this.add.text(centerX, centerY - 80, `Highest Score: ${highScore}`, {
+            fontFamily: 'Arial',
+            fontSize: 20,
+            color: '#FFFF00',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
 
         // Thông tin người chơi (Đặt dưới tiêu đề một chút)
         if (username && !username.startsWith('Guest_')) {
@@ -40,8 +50,8 @@ export class MainMenu extends Scene {
                 fontSize: 24,
                 color: '#00ff00'
             }).setOrigin(0.5);
-        }else{
-            this.add.text(centerX, centerY + 10, `Welcome back, Guest! You have ${coins} coins. Please login to keep your coins!`,  {
+        } else {
+            this.add.text(centerX, centerY + 10, `Welcome back, Guest! You have ${coins} coins. Please login to keep your coins!`, {
                 fontFamily: 'Arial',
                 fontSize: 24,
                 color: '#00ff00'
@@ -75,6 +85,26 @@ export class MainMenu extends Scene {
             Logger.info('MainMenu', 'Customize clicked');
             this.scene.start('CustomizeScene');
         });
+
+        // Shop Button
+        const shopButton = this.add.text(centerX + 400, centerY + 100 + 80 + 70, 'SHOP', {
+            fontFamily: '"Outfit", sans-serif',
+            fontSize: '32px',
+            color: '#ffffff',
+            backgroundColor: '#00AA00', // Green button
+            padding: { x: 40, y: 15 }
+        })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => {
+                // Pass username and coins to ShopScene
+                const username = localStorage.getItem('username') || 'Guest';
+                const currentCoins = localStorage.getItem('coins') || 0;
+                this.scene.launch('ShopScene', { socket: this.socket, username: username, coins: currentCoins });
+                this.scene.pause();
+            })
+            .on('pointerover', () => shopButton.setStyle({ fill: '#ffff00', backgroundColor: '#008800' }))
+            .on('pointerout', () => shopButton.setStyle({ fill: '#ffffff', backgroundColor: '#00AA00' }));
 
 
         // LOGOUT BUTTON 

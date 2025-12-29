@@ -1,4 +1,6 @@
 import { Scene } from 'phaser';
+import { ITEMS } from '../config/items.js';
+import { Logger } from '../utils/Logger';
 
 export class UIScene extends Scene {
     constructor() {
@@ -51,6 +53,23 @@ export class UIScene extends Scene {
         // Check if mobile device
         if (!this.sys.game.device.os.desktop) {
             this.createMobileControls();
+        }
+
+        const { width, height } = this.scale;
+
+        // --- ITEM SLOTS ---
+        this.itemSlots = {};
+        this.createItemSlots(width / 2, safeMargin + 80); // Center Top
+
+        // Game Listeners for Items
+        gameScene.events.on('updateInventory', this.updateInventory, this);
+        gameScene.events.on('itemActivated', this.onItemActivated, this);
+
+        // Keyboard Inputs (Desktop)
+        if (this.sys.game.device.os.desktop) {
+            this.input.keyboard.on('keydown-ONE', () => gameScene.useItem('speed'));
+            this.input.keyboard.on('keydown-TWO', () => gameScene.useItem('magnet'));
+            this.input.keyboard.on('keydown-THREE', () => gameScene.useItem('ghost'));
         }
     }
 
@@ -131,5 +150,60 @@ export class UIScene extends Scene {
 
     updateCoins(coins) {
         this.coinText.setText(`Coins: ${coins}`);
+    }
+
+    createItemSlots(x, y) {
+        const itemIds = [ITEMS.SPEED_UP.id, ITEMS.MAGNET.id, ITEMS.GHOST.id];
+        const gap = 80;
+        let startX = x - gap;
+
+        itemIds.forEach((id, index) => {
+            const slotX = startX + (index * gap);
+
+            // Background
+            this.add.rectangle(slotX, y, 60, 60, 0x333333).setStrokeStyle(2, 0xffffff);
+
+            // Icon (Placeholder Color)
+            const color = Object.values(ITEMS).find(i => i.id === id).iconColor;
+            this.add.rectangle(slotX, y, 40, 40, color);
+
+            // Key Hint (Desktop)
+            if (this.sys.game.device.os.desktop) {
+                this.add.text(slotX - 25, y - 25, `${index + 1}`, { fontSize: '12px', fill: '#fff' });
+            }
+
+            // Quantity Text
+            let initialQty = 0;
+            try {
+                const savedInv = JSON.parse(localStorage.getItem('inventory'));
+                if (savedInv && savedInv[id]) initialQty = savedInv[id];
+            } catch (e) { }
+
+            const qtyText = this.add.text(slotX + 20, y + 20, initialQty.toString(), {
+                fontSize: '16px', fill: '#fff', stroke: '#000', strokeThickness: 3
+            }).setOrigin(1);
+
+            // Click Handler (Mobile/Desktop)
+            const zone = this.add.zone(slotX, y, 60, 60).setInteractive();
+            zone.on('pointerdown', () => {
+                this.scene.get('Game').useItem(id);
+            });
+
+            this.itemSlots[id] = { qtyText, bg: null }; // Store ref
+        });
+    }
+
+    updateInventory(inventory) {
+        // Inventory is object: { speed: 5, magnet: 2 }
+        Object.keys(this.itemSlots).forEach(id => {
+            const count = inventory[id] || 0;
+            this.itemSlots[id].qtyText.setText(count.toString());
+        });
+    }
+
+    onItemActivated(data) {
+        // Show activation visual? For now just log
+        Logger.info('UI', "Item activated UI:", data);
+        // Maybe flash the slot?
     }
 }
