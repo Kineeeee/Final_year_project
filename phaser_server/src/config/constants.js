@@ -13,8 +13,8 @@ module.exports = {
     BOT_COUNT: 20,
     BOT_NAMES: ["Viper", "Python", "Anaconda", "Cobra", "Boa", "Mamba", "Sidewinder", "Rattler", "Nagini", "Kaa"],
     ITEMS: {
-        SPEED_UP: { id: 'speed', price: 100, duration: 15000, description: "Speed up for 15s" },
-        MAGNET: { id: 'magnet', price: 200, duration: 15000, description: "Magnet items for 15s" },
-        GHOST: { id: 'ghost', price: 300, duration: 10000, description: "Ghost mode for 10s" }
+        SPEED_UP: { id: 'speed', price: 100, duration: 10000, cooldown: 10000, buffValue: 4, description: "Speed +4 (10s)" },
+        MAGNET: { id: 'magnet', price: 200, duration: 10000, cooldown: 15000, buffValue: 200, description: "Magnet Radius 200 (10s)" },
+        GHOST: { id: 'ghost', price: 300, duration: 5000, cooldown: 20000, buffValue: 0, description: "Ghost Mode (5s)" }
     }
 };

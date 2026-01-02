@@ -123,37 +123,24 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 const pixelRatio = window.devicePixelRatio || 1;
 const resolution = Math.max(pixelRatio, 2.0);
 
-// Config for Desktop (Fixed Size, Fit to Screen)
+// Config for Desktop (Responsive Full Screen)
 let scaleConfig = {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: 1280,
-    height: 720
+    width: '100%',
+    height: '100%'
 };
 
-// Config for Mobile (HD Resolution, Fit to Screen)
+// Config for Mobile (High Definition)
 if (isMobile) {
-    // Get actual screen dimensions
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
-    // Ensure we calculate based on Landscape orientation
-    const landscapeWidth = Math.max(w, h);
-    const landscapeHeight = Math.min(w, h);
-
-    // Calculate Aspect Ratio
-    const aspectRatio = landscapeWidth / landscapeHeight;
-
-    // Set HD Resolution (Base Height = 720p)
-    // Width is calculated to match device aspect ratio (No black bars)
-    const hdHeight = 720;
-    const hdWidth = Math.round(hdHeight * aspectRatio);
-
+    // Force Landscape Mode Logic (Optional, or just use full screen)
+    // Using RESIZE on mobile is also best for sharpness (1:1 pixel mapping)
+    // But we explicitly state it here to handle mobile-specifics if needed later
     scaleConfig = {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: hdWidth,
-        height: hdHeight
+        width: '100%',
+        height: '100%'
     };
 }
 
@@ -164,7 +151,7 @@ const config = {
     render: {
         antialias: true,
         pixelArt: false,
-        roundPixels: false
+        roundPixels: true
     },
     // Use the dynamic scale config
     scale: scaleConfig,

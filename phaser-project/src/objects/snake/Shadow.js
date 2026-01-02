@@ -4,16 +4,16 @@ export class Shadow {
         this.snake = snake;
         this.shadowGroup = scene.add.group();
         this.shadows = [];
-        
+
         this.isLightingUp = false;
         this.lightStep = 0;
         this.maxLightStep = 3;
-        
+
         // Tints (Matched to reference shadow.js)
         this.darkTint = 0xaaaaaa;
         this.lightTintBright = 0xaa3333;
         this.lightTintDim = 0xdd3333;
-        
+
         // Create initial shadows for existing body
         this.initShadows();
     }
@@ -84,7 +84,7 @@ export class Shadow {
                 // Reference doesn't explicitly set alpha to 0.3 in update loop for dark mode, 
                 // but it sets alpha to 1 or 0 based on position overlap.
                 // I'll stick to tinting.
-                shadow.setAlpha(1); 
+                shadow.setAlpha(1);
             });
         }
     }
@@ -95,7 +95,7 @@ export class Shadow {
 
         this.shadows.forEach((shadow, i) => {
             shadow.setAlpha(1);
-            
+
             // Alternating pattern
             if ((i - this.lightStep) % this.maxLightStep === 0) {
                 shadow.setTint(this.lightTintBright);
@@ -107,6 +107,10 @@ export class Shadow {
 
     setLightingUp(value) {
         this.isLightingUp = value;
+    }
+
+    setVisible(value) {
+        this.shadowGroup.setVisible(value);
     }
 
     destroy() {

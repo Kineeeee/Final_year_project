@@ -7,10 +7,8 @@ const connectDB = require('./src/config/db');
 const authRoutes = require('./src/routers/authRouters.js');
 const Logger = require('./src/utils/Logger');
 
-const { PORT, FPS } = require('./src/config/constants');
-const PlayerManager = require('./src/managers/PlayerManager');
-const FoodManager = require('./src/managers/FoodManager');
-const SpawnManager = require('./src/managers/SpawnManager');
+const { PORT } = require('./src/config/constants');
+const GameServer = require('./src/GameServer');
 
 const app = express();
 
@@ -57,96 +55,8 @@ const io = new Server(server, {
     }
 });
 
-// Initialize Managers
-const foodManager = new FoodManager(io);
-const playerManager = new PlayerManager(io, foodManager);
-const spawnManager = new SpawnManager(playerManager);
-
-// Circular dependency resolution
-playerManager.setSpawnManager(spawnManager);
-
-// Initial Food
-foodManager.spawnInitialFood();
-
-io.on('connection', (socket) => {
-    Logger.info('Server', `User connected: ${socket.id}`);
-
-    // Find safe spawn
-    const spawnPos = spawnManager.getSafeSpawnPosition();
-
-    // Create player
-    const player = playerManager.addPlayer(socket, spawnPos);
-
-    // Send initial state to this player
-    socket.emit('currentPlayers', playerManager.getAllPlayers());
-    socket.emit('currentFood', foodManager.getAllFood());
-
-    // Broadcast new player to others
-    socket.broadcast.emit('newPlayer', player);
-
-    // Handle Disconnect
-    socket.on('disconnect', () => {
-        Logger.info('Server', `User disconnected: ${socket.id}`);
-        playerManager.removePlayer(socket.id);
-    });
-
-    // Handle Ping
-    socket.on('ping', () => {
-        socket.emit('pong');
-    });
-
-    // Handle Input
-    socket.on('playerInput', (inputData) => {
-        playerManager.handlePlayerInput(socket.id, inputData);
-    });
-
-    // Handle Init Player (Name/Color)
-    socket.on('initPlayer', (data) => {
-        playerManager.handleInitPlayer(socket.id, data);
-    });
-
-    socket.on('buyItem', (itemId) => {
-        playerManager.handleBuyItem(socket.id, itemId);
-    });
-
-    socket.on('useItem', (itemId) => {
-        playerManager.handleUseItem(socket.id, itemId);
-    });
-});
-
-// Game Loop
-setInterval(() => {
-    // Update Game Logic (Movement, Collision, Bots)
-    playerManager.update();
-
-    // Prepare lightweight update packet to reduce bandwidth
-    const players = playerManager.getAllPlayers();
-    const updatePacket = {};
-    Object.keys(players).forEach(id => {
-        const p = players[id];
-        updatePacket[id] = {
-            x: Math.round(p.x),
-            y: Math.round(p.y),
-            rotation: parseFloat(p.rotation.toFixed(2)),
-            score: p.score,
-            isBoosting: p.isBoosting,
-            name: p.name // Keep for leaderboard
-        };
-    });
-
-    // Emit the updated state to all players
-    io.emit('playerUpdates', updatePacket);
-}, 1000 / FPS);
-
-setInterval(() => {
-    count = Object.keys(foodManager.getAllFood()).length;
-    Logger.info('Server', `Current food count: ${count}`);
-}, 10000); // Every 10 seconds
-
-setInterval(() => {
-    foodManager.refillFood();
-}, 15000); // Every 15 seconds
-
+// Initialize Game Server
+new GameServer(io);
 
 server.listen(PORT, () => {
     Logger.info('Server', `Server is running on port ${PORT}`);

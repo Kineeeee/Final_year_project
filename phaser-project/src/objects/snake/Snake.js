@@ -17,7 +17,7 @@ export class Snake {
         this.slowSpeed = 180;
         this.fastSpeed = 360;
         this.speed = this.slowSpeed;
-        this.rotationSpeed = 2 * Math.PI; // Radians per second
+        this.rotationSpeed = 4.5; // Match Server Turn Speed (0.075 * 60)
         this.scale = 0.6; // Starting scale (similar to reference)
 
         // Generate textures
@@ -321,6 +321,45 @@ export class Snake {
         if (this.nameText) {
             this.nameText.setPosition(this.head.x, this.head.y - 25);
         }
+
+        // Update Magnet Visuals (Wave Effect)
+        if (this.isMagnetActive && this.magnetGraphics) {
+            this.magnetGraphics.clear();
+            const maxRadius = this.magnetRadius || 200;
+            const waveCount = 3;
+            const speed = 0.1;
+
+            this.magnetGraphics.lineStyle(3 * this.scale, 0x008080, 0.8);
+
+            const headRadius = 15 * this.scale;
+            const effectiveMaxRadius = maxRadius + headRadius;
+
+            for (let i = 0; i < waveCount; i++) {
+                // Offset each wave
+                const t = (time * speed + i * (effectiveMaxRadius / waveCount)) % effectiveMaxRadius;
+
+                // Only draw if outside head
+                if (t > headRadius) {
+                    const alpha = 1 - ((t - headRadius) / maxRadius); // Fade out based on distance from head
+                    this.magnetGraphics.lineStyle(3 * this.scale, 0x008080, alpha);
+                    this.magnetGraphics.strokeCircle(this.head.x, this.head.y, t);
+                }
+            }
+        }
+
+        // Speed Effect Emission (Full Body)
+        if (this.isSpeedActive && this.speedEmitter) {
+            // Emit from head
+            this.speedEmitter.emitParticleAt(this.head.x, this.head.y);
+
+            // Emit from body (randomly to save performance/limit density)
+            // 10% chance per segment per frame -> ~6 particles/sec per segment
+            this.body.forEach(part => {
+                if (Math.random() < 0.1) {
+                    this.speedEmitter.emitParticleAt(part.x, part.y);
+                }
+            });
+        }
     }
 
     setScale(scale) {
@@ -347,6 +386,12 @@ export class Snake {
             }
         });
         // Shadow handles its own scale reading from snake.scale
+
+        // Updates Speed Effect Scale
+        if (this.speedEmitter) {
+            // Keep particle size relative to snake (x2)
+            this.speedEmitter.setScale({ start: 1.7 * scale, end: 0 });
+        }
     }
 
     getLookAngle() {
@@ -359,6 +404,54 @@ export class Snake {
         // this.setScale(this.scale + 0.001);
     }
 
+    setGhostEffect(active) {
+        const alpha = active ? 0.5 : 1.0;
+        this.head.setAlpha(alpha);
+        this.bodyGroup.setAlpha(alpha);
+        if (this.shadow) this.shadow.setVisible(!active);
+    }
+
+    setMagnetEffect(active, range) {
+        if (active) {
+            this.magnetRadius = range || 200; // Use buff value or default
+            if (!this.magnetGraphics) {
+                this.magnetGraphics = this.scene.add.graphics();
+                this.magnetGraphics.setDepth(4);
+            }
+            this.magnetGraphics.setVisible(true);
+            this.isMagnetActive = true;
+        } else {
+            if (this.magnetGraphics) {
+                this.magnetGraphics.setVisible(false);
+            }
+            this.isMagnetActive = false;
+        }
+    }
+
+    setSpeedEffect(active) {
+        this.isSpeedActive = active;
+        if (active) {
+            if (!this.speedEmitter) {
+                // Phaser 3.60+ / 3.90 Syntax
+                // this.scene.add.particles(x, y, texture, config)
+                this.speedEmitter = this.scene.add.particles(0, 0, 'snake-circle', {
+                    speed: 100,
+                    scale: { start: 1.7 * this.scale, end: 0 }, // Visible scale (x2 size relative)
+                    lifespan: 400,
+                    blendMode: "NORMAL",
+                    tint: 0x888888,
+                    alpha: { start: 0.5, end: 0 },
+                    emitting: false // Manual emission
+                });
+                this.speedEmitter.setDepth(4);
+            }
+            // No need to start(), we emit manually in update()
+        } else {
+            // Just stop emitting? Manual emission stops naturally if we don't call emit.
+            // But we might want to clear existing particles? No, let them fade.
+        }
+    }
+
     destroy() {
         this.alive = false;
         if (this.nameText) this.nameText.destroy();
@@ -367,5 +460,9 @@ export class Snake {
         if (this.shadow) this.shadow.destroy();
         if (this.body) this.body.forEach(part => part.destroy());
         if (this.bodyGroup) this.bodyGroup.destroy();
+
+        // Effects Cleanup
+        if (this.magnetGraphics) this.magnetGraphics.destroy();
+        if (this.speedEmitter) this.speedEmitter.destroy();
     }
 }

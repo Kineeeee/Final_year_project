@@ -37,13 +37,21 @@ export class Preloader extends Scene {
 
         this.load.image('logo', 'logo.png');
         
+        // for snake
         this.load.image('snake-circle', 'circle.png');
         this.load.image('background', 'tile.png');
         this.load.image('food', 'hex.png');
         this.load.image('snake-eye', 'eye-white.png');
         this.load.image('snake-pupil', 'eye-black.png');
         this.load.image('snake-shadow', 'white-shadow.png');
+
+        // for joystick
         this.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
+        
+        // for shop
+        this.load.image('speed', 'speedUp.png');
+        this.load.image('magnet', 'magnet.png');
+        this.load.image('ghost', 'ghost.png');
     }
 
     create() {

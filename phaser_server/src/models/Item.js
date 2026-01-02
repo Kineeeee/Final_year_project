@@ -7,6 +7,8 @@ const ItemSchema = new mongoose.Schema({
     description: { type: String },
     type: { type: String, enum: ['consumable', 'skin', 'upgrade'], default: 'consumable' },
     duration: { type: Number, default: 0 }, // For effects (ms)
+    cooldown: { type: Number, default: 0 }, // Cooldown in ms
+    buffValue: { type: Number, default: 0 }, // Magnitude of effect (speed, radius)
     iconColor: { type: String } // Hex string for usage in client
 });
 

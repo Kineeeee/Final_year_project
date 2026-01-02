@@ -1,4 +1,5 @@
 const { WORLD_SIZE, SAFE_SPAWN_RADIUS } = require('../config/constants');
+const Logger = require('../utils/Logger');
 
 class SpawnManager {
     constructor(playerManager) {
@@ -9,7 +10,7 @@ class SpawnManager {
         let safe = false;
         let x, y;
         let attempts = 0;
-        const safeRadius = SAFE_SPAWN_RADIUS; 
+        const safeRadius = SAFE_SPAWN_RADIUS;
 
         const players = this.playerManager.getAllPlayers();
 
@@ -42,9 +43,9 @@ class SpawnManager {
             }
             attempts++;
         }
-        
+
         if (!safe) {
-            console.log("Could not find safe spawn, using random");
+            Logger.warn("SpawnManager", "Could not find safe spawn, using random");
         }
         return { x, y };
     }

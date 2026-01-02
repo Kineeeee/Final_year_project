@@ -1,17 +1,14 @@
+// Core Modules
 const {
     WORLD_SIZE,
-    BOT_COUNT,
-    BOT_NAMES,
     BASE_SPEED,
     BOOST_SPEED,
     TURN_SPEED,
     PIXELS_PER_SEGMENT,
-    FOOD_RADIUS,
     INITIAL_LENGTH,
     ITEMS
 } = require('../config/constants');
 const User = require('../models/User');
-const Item = require('../models/Item');
 const Logger = require('../utils/Logger');
 
 class PlayerManager {
@@ -19,24 +16,11 @@ class PlayerManager {
         this.io = io;
         this.foodManager = foodManager;
         this.players = {};
-        this.shopItems = []; // Cache for shop items
-        this.spawnManager = null; // Will be set later
-
-        // Load Items from DB immediately
-        this.loadShopItems();
+        this.shopManager = null; // Will be set via setter
     }
 
-    async loadShopItems() {
-        try {
-            this.shopItems = await Item.find({});
-            Logger.info('PlayerManager', `Loaded ${this.shopItems.length} items from DB.`);
-        } catch (e) {
-            Logger.error('PlayerManager', 'Failed to load items:', e);
-        }
-    }
-
-    setSpawnManager(spawnManager) {
-        this.spawnManager = spawnManager;
+    setShopManager(shopManager) {
+        this.shopManager = shopManager;
     }
 
     addPlayer(socket, spawnPos) {
@@ -56,50 +40,24 @@ class PlayerManager {
             wantsToBoost: false,
             coins: 0, // Track session coins for Guest/Economy
             inventory: {}, // itemId -> count
-            activeEffects: {} // itemId -> expireTime (ms)
+            activeEffects: {}, // itemId -> expireTime (ms)
+            boostTimer: 0 // Deterministic shrink counter
         };
         return this.players[socket.id];
-    }
-
-    createBot() {
-        if (!this.spawnManager) return;
-
-        const id = 'bot-' + Math.floor(Math.random() * 1000000);
-        const spawnPos = this.spawnManager.getSafeSpawnPosition();
-        const rot = Math.random() * Math.PI * 2;
-
-        this.players[id] = {
-            rotation: rot,
-            targetRotation: rot,
-            x: spawnPos.x,
-            y: spawnPos.y,
-            playerId: id,
-            team: 'red',
-            score: Math.floor(Math.random() * 5),
-            path: [],
-            isBot: true,
-            color: Math.floor(Math.random() * 0xFFFFFF),
-            name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
-            totalDistance: 0,
-            isBoosting: false,
-            wantsToBoost: false,
-            activeEffects: {},
-            coins: 0,
-            inventory: {}
-        };
-        this.io.emit('newPlayer', this.players[id]);
     }
 
     removePlayer(playerId) {
         const player = this.players[playerId];
         if (!player) return;
-        
-        Logger.info('PlayerManager', `Player died: ${playerId}`);
+
+        if (!player.isBot) {
+            Logger.info('PlayerManager', `Player died: ${playerId}`);
+        }
 
         // Convert body to food
         if (player.path) {
             const foodBatch = [];
-            for (let i = 0; i < player.path.length; i += 4 * 2) { // Giữ nguyên logic cũ
+            for (let i = 0; i < player.path.length; i += 4 * 2) {
                 const point = player.path[i];
                 const fx = point.x + (Math.random() * 20 - 10);
                 const fy = point.y + (Math.random() * 20 - 10);
@@ -131,30 +89,17 @@ class PlayerManager {
         if (!player.isBot) {
             this.io.to(playerId).emit('playerDied', playerId);
 
-            // Update High Score if logged in
+            // Economy: Save coins one last time just in case
             if (player.username && !player.username.startsWith('Guest_')) {
                 User.findOne({ username: player.username }).then(user => {
-                    if (user) {
-                        // Check global high score
-                        // Logger.info('PlayerManager', `[High Score Debug] Checking for ${user.username}. Current: ${player.score}, Best: ${user.highScore}`);
-                        if (player.score > user.highScore) {
-                            // Logger.info('PlayerManager', `[High Score Debug] New Record! Updating...`);
-                            user.highScore = player.score;
-                            user.save().then(() => {
-                                Logger.info('PlayerManager', `New High Score Saved: ${user.highScore}`);
-                                // Notify client to update localStorage
-                                this.io.to(playerId).emit('updateHighScore', user.highScore);
-                            }).catch(err => Logger.error('PlayerManager', "Save High Score Error:", err));
-                        } else {
-                            // Logger.info('PlayerManager', `[High Score Debug] No new record.`);
-                        }
-
-                        // Economy: Save coins one last time just in case
-                        // (Coins are usually saved on pickup, but checking high score is good time to sync if needed)
+                    if (user && player.score > user.highScore) {
+                        user.highScore = player.score;
+                        user.save().then(() => {
+                            Logger.info('PlayerManager', `New High Score Saved: ${user.highScore}`);
+                            this.io.to(playerId).emit('updateHighScore', user.highScore);
+                        }).catch(err => Logger.error('PlayerManager', "Save High Score Error:", err));
                     }
-                });
-            } else {
-                // Guest: Check local high score (Client handles this usually)
+                }).catch(err => Logger.error('PlayerManager', "Error finding user for High Score:", err));
             }
         }
 
@@ -217,8 +162,10 @@ class PlayerManager {
                             highScore: user.highScore
                         });
 
-                        // Send Shop Items from DB
-                        this.io.to(id).emit('shopItems', this.shopItems);
+                        // Send Shop Items from DB (delegated via ShopManager potentially, but here directly or via ShopManager)
+                        if (this.shopManager) {
+                            this.io.to(id).emit('shopItems', this.shopManager.getShopItems());
+                        }
 
                     } else {
                         Logger.warn('PlayerManager', `User not found in DB: ${this.players[id].username}`);
@@ -240,155 +187,6 @@ class PlayerManager {
                 color: this.players[id].color,
                 name: this.players[id].name
             });
-        }
-    }
-
-    async handleBuyItem(id, itemId) {
-        Logger.info('PlayerManager', `handleBuyItem called for player ${id}, item: ${itemId}`);
-        const player = this.players[id];
-        if (!player) {
-            Logger.warn('PlayerManager', `Player not found: ${id}`);
-            return;
-        }
-
-        // Fetch Item from DB (Single Source of Truth)
-        let item;
-        try {
-            item = await Item.findOne({ id: itemId });
-        } catch (e) {
-            Logger.error('PlayerManager', 'Error fetching item:', e);
-        }
-
-        if (!item) {
-            // Fallback to constants if DB fails or empty, but prefer DB
-            item = Object.values(ITEMS).find(i => i.id === itemId);
-            Logger.warn('PlayerManager', 'Using fallback item config.');
-        }
-
-        if (!item) {
-            Logger.warn('PlayerManager', `Item not found: ${itemId}`);
-            return;
-        }
-
-        // Re-check player existence after async operation
-        if (!this.players[id]) {
-            Logger.info('PlayerManager', `Player ${id} disconnected during purchase.`);
-            return;
-        }
-
-        Logger.info('PlayerManager', `Price: ${item.price}`);
-
-        if (player.coins >= item.price) {
-            player.coins -= item.price;
-            // Update Runtime State (Object)
-            player.inventory[itemId] = (player.inventory[itemId] || 0) + 1;
-            Logger.info('PlayerManager', `Purchased. New Coins: ${player.coins}`);
-
-            // Save to DB
-            if (player.username && !player.username.startsWith('Guest_')) {
-                try {
-                    const user = await User.findOne({ username: player.username });
-                    if (user) {
-                        user.coins = player.coins;
-
-                        // Sync Inventory Array
-                        // Find if item exists in user.inventory (array)
-                        // Note: user.inventory is a Mongoose Array of Subdocuments
-                        const existingItem = user.inventory.find(i => i.itemId === itemId);
-                        if (existingItem) {
-                            existingItem.quantity = player.inventory[itemId];
-                        } else {
-                            user.inventory.push({ itemId: itemId, quantity: player.inventory[itemId] });
-                        }
-
-                        // Mark as modified just in case
-                        user.markModified('inventory');
-                        await user.save();
-                        Logger.info('PlayerManager', 'User Data Saved Successfully.');
-                    }
-                } catch (err) {
-                    Logger.error('PlayerManager', "Buy item DB error:", err);
-                }
-            }
-
-            this.io.to(id).emit('updateCoins', player.coins);
-            this.io.to(id).emit('updateInventory', player.inventory);
-            // Also emit playerState for consistency
-            this.io.to(id).emit('playerState', {
-                coins: player.coins,
-                inventory: player.inventory
-            });
-        } else {
-            Logger.info('PlayerManager', `Not enough coins!`);
-        }
-    }
-
-    handleUseItem(id, itemId) {
-        const player = this.players[id];
-        if (!player) return;
-
-        if (player.inventory[itemId] > 0) {
-            player.inventory[itemId]--;
-
-            // Use cached shopItems for properties like duration
-            const item = this.shopItems.find(i => i.id === itemId);
-            if (item) {
-                // Set/Extend active effect
-                const now = Date.now();
-                player.activeEffects[itemId] = now + item.duration;
-            }
-
-            // Save to DB if logged in (inventory change)
-            if (player.username && !player.username.startsWith('Guest_')) {
-                User.findOne({ username: player.username }).then(user => {
-                    if (user) {
-                        if (!user.inventory) user.inventory = [];
-                        const existingItem = user.inventory.find(i => i.itemId === itemId);
-                        if (existingItem) {
-                            existingItem.quantity = player.inventory[itemId];
-                        }
-                        user.markModified('inventory');
-                        return user.save();
-                    }
-                }).catch(err => Logger.error('PlayerManager', "Use Item DB Error:", err));
-            }
-
-            this.io.to(id).emit('updateInventory', player.inventory);
-            // Notify client of effect start (for visuals)
-            if (item) {
-                this.io.to(id).emit('itemActivated', { itemId, duration: item.duration });
-            }
-        }
-    }
-
-    updateBotAI(bot) {
-        // Simple AI: Find nearest food
-        let nearestDist = Infinity;
-        let targetX = bot.x;
-        let targetY = bot.y;
-
-        // Search for food
-        const allFood = this.foodManager.getAllFood();
-        Object.keys(allFood).forEach(fid => {
-            const f = allFood[fid];
-            const dx = f.x - bot.x;
-            const dy = f.y - bot.y;
-            const d = dx * dx + dy * dy;
-            if (d < nearestDist) {
-                nearestDist = d;
-                targetX = f.x;
-                targetY = f.y;
-            }
-        });
-
-        // Calculate target angle
-        bot.targetRotation = Math.atan2(targetY - bot.y, targetX - bot.x);
-
-        // Boost if close to food and has score > 5
-        if (nearestDist < 200 * 200 && bot.score > 5) {
-            bot.wantsToBoost = true;
-        } else {
-            bot.wantsToBoost = false;
         }
     }
 
@@ -415,30 +213,19 @@ class PlayerManager {
     }
 
     getPlayerRadius(score) {
-        // Sync with Client Visuals (15 * scale)
-        // Previously 14, causing "visual touch but no server hit"
         return 15 * this.getPlayerScale(score);
     }
 
     update() {
-        const segmentLength = 1; // Reduced for better precision near head
+        // NOTE: Bot spawning and AI Update is now handled by BotManager externally
+        // This update() only handles physics, collision, and state for ALL players
 
-        // // Spawn Bots
-        const currentBotCount = Object.values(this.players).filter(p => p.isBot).length;
-        if (currentBotCount < BOT_COUNT) {
-            if (Math.random() < 0.05) { // Don't spawn all at once
-                this.createBot();
-            }
-        }
+        const segmentLength = 1;
 
         // Update all players positions
         Object.keys(this.players).forEach(id => {
             const player = this.players[id];
             if (!player) return;
-
-            if (player.isBot) {
-                this.updateBotAI(player);
-            }
 
             // Apply rotation smoothing for everyone (Bots AND Players)
             this.updateRotation(player);
@@ -446,8 +233,6 @@ class PlayerManager {
             // Determine current speed
 
             // Boost Logic with Hysteresis
-            // Start criteria: wantsToBoost AND score > 5
-            // Stop criteria: !wantsToBoost OR score <= 2
             if (!player.isBoosting && player.wantsToBoost && player.score > 5) {
                 player.isBoosting = true;
             } else if (player.isBoosting && (!player.wantsToBoost || player.score <= 2)) {
@@ -459,29 +244,36 @@ class PlayerManager {
             Object.keys(player.activeEffects).forEach(effectId => {
                 if (player.activeEffects[effectId] < now) {
                     delete player.activeEffects[effectId];
-                    this.io.to(id).emit('itemDeactivated', { itemId: effectId });
+                    // BROADCAST deactivation
+                    this.io.emit('itemDeactivated', { playerId: id, itemId: effectId });
                 }
             });
 
+            // Calculate Speed
             let currentSpeed = BASE_SPEED;
+
+            // 1. Item Speed Buff
             if (player.activeEffects['speed']) {
-                currentSpeed = BOOST_SPEED;
-            } else if (player.isBoosting) { // Can only boost if length > 2 (enforced by stop criteria)
+                let buffValue = 4;
+                if (this.shopManager) {
+                    const item = this.shopManager.getShopItems().find(i => i.id === 'speed');
+                    if (item) buffValue = item.buffValue;
+                }
+                currentSpeed += buffValue;
+            }
+            // 2. Manual Boost
+            else if (player.isBoosting) {
                 currentSpeed = BOOST_SPEED;
 
-                // Burn mass logic
-                // Decrease score every X frames? Or probabilistic?
-                // Reduced from 0.05 (3/sec) to 0.02 (~1.2/sec) to make shrinking slower
-                if (Math.random() < 0.03) {
+                // DETERMINISTIC: Shrink every 90 frames (1.5s at 60fps)
+                player.boostTimer++;
+                if (player.boostTimer > 90) {
+                    player.boostTimer = 0; // Reset timer
                     player.score = Math.max(0, player.score - 1);
 
-                    // Spawn food behind
-                    // Get position from end of path or just behind head?
-                    // Ideally behind tail, but path might be long.
-                    // Let's spawn behind head for simplicity or last path point
                     const dropPos = player.path.length > 0 ? player.path[player.path.length - 1] : { x: player.x, y: player.y };
 
-                    const newFood = this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color); // Use player color?
+                    const newFood = this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color);
                     if (newFood) {
                         this.io.emit('newFood', newFood);
                     }
@@ -489,12 +281,10 @@ class PlayerManager {
             }
 
             // Simple movement logic based on rotation
-            // In a real implementation, this should match the client's physics exactly
             player.x += Math.cos(player.rotation) * currentSpeed;
             player.y += Math.sin(player.rotation) * currentSpeed;
 
             // Update Path for Body Collision
-            // Use Distance-Based Pruning to match Client rendering exactly (Fixes Ghost Tail)
             player.totalDistance += currentSpeed;
             player.path.unshift({
                 x: player.x,
@@ -502,17 +292,9 @@ class PlayerManager {
                 d: player.totalDistance
             });
 
-            // Limit path length based on DISTANCE, not just count.
-            // Client uses distance-based history.
-            // Need history for (score) body parts * PIXELS_PER_SEGMENT
-            // Add some buffer (+5 parts)
-            // FIXED: Include INITIAL_LENGTH (10) in calculation so server tracks enough history for the full visual body
             const neededHistoryDist = (player.score + INITIAL_LENGTH + 5) * PIXELS_PER_SEGMENT;
 
             // Prune old points
-            // path[last].d is the totalDistance at that point.
-            // Current totalDistance is player.totalDistance.
-            // Age of point = player.totalDistance - point.d
             while (player.path.length > 0 &&
                 (player.totalDistance - player.path[player.path.length - 1].d > neededHistoryDist)) {
                 player.path.pop();
@@ -543,26 +325,16 @@ class PlayerManager {
                     }
 
                     // Check against other's body segments
-                    // We iterate through the path at intervals to simulate body segments
-                    // FIX GHOST TAIL: Calculate valid visual length
                     const validCollisionDistance = (other.score + INITIAL_LENGTH) * PIXELS_PER_SEGMENT;
 
-                    // Start from index segmentLength (skip head area to avoid head-to-head instant death if close)
-                    // Increased precision: Check every 2 points instead of segmentLength (4)
                     if (other.path) {
                         for (let i = segmentLength; i < other.path.length; i++) {
                             const point = other.path[i];
-
-                            // FIX GHOST TAIL: Stop checking if we are past the visible tail
-                            // point.d is totalDistance at that point. other.totalDistance is current total.
-                            // age = other.totalDistance - point.d
                             const distFromHead = other.totalDistance - point.d;
                             if (distFromHead > validCollisionDistance) break;
 
                             const dist = Math.hypot(player.x - point.x, player.y - point.y);
 
-                            // HITBOX FIX: Revert to 1.0 (Standard) to ensure collisions register correctly
-                            // User reported bots passing through body (0.9 was too small)
                             const HITBOX_SENSITIVITY = 1.0;
                             if (dist < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
                                 this.removePlayer(id);
@@ -583,10 +355,14 @@ class PlayerManager {
 
                 const myRadius = this.getPlayerRadius(player.score);
 
-
                 let MAGNET_RADIUS = 50;
                 if (player.activeEffects['magnet']) {
-                    MAGNET_RADIUS = 200;
+                    let buffValue = 200;
+                    if (this.shopManager) {
+                        const item = this.shopManager.getShopItems().find(i => i.id === 'magnet');
+                        if (item) buffValue = item.buffValue;
+                    }
+                    MAGNET_RADIUS = buffValue;
                 }
 
                 if (distance < myRadius + MAGNET_RADIUS) {
@@ -595,24 +371,17 @@ class PlayerManager {
 
                     //xử lý ăn coin
                     if (f.type === 'coin') {
-                        // !bot -> thêm tiền
                         if (!player.isBot) {
                             try {
-                                // Tìm user theo username (vì trong player object có lưu name)
-                                // Lưu ý: player.name có thể là "Guest_..." hoặc tên thật.
-                                // Tốt nhất là lưu username gốc vào player object lúc init.
-                                // Giả sử player.username là tên đăng nhập chuẩn.
                                 if (player.username && !player.username.startsWith('Guest_')) {
                                     await User.findOneAndUpdate(
                                         { username: player.username },
-                                        { $inc: { coins: f.value } } // Cộng dồn tiền
+                                        { $inc: { coins: f.value } }
                                     );
                                     // Gửi event báo cho Client biết tiền mới
                                     const updatedUser = await User.findOne({ username: player.username });
                                     this.io.to(id).emit('updateCoins', updatedUser.coins);
                                 } else {
-                                    // !guest -> cộng tiền vào bộ nhớ tạm (session)
-                                    // Server không có localStorage, phải lưu vào biến player
                                     let currentCoins = parseInt(player.coins) || 0;
                                     player.coins = currentCoins + f.value;
                                     this.io.to(id).emit('updateCoins', player.coins);
@@ -624,13 +393,8 @@ class PlayerManager {
                     } else {
                         // Ăn thức ăn thường -> Tăng điểm
                         player.score += 1;
-                        if (!player.isBot) {
-                            // Logger.info('PlayerManager', `[Score Debug] Player ${player.username || id} ate food. New Score: ${player.score}`);
-                        }
                     }
 
-                    // Emit event to remove food and update score
-                    // Use f.id to ensure we send a number, not the string key from Object.keys
                     this.io.emit('foodEaten', { foodId: f.id, playerId: id, score: player.score, type: f.type });
 
                     // Spawn new food

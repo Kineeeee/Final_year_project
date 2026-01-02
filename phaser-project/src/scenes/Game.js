@@ -34,7 +34,7 @@ export class Game extends Scene {
         // Create a tiled background
         this.add.tileSprite(0, 0, WIDTH_WORLD, HEIGHT_WORLD, 'background').setOrigin(0);
 
-        // Reference game.js: this.game.stage.backgroundColor = '#444';
+        // Reference game.js: this.game.stage.backgroundColor = '#4444442e';
         this.cameras.main.setBackgroundColor(0x444444);
 
         // UI is now handled by UIScene
@@ -234,6 +234,60 @@ export class Game extends Scene {
             }
         });
 
+        this.socket.on('updateInventory', (inventory) => {
+            Logger.info('Game', 'Inventory Updated:', inventory);
+            localStorage.setItem('inventory', JSON.stringify(inventory));
+            this.events.emit('updateInventory', inventory);
+        });
+
+        this.socket.on('itemActivated', (data) => {
+            Logger.info('Game', 'Item Activated:', data);
+
+            // Emit event for UI (only if it's me)
+            if (this.player && this.player.playerId === data.playerId) {
+                this.events.emit('itemActivated', data);
+            }
+
+            // Trigger visual effect for ANY player (Local or Remote)
+            let snake;
+            if (this.player && this.player.playerId === data.playerId) {
+                snake = this.player;
+            } else if (this.otherSnakes.has(data.playerId)) {
+                snake = this.otherSnakes.get(data.playerId);
+            }
+
+            if (snake) {
+                switch (data.itemId) {
+                    case 'ghost': snake.setGhostEffect(true, data.buffValue); break;
+                    case 'magnet': snake.setMagnetEffect(true, data.buffValue); break;
+                    case 'speed': snake.setSpeedEffect(true, data.buffValue); break;
+                }
+            }
+        });
+
+        this.socket.on('itemDeactivated', (data) => {
+            // Emit event for UI (only if it's me)
+            if (this.player && this.player.playerId === data.playerId) {
+                this.events.emit('itemDeactivated', data);
+            }
+
+            // Stop visual effect for ANY player
+            let snake;
+            if (this.player && this.player.playerId === data.playerId) {
+                snake = this.player;
+            } else if (this.otherSnakes.has(data.playerId)) {
+                snake = this.otherSnakes.get(data.playerId);
+            }
+
+            if (snake) {
+                switch (data.itemId) {
+                    case 'ghost': snake.setGhostEffect(false); break;
+                    case 'magnet': snake.setMagnetEffect(false); break;
+                    case 'speed': snake.setSpeedEffect(false); break;
+                }
+            }
+        });
+
         this.socket.on('playerUpdates', (players) => {
             // Update Leaderboard
             const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score).slice(0, 5);
@@ -330,6 +384,19 @@ export class Game extends Scene {
 
         this.snakes.push(this.player);
         this.cameras.main.startFollow(this.player.head);
+
+        // Apply Initial Effects (if reconnection or late join)
+        if (playerInfo.activeEffects) {
+            Object.keys(playerInfo.activeEffects).forEach(itemId => {
+                const buffValue = 0; // Trigger effect (visuals often don't need exact value, or we assume default)
+                // If we need buffValue, Server should send it in playerInfo. For now, visual is enough.
+                switch (itemId) {
+                    case 'ghost': this.player.setGhostEffect(true); break;
+                    case 'magnet': this.player.setMagnetEffect(true); break;
+                    case 'speed': this.player.setSpeedEffect(true); break;
+                }
+            });
+        }
     }
 
     addOtherPlayers(playerInfo) {
@@ -344,14 +411,22 @@ export class Game extends Scene {
             otherPlayer.score = playerInfo.score;
         }
 
+        // Apply Initial Effects
+        if (playerInfo.activeEffects) {
+            Object.keys(playerInfo.activeEffects).forEach(itemId => {
+                switch (itemId) {
+                    case 'ghost': otherPlayer.setGhostEffect(true); break;
+                    case 'magnet': otherPlayer.setMagnetEffect(true); break;
+                    case 'speed': otherPlayer.setSpeedEffect(true); break;
+                }
+            });
+        }
+
         this.otherSnakes.set(playerInfo.playerId, otherPlayer);
         this.snakes.push(otherPlayer);
     }
 
     spawnFood(x, y, color, id, type = 'regular') {
-        // if (x === undefined) x = Phaser.Math.Between(0, 3000);
-        // if (y === undefined) y = Phaser.Math.Between(0, 3000);
-
         if (!this.textures.exists('food')) {
             const graphics = this.make.graphics({ x: 0, y: 0, add: false });
             graphics.fillStyle(0xff0000, 1);

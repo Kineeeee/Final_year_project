@@ -1,5 +1,7 @@
+
 import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
+import { Snake } from '../objects/snake/Snake';
 
 export class CustomizeScene extends Scene {
     constructor() {
@@ -17,69 +19,48 @@ export class CustomizeScene extends Scene {
         this.add.image(width / 2, height / 2, 'background').setAlpha(0.2).setTint(0x000000); // Subtle texture
 
         // ---------------------------------------------------------
-        // PREVIEW SNAKE — CENTERED & HORIZONTAL
+        // PREVIEW SNAKE — USING REAL SNAKE CLASS
         // ---------------------------------------------------------
-        this.previewContainer = this.add.container(width / 2, height / 2);
-        this.previewBody = [];
-        this.previewShadows = [];
-
-        // Snake Configuration
-        const totalSegments = 20; // Longer snake like in the image
-        const segmentSpacing = 10;
-        const snakeLengthPx = (totalSegments - 1) * segmentSpacing;
-        const startX = -snakeLengthPx / 2; // Center the snake horizontally
 
         // Default color
-        this.selectedColor = 0x9b59b6; // Purple like in the image
+        this.selectedColor = 0x9b59b6;
 
-        // 1. SHADOWS (Bottom Layer)
-        for (let i = 0; i < totalSegments; i++) {
-            const x = startX + (i * segmentSpacing);
-            const shadow = this.add.image(x, 0, 'snake-shadow')
-                .setAlpha(0.3)
-                .setScale(0.8);
-            this.previewShadows.push(shadow);
-            this.previewContainer.add(shadow);
+        // Instantiate the Snake
+        // Position it at center initially
+        this.previewSnake = new Snake(this, width / 2, height / 2, this.selectedColor);
+
+        // Force grow to desired length immediately
+        const desiredLength = 20;
+        this.previewSnake.addSections(desiredLength);
+
+        // We need to manually process the growth queue since we aren't running the full game loop with movement
+        // Or we can just forcibly add body parts.
+        // The Snake.grow() method adds one part at head position. 
+        // To make a long snake instantly for preview, we might need to manually position them 
+        // or let the animation loop spread them out.
+        // Let's just call grow() loop and let our animation handle positions.
+        for (let i = 0; i < desiredLength; i++) {
+            this.previewSnake.grow();
         }
 
-        // 2. BODY (Middle Layer)
-        // Draw from tail (left) to head (right)
-        for (let i = 0; i < totalSegments; i++) {
-            const x = startX + (i * segmentSpacing);
-            const segment = this.add.image(x, 0, 'snake-circle')
-                .setTint(this.selectedColor)
-                .setScale(0.8);
-            
-            this.previewBody.push(segment);
-            this.previewContainer.add(segment);
-        }
+        // Set Scale
+        this.previewSnake.setScale(0.8);
 
-        // 3. HEAD (Top Layer - Rightmost)
-        const headX = startX + ((totalSegments - 1) * segmentSpacing);
-        this.previewHead = this.add.image(headX, 0, 'snake-circle')
-            .setTint(this.selectedColor)
-            .setScale(0.85); // Slightly bigger head
-        this.previewContainer.add(this.previewHead);
+        // Center the snake visually
+        // The head is at (width/2, height/2). Body parts are added at head position.
+        // The animation loop below will spread them out horizontally.
 
-        // 4. EYES (On the Head)
-        // Eyes looking right
-        const eyeOffsetX = 5; 
-        const eyeOffsetY = 8;
-
-        const leftEye = this.add.image(headX + eyeOffsetX, -eyeOffsetY, 'snake-eye').setScale(0.7);
-        const rightEye = this.add.image(headX + eyeOffsetX, eyeOffsetY, 'snake-eye').setScale(0.7);
-        const leftPupil = this.add.image(headX + eyeOffsetX + 2, -eyeOffsetY, 'snake-pupil').setScale(0.7);
-        const rightPupil = this.add.image(headX + eyeOffsetX + 2, eyeOffsetY, 'snake-pupil').setScale(0.7);
-
-        this.previewContainer.add([leftEye, rightEye, leftPupil, rightPupil]);
-
-        // Scale up the whole container to match the reference image size
-        this.previewContainer.setScale(1.5);
-
+        this.previewContainer = this.add.container(0, 0); // Dummy container if accessed elsewhere, or remove usage.
+        // Note: Snake class adds items to scene directly (head container + bodyGroup).
 
         // ---------------------------------------------------------
         // ANIMATION — WIGGLE (Sine Wave)
         // ---------------------------------------------------------
+        // ---------------------------------------------------------
+        // ANIMATION — WIGGLE (Sine Wave)
+        // ---------------------------------------------------------
+        const segmentSpacing = 12 * 0.8; // Spacing * scale
+
         this.tweens.addCounter({
             from: 0,
             to: 360,
@@ -87,86 +68,91 @@ export class CustomizeScene extends Scene {
             loop: -1,
             onUpdate: (tween) => {
                 const t = tween.getValue();
-                const waveFreq = 15; // Frequency of the wave
-                const waveAmp = 15;  // Amplitude of the wave
+                const waveFreq = 10;
+                const waveAmp = 10;
 
-                // Animate Body & Shadows
-                this.previewBody.forEach((seg, index) => {
-                    // Calculate wave offset based on index and time
-                    // Head is at the end of the array (index = totalSegments - 1)
-                    // We want the wave to travel from head (right) to tail (left).
-                    
-                    const offset = Math.sin(Phaser.Math.DegToRad(t * 3 + index * waveFreq)) * waveAmp;
-                    
-                    seg.y = offset;
-                    
-                    // Sync shadow
-                    if (this.previewShadows[index]) {
-                        this.previewShadows[index].y = offset + 5; // Shadow slightly below
-                    }
-                });
+                // Center X for the whole snake
+                const snakeLen = this.previewSnake.body.length * segmentSpacing;
+                const startX = (width / 2) - (snakeLen / 2);
 
                 // Animate Head
-                const headIndex = totalSegments - 1;
-                const headOffset = Math.sin(Phaser.Math.DegToRad(t * 3 + headIndex * waveFreq)) * waveAmp;
-                this.previewHead.y = headOffset;
+                const headX = startX + snakeLen;
+                const headOffset = Math.sin(Phaser.Math.DegToRad(t * 3 + 20 * waveFreq)) * waveAmp;
 
-                // Sync Eyes
-                leftEye.y = this.previewHead.y - eyeOffsetY;
-                rightEye.y = this.previewHead.y + eyeOffsetY;
-                leftPupil.y = leftEye.y;
-                rightPupil.y = rightEye.y;
+                this.previewSnake.head.x = headX;
+                this.previewSnake.head.y = (height / 2) + headOffset;
+                this.previewSnake.head.rotation = 0; // Look right
+                this.previewSnake.head.setDepth(1000); // Ensure head is always on top
+
+                // Animate Body
+                this.previewSnake.body.forEach((part, i) => {
+                    const x = startX + (i * segmentSpacing);
+                    const offset = Math.sin(Phaser.Math.DegToRad(t * 3 + i * waveFreq)) * waveAmp;
+
+                    part.x = x;
+                    part.y = (height / 2) + offset;
+                    part.setDepth(5 + i);
+                });
+
+                // Shadow update
+                if (this.previewSnake.shadow) {
+                    this.previewSnake.shadow.update();
+                }
+
+                // Eyes update
+                if (this.previewSnake.eyes) {
+                    this.previewSnake.eyes.update();
+                }
             }
         });
 
 
-        // ---------------------------------------------------------
-        // UI CONTROLS (Arrows & Save Button)
-        // ---------------------------------------------------------
-        
-        // Left Arrow
-        const leftArrow = this.add.text(width / 2 - 250, height / 2, '◀', {
-            fontSize: '64px',
-            color: '#4caf50', // Green arrow
+        // Title
+        this.add.text(width / 2, 80, 'Customize Your Snake', {
+            fontFamily: '"Outfit", sans-serif',
+            fontSize: '48px',
+            color: '#ffffff',
             stroke: '#000000',
-            strokeThickness: 4
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            strokeThickness: 6
+        }).setOrigin(0.5);
 
-        // Right Arrow
-        const rightArrow = this.add.text(width / 2 + 250, height / 2, '▶', {
-            fontSize: '64px',
-            color: '#4caf50', // Green arrow
-            stroke: '#000000',
-            strokeThickness: 4
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        // ---------------------------------------------------------
+        // UI CONTROLS
+        // ---------------------------------------------------------
+
+        // Left Arrow Button
+        const leftBtn = this.add.container(width / 2 - 250, height / 2);
+        const lBg = this.add.circle(0, 0, 40, 0xffffff, 0.2).setStrokeStyle(2, 0xffffff);
+        const lText = this.add.text(0, 0, '<', { fontSize: '48px', color: '#fff', fontFamily: '"Outfit", sans-serif' }).setOrigin(0.5, 0.55);
+        leftBtn.add([lBg, lText]);
+        leftBtn.setSize(80, 80).setInteractive({ useHandCursor: true });
+
+        // Right Arrow Button
+        const rightBtn = this.add.container(width / 2 + 250, height / 2);
+        const rBg = this.add.circle(0, 0, 40, 0xffffff, 0.2).setStrokeStyle(2, 0xffffff);
+        const rText = this.add.text(0, 0, '>', { fontSize: '48px', color: '#fff', fontFamily: '"Outfit", sans-serif' }).setOrigin(0.5, 0.55);
+        rightBtn.add([rBg, rText]);
+        rightBtn.setSize(80, 80).setInteractive({ useHandCursor: true });
 
         // Color Palette Logic
         const colors = [
-            0x9b59b6, // Purple (Default)
+            0x9b59b6, // Purple
             0xe74c3c, // Red
             0x2ecc71, // Green
             0x3498db, // Blue
             0xf1c40f, // Yellow
             0xe67e22, // Orange
             0xecf0f1, // White
-            0x34495e  // Dark Blue
+            0x34495e, // Dark Blue
+            0xe91e63, // Pink
+            0x00bcd4  // Cyan
         ];
-        // lấy màu đã lưu
+
         const savedColor = localStorage.getItem('preferredColor');
-
-        // xác định màu khởi tạo cho con rắn preview
         this.selectedColor = savedColor ? parseInt(savedColor) : colors[0];
-
-        // tìm chỉ mục của màu hiện tại
         let currentColorIndex = colors.indexOf(this.selectedColor);
+        if (currentColorIndex === -1) { currentColorIndex = 0; this.selectedColor = colors[0]; }
 
-        // nếu màu lưu không có trong danh sách
-        if (currentColorIndex === -1) {
-            currentColorIndex = 0;
-            this.selectedColor = colors[0];
-        }
-        
-        // Cập nhật màu preview ban đầu
         this.updatePreviewColor(this.selectedColor);
 
         const changeColor = (direction) => {
@@ -177,9 +163,9 @@ export class CustomizeScene extends Scene {
             }
             this.selectedColor = colors[currentColorIndex];
             this.updatePreviewColor(this.selectedColor);
-            
+
             // Button feedback
-            const target = direction === 'next' ? rightArrow : leftArrow;
+            const target = direction === 'next' ? rightBtn : leftBtn;
             this.tweens.add({
                 targets: target,
                 scale: 1.2,
@@ -188,58 +174,63 @@ export class CustomizeScene extends Scene {
             });
         };
 
-        leftArrow.on('pointerdown', () => changeColor('prev'));
-        rightArrow.on('pointerdown', () => changeColor('next'));
-
+        leftBtn.on('pointerdown', () => changeColor('prev'));
+        rightBtn.on('pointerdown', () => changeColor('next'));
 
         // Save / Play Button
-        const saveBtn = this.add.text(width / 2, height / 2 + 150, 'Save', {
-            fontFamily: 'Arial',
+        const saveContainer = this.add.container(width / 2, height / 2 + 180);
+        const saveBg = this.add.rectangle(0, 0, 200, 60, 0x4caf50).setStrokeStyle(2, 0xffffff);
+        const saveText = this.add.text(0, 0, 'SAVE & PLAY', {
+            fontFamily: '"Outfit", sans-serif',
             fontSize: '24px',
             fontStyle: 'bold',
-            color: '#ffffff',
-            backgroundColor: '#4caf50',
-            padding: { x: 40, y: 10 }
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-        
-        saveBtn.on('pointerdown', () => {
-            const username = localStorage.getItem('username') || 'Guest';
+            color: '#ffffff'
+        }).setOrigin(0.5);
 
-            // Save selected color to localStorage
-            localStorage.setItem('preferredColor', this.selectedColor);
+        saveContainer.add([saveBg, saveText]);
+        saveContainer.setSize(200, 60).setInteractive({ useHandCursor: true });
 
-            // nếu không phải Guest thì cập nhật màu lên server
-            if (username !== 'Guest' && !username.startsWith('Guest_')) {
-                fetch('http://localhost:3000/api/update-color', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'},
-                    body: JSON.stringify({ username: username, color: this.selectedColor })
-                }).catch(err => {
-                    Logger.error('CustomizeScene', 'Failed to update color on server', err);
-
-                });
-            }
-
-            this.scene.start('Game', { 
-                name: username,
-                color: this.selectedColor });
+        saveContainer.on('pointerover', () => {
+            saveBg.setFillStyle(0x66bb6a);
+            this.tweens.add({ targets: saveContainer, scale: 1.05, duration: 100 });
+        });
+        saveContainer.on('pointerout', () => {
+            saveBg.setFillStyle(0x4caf50);
+            this.tweens.add({ targets: saveContainer, scale: 1.0, duration: 100 });
         });
 
-        saveBtn.on('pointerover', () => saveBtn.setStyle({ backgroundColor: '#45a049' }));
-        saveBtn.on('pointerout', () => saveBtn.setStyle({ backgroundColor: '#4caf50' }));
+        saveContainer.on('pointerdown', () => {
+            const username = localStorage.getItem('username') || 'Guest';
 
-        // "Build a Slither" text (optional decoration)
-        this.add.text(width - 100, height - 50, 'Build a Snake', {
-            fontSize: '16px',
-            color: '#aaaaaa'
-        }).setOrigin(0.5);
+            // Save locally
+            localStorage.setItem('preferredColor', this.selectedColor);
+
+            // Save to server
+            if (username !== 'Guest' && !username.startsWith('Guest_')) {
+                const url = `${location.protocol}//${location.hostname}:3000/api/auth/update-color`;
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, color: this.selectedColor })
+                }).catch(err => Logger.error('CustomizeScene', 'Failed to update color', err));
+            }
+
+            // Click Anim
+            this.tweens.add({
+                targets: saveContainer,
+                scale: 0.95,
+                duration: 50,
+                yoyo: true,
+                onComplete: () => {
+                    this.scene.start('Game', { name: username, color: this.selectedColor });
+                }
+            });
+        });
     }
 
     updatePreviewColor(color) {
-        this.previewHead.setTint(color);
-        this.previewBody.forEach(seg => seg.setTint(color));
+        if (this.previewSnake) {
+            this.previewSnake.setColor(color);
+        }
     }
 }
