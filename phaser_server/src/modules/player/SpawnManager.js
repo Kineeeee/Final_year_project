@@ -1,10 +1,14 @@
-const { WORLD_SIZE, SAFE_SPAWN_RADIUS } = require('../config/constants');
-const Logger = require('../utils/Logger');
+const { WORLD_SIZE, SAFE_SPAWN_RADIUS } = require('../../config/constants');
+const Logger = require('../../utils/Logger');
 
 class SpawnManager {
-    constructor(playerManager) {
-        this.playerManager = playerManager;
+    constructor(container) {
+        this.container = container;
+        // Dependencies resolved via Container
     }
+
+    get playerManager() { return this.container.get('playerManager'); }
+
 
     getSafeSpawnPosition() {
         let safe = false;

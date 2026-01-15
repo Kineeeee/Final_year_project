@@ -7,11 +7,14 @@ const LOG_CONFIG = {
     categories: {
         'Server': true,
         'PlayerManager': true,
-        'FoodManager': true,
-        'SpawnManager': true,
+        'FoodManager': false,
+        'SpawnManager': false,
         'Database': true,
         'Auth': true,
-        'Network': false // Example: Disable network logs if too noisy
+        'Network': false, // Example: Disable network logs if too noisy
+        'QuizManager': false,
+        'ShopManager': false,
+        'GameServer': true,
     }
 };
 

@@ -77,22 +77,27 @@ export class MainMenu extends Scene {
 
 
         // ------------------------------
-        // NÚT START GAME (Pulsing)
+        // MODE SELECTION BUTTONS
         // ------------------------------
-        const playBtn = this.createButton(centerX, centerY + 120, 'PLAY NOW', () => {
-            Logger.info('MainMenu', 'Start Game clicked');
-            this.cameras.main.fadeOut(500, 0, 0, 0);
-            this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, (cam, effect) => {
-                const gameData = { name: username };
-                const savedColor = localStorage.getItem('preferredColor');
-                if (savedColor) gameData.color = parseInt(savedColor);
-                this.scene.start('Game', gameData);
-            });
-        });
 
-        // Pulse Effect for Play Button
+        // 1. SURVIVAL
+        const survivalBtn = this.createButton(centerX, centerY + 80, 'SURVIVAL', () => {
+            this.startGame('normal');
+        }, 0x1e90ff);
+
+        // 2. MATH QUIZ
+        const mathBtn = this.createButton(centerX, centerY + 150, 'MATH QUIZ', () => {
+            this.startGame('math');
+        }, 0xff4500); // Orange
+
+        // 3. ENGLISH QUIZ
+        const englishBtn = this.createButton(centerX, centerY + 220, 'ENGLISH QUIZ', () => {
+            this.startGame('english');
+        }, 0x9932cc); // Purple
+
+        // Pulse Effect for Survival
         this.tweens.add({
-            targets: playBtn,
+            targets: survivalBtn,
             scaleX: 1.05,
             scaleY: 1.05,
             duration: 800,
@@ -104,7 +109,7 @@ export class MainMenu extends Scene {
         // ------------------------------
         // NÚT CUSTOMIZE SNAKE
         // ------------------------------
-        this.createButton(centerX, centerY + 200, 'Customize', () => {
+        this.createButton(centerX, centerY + 290, 'Customize', () => {
             this.scene.start('CustomizeScene');
         });
 
@@ -172,17 +177,32 @@ export class MainMenu extends Scene {
     // ---------------------------------------
     // REUSABLE BUTTON FUNCTION
     // ---------------------------------------
-    createButton(x, y, text, callback) {
+    startGame(mode) {
+        Logger.info('MainMenu', `Starting Game Mode: ${mode}`);
+        this.cameras.main.fadeOut(500, 0, 0, 0);
+        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, (cam, effect) => {
+            const username = localStorage.getItem('username') || 'Guest';
+            const gameData = { name: username, mode: mode }; // Pass mode
+            const savedColor = localStorage.getItem('preferredColor');
+            if (savedColor) gameData.color = parseInt(savedColor);
+            this.scene.start('Game', gameData);
+        });
+    }
+
+    // ---------------------------------------
+    // REUSABLE BUTTON FUNCTION
+    // ---------------------------------------
+    createButton(x, y, text, callback, color = 0x1e90ff) {
         // Container for better handling
         const container = this.add.container(x, y);
 
-        const btn = this.add.rectangle(0, 0, 280, 70, 0x1e90ff)
+        const btn = this.add.rectangle(0, 0, 280, 60, color)
             .setStrokeStyle(4, 0xffffff)
             .setInteractive({ useHandCursor: true });
 
         const btnText = this.add.text(0, 0, text, {
             fontFamily: '"Outfit", sans-serif',
-            fontSize: '28px',
+            fontSize: '24px',
             color: '#ffffff',
             fontStyle: 'bold'
         }).setOrigin(0.5);
@@ -191,7 +211,8 @@ export class MainMenu extends Scene {
 
         // Hover effect
         btn.on('pointerover', () => {
-            btn.setFillStyle(0x3cb0ff);
+            btn.setFillStyle(0xffffff);
+            btnText.setColor('#000000');
             // Tween the container
             this.tweens.add({
                 targets: container,
@@ -201,7 +222,8 @@ export class MainMenu extends Scene {
         });
 
         btn.on('pointerout', () => {
-            btn.setFillStyle(0x1e90ff);
+            btn.setFillStyle(color);
+            btnText.setColor('#ffffff');
             this.tweens.add({
                 targets: container,
                 scale: 1.0,

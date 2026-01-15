@@ -16,6 +16,7 @@ export class Game extends Scene {
         data = data || {};
         this.myColor = data.color; // If undefined, will use server random color
         this.myName = data.name; // Use server generated name if not provided
+        this.gameMode = data.mode || 'normal'; // 'normal', 'math', 'english'
     }
 
     create() {
@@ -38,7 +39,7 @@ export class Game extends Scene {
         this.cameras.main.setBackgroundColor(0x444444);
 
         // UI is now handled by UIScene
-        this.scene.launch('UIScene');
+        this.scene.launch('UIScene', { mode: this.gameMode });
         this.scene.bringToTop('UIScene');
 
         // --- CAMERA ZOOM LOGIC ---
@@ -56,7 +57,12 @@ export class Game extends Scene {
         });
 
         // Socket Connection
-        this.socket = io(CONFIG.SERVER_URL, { forceNew: true });
+        let serverUrl = CONFIG.SERVER_URL;
+        if (this.gameMode === 'math') serverUrl += '/math';
+        if (this.gameMode === 'english') serverUrl += '/english';
+
+        Logger.info('Game', `Connecting to Server: ${serverUrl}`);
+        this.socket = io(serverUrl, { forceNew: true });
 
         // Listen for initial player state to sync High Score immediately
         this.socket.on('playerState', (state) => {
@@ -138,6 +144,25 @@ export class Game extends Scene {
             });
         });
 
+        // Minimap Food Update Loop (1Hz)
+        this.time.addEvent({
+            delay: 1000,
+            loop: true,
+            callback: () => {
+                const uiScene = this.scene.get('UIScene');
+                if (uiScene) {
+                    // Convert Group to simple array of {x,y,type,color}
+                    const foodData = this.foodGroup.getChildren().map(f => ({
+                        x: f.x,
+                        y: f.y,
+                        type: f.type,
+                        color: f.color
+                    }));
+                    uiScene.updateMinimapFood(foodData);
+                }
+            }
+        });
+
         this.socket.on('newPlayer', (playerInfo) => {
             this.addOtherPlayers(playerInfo);
         });
@@ -157,18 +182,55 @@ export class Game extends Scene {
 
             Object.keys(foodData).forEach((id) => {
                 const f = foodData[id];
-                this.spawnFood(f.x, f.y, f.color, f.id, f.type);
+                this.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data);
             });
         });
 
         this.socket.on('newFood', (f) => {
-            this.spawnFood(f.x, f.y, f.color, f.id, f.type);
+            this.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data);
+        });
+
+        // QUIZ HUD EVENTS
+        this.socket.on('newQuestion', (data) => {
+            this.events.emit('updateQuestion', data); // Emit to UIScene
+        });
+
+        this.socket.on('roundStart', (data) => {
+            this.events.emit('roundStart', data); // Emit to UIScene
+        });
+
+        this.socket.on('roundEnd', (data) => {
+            this.events.emit('roundEnd', data); // Emit to UIScene
         });
 
         this.socket.on('batchFood', (foodArray) => {
-            foodArray.forEach(f => {
-                this.spawnFood(f.x, f.y, f.color, f.id, f.type);
-            });
+            // Cancel any previous staggered spawn
+            if (this.staggeredSpawnTimer) {
+                this.staggeredSpawnTimer.destroy();
+                this.staggeredSpawnTimer = null;
+            }
+
+            // Stagger spawning to prevent frame drops
+            const BATCH_SIZE = 20; // Spawn 20 items per frame
+            let index = 0;
+
+            const spawnBatch = () => {
+                const end = Math.min(index + BATCH_SIZE, foodArray.length);
+                for (let i = index; i < end; i++) {
+                    const f = foodArray[i];
+                    this.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data);
+                }
+                index = end;
+
+                if (index < foodArray.length) {
+                    // Continue next frame
+                    this.staggeredSpawnTimer = this.time.delayedCall(16, spawnBatch); // ~1 frame delay (60fps)
+                } else {
+                    this.staggeredSpawnTimer = null;
+                }
+            };
+
+            spawnBatch();
         });
 
         // Lắng nghe sự kiện cập nhật tiền
@@ -206,6 +268,45 @@ export class Game extends Scene {
             }
         });
 
+        // Add explicit removal listener (for Quiz cleanup)
+        this.socket.on('removeFood', (foodId) => {
+            const food = this.foodGroup.getChildren().find(f => f.id == foodId);
+            if (food) {
+                food.destroy();
+            }
+        });
+
+        // Batch removal for quiz food (PERFORMANCE OPTIMIZATION)
+        this.socket.on('clearQuizFood', (foodIds) => {
+            // CRITICAL: Cancel any ongoing staggered spawn to prevent ghost food
+            if (this.staggeredSpawnTimer) {
+                this.staggeredSpawnTimer.destroy();
+                this.staggeredSpawnTimer = null;
+            }
+
+            // Instead of matching IDs (which can desync), clear ALL quiz food by type
+            // CRITICAL: Create a COPY of the array because valid destroy() modifies the live array, breaking the loop
+            const allFood = [...this.foodGroup.getChildren()];
+            allFood.forEach(food => {
+                if (food.type === 'text') {
+                    food.destroy();
+                }
+            });
+        });
+
+        // Batch Remove (Efficient Cleanup)
+        this.socket.on('batchRemove', (ids) => {
+            // CRITICAL: Iterate COPY to allow safe destruction
+            const allFood = [...this.foodGroup.getChildren()];
+            const idSet = new Set(ids);
+
+            allFood.forEach(food => {
+                if (idSet.has(food.id)) {
+                    food.destroy();
+                }
+            });
+        });
+
         this.socket.on('playerDied', (playerId) => {
             if (this.player && this.player.playerId === playerId) {
                 // Pass socket to GameOver to receive High Score update
@@ -238,6 +339,19 @@ export class Game extends Scene {
             Logger.info('Game', 'Inventory Updated:', inventory);
             localStorage.setItem('inventory', JSON.stringify(inventory));
             this.events.emit('updateInventory', inventory);
+        });
+
+        this.socket.on('answerResult', (data) => {
+            // data: { playerId, correct, scoreChange, x, y }
+            this.showFloatingText(data.x, data.y, data.correct ? "CORRECT!" : "WRONG!", data.correct ? 0x00ff00 : 0xff0000);
+
+            // If it's me, showed score change
+            if (this.player && this.player.playerId === data.playerId) {
+                this.events.emit('showToast', {
+                    message: data.correct ? `Correct! +${data.scoreChange}` : `Wrong! ${data.scoreChange}`,
+                    color: data.correct ? '#00ff00' : '#ff0000'
+                });
+            }
         });
 
         this.socket.on('itemActivated', (data) => {
@@ -322,6 +436,12 @@ export class Game extends Scene {
                     } else {
                         if (this.player.shadow) this.player.shadow.setLightingUp(false);
                         this.player.speed = this.player.slowSpeed;
+                    }
+
+                    // Update Minimap
+                    const uiScene = this.scene.get('UIScene');
+                    if (uiScene) {
+                        uiScene.updateMinimapPlayer(this.player.head.x, this.player.head.y);
                     }
                 } else {
                     if (this.otherSnakes.has(id)) {
@@ -426,7 +546,7 @@ export class Game extends Scene {
         this.snakes.push(otherPlayer);
     }
 
-    spawnFood(x, y, color, id, type = 'regular') {
+    spawnFood(x, y, color, id, type = 'regular', value = 1, data = null) {
         if (!this.textures.exists('food')) {
             const graphics = this.make.graphics({ x: 0, y: 0, add: false });
             graphics.fillStyle(0xff0000, 1);
@@ -453,14 +573,31 @@ export class Game extends Scene {
             return;
         }
 
-        const food = this.foodGroup.get(x, y);
-        if (food) {
-            food.onSpawn(x, y, color);
-            food.id = id; // Assign Server ID
-            food.type = type; // 'regular'
-            food.setScale(1.0);
-            food.setRotation(0);
+        let food;
+
+        // DISABLE REUSE FOR ANSWER ORBS (User Request)
+        if (type === 'text') {
+            food = new Food(this, x, y, color);
+            food.id = id;
+            food.onSpawn(x, y, color, type, value, data, id);
+            this.foodGroup.add(food);
         }
+        // POOLING for Regular Food / Coins
+        else {
+            food = this.foodGroup.get(x, y);
+            if (food) {
+                food.onSpawn(x, y, color, type, value, data, id);
+                food.id = id;
+            } else {
+                food = new Food(this, x, y, color);
+                food.id = id;
+                food.onSpawn(x, y, color, type, value, data, id);
+                this.foodGroup.add(food);
+            }
+        }
+
+        food.setScale(1.0);
+        food.setRotation(0);
     }
 
     update(time, delta) {
@@ -498,10 +635,7 @@ export class Game extends Scene {
                 isBoosting = (this.player.spaceKey.isDown || this.input.activePointer.isDown);
             }
 
-
             this.socket.emit('playerInput', { angle: angle, isBoosting: isBoosting });
-
-            // REMOVED LOCAL PREDICTION: Visuals now updated via Server State in playerUpdates
         }
 
 
@@ -547,9 +681,6 @@ export class Game extends Scene {
         }
     }
 
-    // checkCollisions removed for Server Authoritative Fairness
-    // Client no longer predicts death. We wait for server 'playerDied' event.
-
     killSnake(snake) {
         if (!snake.alive) return;
         snake.alive = false;
@@ -576,6 +707,31 @@ export class Game extends Scene {
         if (this.socket) {
             this.socket.emit('useItem', itemId);
         }
+    }
+
+    showFloatingText(x, y, message, color) {
+        // Offset Y by -50 to show above head
+        const text = this.add.text(x, y - 50, message, {
+            fontFamily: '"Outfit", sans-serif',
+            fontSize: '24px',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 4
+        }).setOrigin(0.5);
+
+        if (typeof color === 'number') text.setTint(color);
+        else text.setColor(color);
+
+        this.tweens.add({
+            targets: text,
+            y: y - 100, // Move up further
+            alpha: 0,
+            scale: 1.5,
+            duration: 1000,
+            ease: 'Power2',
+            onComplete: () => text.destroy()
+        });
     }
 }
 

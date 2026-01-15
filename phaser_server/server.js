@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const connectDB = require('./src/config/db');
-const authRoutes = require('./src/routers/authRouters.js');
+const authRoutes = require('./src/modules/auth/AuthRoutes.js');
 const Logger = require('./src/utils/Logger');
 
 const { PORT } = require('./src/config/constants');
@@ -42,6 +42,7 @@ app.use(express.static(__dirname + '/public'));
 
 // 3.Routes
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/questions', require('./src/modules/quiz/QuestionRoutes'));
 
 app.get('/', function (req, res) {
     res.send('Server is running');
@@ -55,8 +56,17 @@ const io = new Server(server, {
     }
 });
 
-// Initialize Game Server
-new GameServer(io);
+// Initialize Game Servers
+// 1. Normal Mode
+new GameServer(io, { mode: 'normal' });
+
+// 2. Math Mode
+const mathIO = io.of('/math');
+new GameServer(mathIO, { mode: 'quiz', topic: 'math' });
+
+// 3. English Mode
+const englishIO = io.of('/english');
+new GameServer(englishIO, { mode: 'quiz', topic: 'english' });
 
 server.listen(PORT, () => {
     Logger.info('Server', `Server is running on port ${PORT}`);

@@ -11,7 +11,17 @@ module.exports = {
     PIXELS_PER_SEGMENT: 12,
     INITIAL_LENGTH: 5,
     BOT_COUNT: 20,
+    BOT_COUNT: 20,
     BOT_NAMES: ["Viper", "Python", "Anaconda", "Cobra", "Boa", "Mamba", "Sidewinder", "Rattler", "Nagini", "Kaa"],
+
+    // Gameplay Constants
+    HITBOX_SENSITIVITY: 1.0,
+    BASE_MAGNET_RADIUS: 80,
+    BOOST_COST_INTERVAL: 90, // Frames (approx 1.5s at 60fps)
+    MAX_PLAYER_SCALE: 1.2,
+    PLAYER_SCALE_BASE: 0.6,
+    PLAYER_SCALE_GROWTH: 0.005,
+
     ITEMS: {
         SPEED_UP: { id: 'speed', price: 100, duration: 10000, cooldown: 10000, buffValue: 4, description: "Speed +4 (10s)" },
         MAGNET: { id: 'magnet', price: 200, duration: 10000, cooldown: 15000, buffValue: 200, description: "Magnet Radius 200 (10s)" },

@@ -1,16 +1,20 @@
 const {
     BOT_COUNT,
     BOT_NAMES
-} = require('../config/constants');
-const Logger = require('../utils/Logger');
+} = require('../../config/constants');
+const Logger = require('../../utils/Logger');
 
 class BotManager {
-    constructor(io, playerManager, foodManager, spawnManager) {
+    constructor(io, container) {
         this.io = io;
-        this.playerManager = playerManager;
-        this.foodManager = foodManager;
-        this.spawnManager = spawnManager;
+        this.container = container;
+        // Dependencies resolved via Container
     }
+
+    get playerManager() { return this.container.get('playerManager'); }
+    get foodManager() { return this.container.get('foodManager'); }
+    get spawnManager() { return this.container.get('spawnManager'); }
+
 
     createBot() {
         if (!this.spawnManager) {

@@ -222,9 +222,11 @@ export class Snake {
                 const dist = PhaserMath.Distance.Between(this.head.x, this.head.y, this.targetX, this.targetY);
 
                 if (dist > 2) {
-                    // Increase lerp factor to 0.2 (20% per frame at 60fps) for faster catch-up
-                    // Scale by delta to ensure consistency across frame rates
-                    let t = 0.2 * (delta / 16.66);
+                    // Smooth Lerp Factor
+                    // 0.1 means we correct 10% of the error per frame (at 60fps).
+                    // This is approx 600ms to fully converge, but visually smooth.
+                    // For 30Hz updates, this is safer than 0.2 to avoid "jitter".
+                    let t = 0.1 * (delta / 16.66);
                     if (t > 1) t = 1;
 
                     this.head.x = PhaserMath.Linear(this.head.x, this.targetX, t);
@@ -388,9 +390,23 @@ export class Snake {
         // Shadow handles its own scale reading from snake.scale
 
         // Updates Speed Effect Scale
-        if (this.speedEmitter) {
-            // Keep particle size relative to snake (x2)
-            this.speedEmitter.setScale({ start: 1.7 * scale, end: 0 });
+        if (this.speedEmitter && this.isSpeedActive) {
+            // Emitter Swap Strategy:
+            // Scaling the emitter container causes offset bugs.
+            // Dynamic scaling function caused visibility bugs.
+            // Solution: Retire the old emitter and create a new one with the new scale.
+
+            const oldEmitter = this.speedEmitter;
+            oldEmitter.emitting = false; // Stop emitting new particles (though we use manual emit anyway)
+            // If we are manually emitting, just stopping logic usage is enough, but let's let existing particles fade.
+
+            // Destroy after lifespan (400ms) + buffer
+            this.scene.time.delayedCall(450, () => {
+                if (oldEmitter) oldEmitter.destroy();
+            });
+
+            this.speedEmitter = null;
+            this.setSpeedEffect(true); // Re-create with new 'this.scale'
         }
     }
 
@@ -436,7 +452,7 @@ export class Snake {
                 // this.scene.add.particles(x, y, texture, config)
                 this.speedEmitter = this.scene.add.particles(0, 0, 'snake-circle', {
                     speed: 100,
-                    scale: { start: 1.7 * this.scale, end: 0 }, // Visible scale (x2 size relative)
+                    scale: { start: 1.7 * this.scale, end: 0 },
                     lifespan: 400,
                     blendMode: "NORMAL",
                     tint: 0x888888,
@@ -449,6 +465,10 @@ export class Snake {
         } else {
             // Just stop emitting? Manual emission stops naturally if we don't call emit.
             // But we might want to clear existing particles? No, let them fade.
+            if (this.speedEmitter) {
+                this.speedEmitter.destroy();
+                this.speedEmitter = null;
+            }
         }
     }
 

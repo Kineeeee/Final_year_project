@@ -1,107 +1,195 @@
 const { FPS } = require('./config/constants');
-const PlayerManager = require('./managers/PlayerManager');
-const FoodManager = require('./managers/FoodManager');
-const SpawnManager = require('./managers/SpawnManager');
-const ShopManager = require('./managers/ShopManager');
-const BotManager = require('./managers/BotManager');
+const PlayerManager = require('./modules/player/PlayerManager');
+const FoodManager = require('./modules/food/FoodManager');
+const SpawnManager = require('./modules/player/SpawnManager');
+const ShopManager = require('./modules/shop/ShopManager');
+const BotManager = require('./modules/bot/BotManager');
+const QuizManager = require('./modules/quiz/QuizManager');
 const Logger = require('./utils/Logger');
 
+const EVENT = {
+    CONNECTION: 'connection',
+    DISCONNECT: 'disconnect',
+    PING: 'ping',
+    PONG: 'pong',
+    PLAYER_INPUT: 'playerInput',
+    INIT_PLAYER: 'initPlayer',
+    BUY_ITEM: 'buyItem',
+    USE_ITEM: 'useItem',
+    NEW_PLAYER: 'newPlayer',
+    PLAYER_UPDATES: 'playerUpdates',
+    CURRENT_PLAYERS: 'currentPlayers',
+    CURRENT_FOOD: 'currentFood',
+    SHOP_ITEMS: 'shopItems',
+    NEW_QUESTION: 'newQuestion',
+    ROUND_START: 'roundStart'
+};
+
+const FOOD_REFILL_INTERVAL = 15000;
+
 class GameServer {
-    constructor(io) {
+    constructor(io, config = {}) {
         this.io = io;
+        this.config = config; // { mode: 'normal'|'quiz', topic: 'math'|'english' }
 
-        // Initialize Managers
-        this.foodManager = new FoodManager(io);
-        this.playerManager = new PlayerManager(io, this.foodManager);
-        this.spawnManager = new SpawnManager(this.playerManager);
-        this.shopManager = new ShopManager(io, this.playerManager);
-        this.botManager = new BotManager(io, this.playerManager, this.foodManager, this.spawnManager);
+        this.setupManagers();
+        this.setupGameLoop();
+        this.setupSocketIO();
 
-        // Circular Dependencies / Manual Injection
+        Logger.info('GameServer', `Server initialized in mode: ${this.config.mode || 'default'}`);
+    }
 
-        this.playerManager.setShopManager(this.shopManager);
+    /**
+     * Initialize and wire up all game managers
+     */
+    setupManagers() {
+        // Import Classes (Not Instances)
+        const ServiceContainer = require('./core/ServiceContainer');
+        const EventBus = require('./core/EventBus');
 
-        // State Interaction
-        // Initial Food
+        // 1. Create Scoped Instances
+        this.container = new ServiceContainer();
+        this.eventBus = new EventBus();
+
+        // 2. Initialize Managers (Pass Container)
+        this.foodManager = new FoodManager(this.io, this.container);
+        this.playerManager = new PlayerManager(this.io, this.container);
+        this.shopManager = new ShopManager(this.io, this.container);
+        this.spawnManager = new SpawnManager(this.container);
+
+        // 3. Register Services to Scoped Container
+        this.container.register('foodManager', this.foodManager);
+        this.container.register('playerManager', this.playerManager);
+        this.container.register('shopManager', this.shopManager);
+        this.container.register('spawnManager', this.spawnManager);
+        this.container.register('eventBus', this.eventBus);
+
+        // 4. Configure Managers
+        this.foodManager.setConfig(this.config);
         this.foodManager.spawnInitialFood();
 
-        this.setupSocketIO();
-        this.startGameLoop();
+        // 5. Optional Managers
+        if (this.config.mode === 'quiz') {
+            this.setupQuizManager();
+        }
+
+        if (this.shouldEnableBots()) {
+            this.botManager = new BotManager(this.io, this.container);
+            this.container.register('botManager', this.botManager);
+        }
+    }
+
+    setupQuizManager() {
+        const QuizManager = require('./modules/quiz/QuizManager'); // Ensure import if not global
+        this.quizManager = new QuizManager(this.io, this.container, this.config.topic);
+        this.container.register('quizManager', this.quizManager);
+
+        Logger.info('GameServer', `Quiz Mode Enabled: ${this.config.topic}`);
+        this.quizManager.startRound();
+    }
+
+    shouldEnableBots() {
+        return this.config.mode !== 'quiz';
     }
 
     setupSocketIO() {
-        this.io.on('connection', (socket) => {
-            Logger.info('GameServer', `User connected: ${socket.id}`);
+        this.io.on(EVENT.CONNECTION, (socket) => this.handleConnection(socket));
+    }
 
-            // Find safe spawn
-            const spawnPos = this.spawnManager.getSafeSpawnPosition();
+    handleConnection(socket) {
+        Logger.info('GameServer', `User connected: ${socket.id}`);
 
-            // Create player
-            const player = this.playerManager.addPlayer(socket, spawnPos);
+        this.initializePlayer(socket);
+        this.sendInitialState(socket);
+        this.registerSocketEvents(socket);
+    }
 
-            // Send initial state to this player
-            socket.emit('currentPlayers', this.playerManager.getAllPlayers());
-            socket.emit('currentFood', this.foodManager.getAllFood());
-            // Send shop items (now handled via ShopManager but we can emit directly here too)
-            socket.emit('shopItems', this.shopManager.getShopItems());
+    initializePlayer(socket) {
+        // Find safe spawn and create player
+        const spawnPos = this.spawnManager.getSafeSpawnPosition();
+        const player = this.playerManager.addPlayer(socket, spawnPos);
 
-            // Broadcast new player to others
-            socket.broadcast.emit('newPlayer', player);
+        // Broadcast to others
+        socket.broadcast.emit(EVENT.NEW_PLAYER, player);
+    }
 
-            // Handle Disconnect
-            socket.on('disconnect', () => {
-                Logger.info('GameServer', `User disconnected: ${socket.id}`);
-                this.playerManager.removePlayer(socket.id);
+    sendInitialState(socket) {
+        // Send current game state to the new player
+        socket.emit(EVENT.CURRENT_PLAYERS, this.playerManager.getAllPlayers());
+        socket.emit(EVENT.CURRENT_FOOD, this.foodManager.getAllFood());
+        socket.emit(EVENT.SHOP_ITEMS, this.shopManager.getShopItems());
+
+        // Sync Quiz State if active
+        if (this.quizManager && this.quizManager.currentQuestion) {
+            socket.emit(EVENT.NEW_QUESTION, {
+                text: this.quizManager.currentQuestion.questionText,
+                difficulty: this.quizManager.currentQuestion.difficulty,
+                endTime: this.quizManager.questionEndTime
             });
-
-            // Handle Ping
-            socket.on('ping', () => {
-                socket.emit('pong');
+            socket.emit(EVENT.ROUND_START, {
+                endTime: this.quizManager.roundEndTime,
+                topic: this.config.topic
             });
+        }
+    }
 
-            // Handle Input
-            socket.on('playerInput', (inputData) => {
-                this.playerManager.handlePlayerInput(socket.id, inputData);
-            });
+    registerSocketEvents(socket) {
+        // Disconnect
+        socket.on(EVENT.DISCONNECT, () => {
+            Logger.info('GameServer', `User disconnected: ${socket.id}`);
+            this.playerManager.removePlayer(socket.id);
+        });
 
-            // Handle Init Player (Name/Color)
-            socket.on('initPlayer', (data) => {
-                this.playerManager.handleInitPlayer(socket.id, data);
-            });
+        // Ping/Pong
+        socket.on(EVENT.PING, () => socket.emit(EVENT.PONG));
 
-            // Shop Events
-            socket.on('buyItem', (itemId) => {
-                this.shopManager.handleBuyItem(socket.id, itemId);
-            });
+        // Gameplay
+        socket.on(EVENT.PLAYER_INPUT, (inputData) => {
+            this.playerManager.handlePlayerInput(socket.id, inputData);
+        });
 
-            socket.on('useItem', (itemId) => {
-                this.shopManager.handleUseItem(socket.id, itemId);
-            });
+        socket.on(EVENT.INIT_PLAYER, (data) => {
+            this.playerManager.handleInitPlayer(socket.id, data);
+        });
+
+        // Shop
+        socket.on(EVENT.BUY_ITEM, (itemId) => {
+            this.shopManager.handleBuyItem(socket.id, itemId);
+        });
+
+        socket.on(EVENT.USE_ITEM, (itemId) => {
+            this.shopManager.handleUseItem(socket.id, itemId);
         });
     }
 
-    startGameLoop() {
-        setInterval(() => {
-            this.update();
-        }, 1000 / FPS);
+    setupGameLoop() {
+        // Main Update Loop (Physics @ 60 FPS)
+        setInterval(() => this.update(), 1000 / FPS);
+
+        // Broadcast Loop (Network @ 30 FPS) - Decoupled to save bandwidth
+        // 50% Reduction in traffic without affecting physics precision
+        setInterval(() => this.broadcastGameUpdate(), 1000 / 30);
 
         // Food Refill Loop
-        setInterval(() => {
-            this.foodManager.refillFood();
-        }, 15000); // Every 15 seconds
+        setInterval(() => this.foodManager.refillFood(), FOOD_REFILL_INTERVAL);
     }
 
     update() {
-        // Update Bot Logic
-        this.botManager.update();
+        // 1. Update Managers (Physics & Logic)
+        if (this.quizManager) this.quizManager.update();
+        if (this.botManager) this.botManager.update();
+        this.playerManager.update(); // Handles physics for players & bots
 
-        // Update Physics & Collision (PlayerManager now handles physics for AI bots too)
-        this.playerManager.update();
+        // 2. Broadcast State
+        // Moved to separate interval above
+    }
 
-        // Prepare lightweight update packet
+    broadcastGameUpdate() {
         const players = this.playerManager.getAllPlayers();
         const updatePacket = {};
-        Object.keys(players).forEach(id => {
+
+        // Optimize payload: only send necessary data
+        for (const id in players) {
             const p = players[id];
             updatePacket[id] = {
                 x: Math.round(p.x),
@@ -109,12 +197,11 @@ class GameServer {
                 rotation: parseFloat(p.rotation.toFixed(2)),
                 score: p.score,
                 isBoosting: p.isBoosting,
-                name: p.name // Keep for leaderboard
+                name: p.name
             };
-        });
+        }
 
-        // Emit updates
-        this.io.emit('playerUpdates', updatePacket);
+        this.io.emit(EVENT.PLAYER_UPDATES, updatePacket);
     }
 }
 

@@ -6,21 +6,36 @@ const {
     TURN_SPEED,
     PIXELS_PER_SEGMENT,
     INITIAL_LENGTH,
-    ITEMS
-} = require('../config/constants');
-const User = require('../models/User');
-const Logger = require('../utils/Logger');
+    ITEMS,
+    // Cleanup Constants
+    HITBOX_SENSITIVITY,
+    BASE_MAGNET_RADIUS,
+    BOOST_COST_INTERVAL,
+    MAX_PLAYER_SCALE,
+    PLAYER_SCALE_BASE,
+    PLAYER_SCALE_GROWTH
+} = require('../../config/constants');
+const UserRepository = require('../../repositories/UserRepository');
+const Logger = require('../../utils/Logger');
 
 class PlayerManager {
-    constructor(io, foodManager) {
+    constructor(io, container) {
         this.io = io;
-        this.foodManager = foodManager;
+        this.container = container;
         this.players = {};
-        this.shopManager = null; // Will be set via setter
+
+        // Lazy getters for dependencies to avoid circular init issues
+        // or resolve them in a 'init' method if preferred.
+        // For now, we'll access them via Container.get() when needed
     }
 
-    setShopManager(shopManager) {
-        this.shopManager = shopManager;
+    get foodManager() { return this.container.get('foodManager'); }
+    get shopManager() { return this.container.get('shopManager'); }
+    get quizManager() {
+        if (this.container.has('quizManager')) {
+            return this.container.get('quizManager');
+        }
+        return null;
     }
 
     addPlayer(socket, spawnPos) {
@@ -67,9 +82,9 @@ class PlayerManager {
 
                 let newFood;
                 if (isCoin) {
-                    newFood = this.foodManager.spawnFood(fx, fy, null, 'coin', 10);
+                    newFood = this.foodManager.spawnFood(fx, fy, null, 'coin', 10, null, false); // Batch: don't emit yet
                 } else {
-                    newFood = this.foodManager.spawnFood(fx, fy);
+                    newFood = this.foodManager.spawnFood(fx, fy, null, 'regular', 1, null, false); // Batch: don't emit yet
                 }
 
                 if (newFood) {
@@ -91,15 +106,20 @@ class PlayerManager {
 
             // Economy: Save coins one last time just in case
             if (player.username && !player.username.startsWith('Guest_')) {
-                User.findOne({ username: player.username }).then(user => {
-                    if (user && player.score > user.highScore) {
-                        user.highScore = player.score;
-                        user.save().then(() => {
-                            Logger.info('PlayerManager', `New High Score Saved: ${user.highScore}`);
+                // Use Repository
+                UserRepository.updateHighScore(player.username, player.score)
+                    .then(user => {
+                        if (user && user.highScore === player.score) {
+                            // Only log/emit if it was actually a new high score (or equal)
+                            // The Repo logic updates only if higher.
+                            // To be perfectly faithful to original feedback:
+                            // Original emitted 'updateHighScore' whenever it SAVED.
+                            // Accessing user.highScore is safe.
+                            Logger.info('PlayerManager', `High Score Check/Update for ${user.username}: ${user.highScore}`);
                             this.io.to(playerId).emit('updateHighScore', user.highScore);
-                        }).catch(err => Logger.error('PlayerManager', "Save High Score Error:", err));
-                    }
-                }).catch(err => Logger.error('PlayerManager', "Error finding user for High Score:", err));
+                        }
+                    })
+                    .catch(err => Logger.error('PlayerManager', "Save High Score Error:", err));
             }
         }
 
@@ -136,7 +156,7 @@ class PlayerManager {
             if (!isGuest) {
                 Logger.info('PlayerManager', `handleInitPlayer: Loading DB for ${this.players[id].username}`);
                 // Load from DB if verified user
-                User.findOne({ username: this.players[id].username }).then(user => {
+                UserRepository.findByUsername(this.players[id].username).then(user => {
                     if (user) {
                         Logger.info('PlayerManager', `Found user in DB: ${user.username}, coins: ${user.coins}`);
                         this.players[id].coins = user.coins;
@@ -207,8 +227,8 @@ class PlayerManager {
     }
 
     getPlayerScale(score) {
-        let scale = 0.6 + (INITIAL_LENGTH + score) * 0.005;
-        if (scale > 1.2) scale = 1.2;
+        let scale = PLAYER_SCALE_BASE + (INITIAL_LENGTH + score) * PLAYER_SCALE_GROWTH;
+        if (scale > MAX_PLAYER_SCALE) scale = MAX_PLAYER_SCALE;
         return scale;
     }
 
@@ -267,16 +287,14 @@ class PlayerManager {
 
                 // DETERMINISTIC: Shrink every 90 frames (1.5s at 60fps)
                 player.boostTimer++;
-                if (player.boostTimer > 90) {
+                if (player.boostTimer > BOOST_COST_INTERVAL) {
                     player.boostTimer = 0; // Reset timer
                     player.score = Math.max(0, player.score - 1);
 
                     const dropPos = player.path.length > 0 ? player.path[player.path.length - 1] : { x: player.x, y: player.y };
 
-                    const newFood = this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color);
-                    if (newFood) {
-                        this.io.emit('newFood', newFood);
-                    }
+                    // Spawn food at drop position (auto-emits 'newFood')
+                    this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color);
                 }
             }
 
@@ -317,7 +335,6 @@ class PlayerManager {
 
                     // 2a. Head-on-Head Collision
                     const distHead = Math.hypot(player.x - other.x, player.y - other.y);
-                    const HITBOX_SENSITIVITY = 1.0;
                     if (distHead < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
                         this.removePlayer(id);
                         this.removePlayer(otherId);
@@ -335,7 +352,6 @@ class PlayerManager {
 
                             const dist = Math.hypot(player.x - point.x, player.y - point.y);
 
-                            const HITBOX_SENSITIVITY = 1.0;
                             if (dist < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
                                 this.removePlayer(id);
                                 return;
@@ -348,60 +364,88 @@ class PlayerManager {
             // Check collision with food
             const allFood = this.foodManager.getAllFood();
             Object.keys(allFood).forEach(async foodId => {
-                const f = allFood[foodId];
-                const dx = player.x - f.x;
-                const dy = player.y - f.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+                try {
+                    const f = allFood[foodId];
+                    if (!f) return;
 
-                const myRadius = this.getPlayerRadius(player.score);
+                    const dx = player.x - f.x;
+                    const dy = player.y - f.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
 
-                let MAGNET_RADIUS = 50;
-                if (player.activeEffects['magnet']) {
-                    let buffValue = 200;
-                    if (this.shopManager) {
-                        const item = this.shopManager.getShopItems().find(i => i.id === 'magnet');
-                        if (item) buffValue = item.buffValue;
+                    const myRadius = this.getPlayerRadius(player.score);
+
+                    // Base magnet radius (increased for quiz food with larger bodies)
+                    let magnetRadius = BASE_MAGNET_RADIUS;
+                    if (player.activeEffects['magnet']) {
+                        let buffValue = 200;
+                        if (this.shopManager) {
+                            const item = this.shopManager.getShopItems().find(i => i.id === 'magnet');
+                            if (item) buffValue = item.buffValue;
+                        }
+                        magnetRadius = buffValue;
                     }
-                    MAGNET_RADIUS = buffValue;
-                }
 
-                if (distance < myRadius + MAGNET_RADIUS) {
-                    // Eat food
-                    this.foodManager.removeFood(foodId);
+                    if (distance < myRadius + magnetRadius) {
+                        // Eat food
+                        this.foodManager.removeFood(foodId);
 
-                    //xử lý ăn coin
-                    if (f.type === 'coin') {
-                        if (!player.isBot) {
-                            try {
-                                if (player.username && !player.username.startsWith('Guest_')) {
-                                    await User.findOneAndUpdate(
-                                        { username: player.username },
-                                        { $inc: { coins: f.value } }
-                                    );
-                                    // Gửi event báo cho Client biết tiền mới
-                                    const updatedUser = await User.findOne({ username: player.username });
-                                    this.io.to(id).emit('updateCoins', updatedUser.coins);
+                        // QUIZ LOGIC
+                        let quizHandled = false;
+                        if (this.quizManager && f.type === 'text') {
+                            const result = this.quizManager.checkAnswer(f);
+                            if (result) {
+                                quizHandled = true;
+                                if (result.correct) {
+                                    player.score += result.reward; // Big Bonus
                                 } else {
-                                    let currentCoins = parseInt(player.coins) || 0;
-                                    player.coins = currentCoins + f.value;
-                                    this.io.to(id).emit('updateCoins', player.coins);
+                                    player.score = Math.max(0, player.score - result.penalty); // Penalty
                                 }
-                            } catch (err) {
-                                Logger.error('PlayerManager', 'Error updating coins:', err);
+
+                                // Emit Result for Visual Feedback
+                                this.io.emit('answerResult', {
+                                    playerId: id,
+                                    correct: result.correct,
+                                    scoreChange: result.correct ? result.reward : -result.penalty,
+                                    x: player.x,
+                                    y: player.y
+                                });
                             }
                         }
-                    } else {
-                        // Ăn thức ăn thường -> Tăng điểm
-                        player.score += 1;
-                    }
 
-                    this.io.emit('foodEaten', { foodId: f.id, playerId: id, score: player.score, type: f.type });
+                        if (quizHandled) {
+                            // Already handled
+                        }
+                        // NORMAL LOGIC
+                        else if (f.type === 'coin') {
+                            if (!player.isBot) {
+                                try {
+                                    if (player.username && !player.username.startsWith('Guest_')) {
+                                        const newBalance = await UserRepository.addCoins(player.username, f.value);
+                                        this.io.to(id).emit('updateCoins', newBalance);
+                                    } else {
+                                        let currentCoins = parseInt(player.coins) || 0;
+                                        player.coins = currentCoins + f.value;
+                                        this.io.to(id).emit('updateCoins', player.coins);
+                                    }
+                                } catch (err) {
+                                    Logger.error('PlayerManager', 'Error updating coins:', err);
+                                }
+                            }
+                        } else {
+                            // Ăn thức ăn thường -> Tăng điểm
+                            // Reduced regular food score in Quiz Mode? Optional.
+                            player.score += 1;
+                        }
 
-                    // Spawn new food
-                    if (f.type !== 'coin') {
-                        const newFood = this.foodManager.spawnFood();
-                        if (newFood) this.io.emit('newFood', newFood);
+                        this.io.emit('foodEaten', { foodId: f.id, playerId: id, score: player.score, type: f.type });
+
+                        // Spawn new food (auto-emits 'newFood' event)
+                        if (f.type !== 'coin') {
+                            this.foodManager.spawnFood(); // shouldEmit = true by default
+                        }
                     }
+                } catch (err) {
+                    Logger.error('PlayerManager', `Collision Error for food ${foodId}:`, err);
                 }
             });
         });
@@ -409,6 +453,38 @@ class PlayerManager {
 
     getAllPlayers() {
         return this.players;
+    }
+
+    resetScores() {
+        Object.values(this.players).forEach(p => {
+            p.score = 0;
+            // Also reset length/sections if needed, but score=0 usually implies restart
+            if (p.sections && p.sections.length > 0) {
+                while (p.sections.length > 5) {
+                    p.sections.pop(); // Reset to base length
+                }
+            }
+        });
+        // Notify all clients to reset local score display
+        this.io.emit('resetScores'); // Helper event (Client needs to handle this)
+    }
+
+    killAllPlayers() {
+        Object.keys(this.players).forEach(id => {
+            const player = this.players[id];
+            player.alive = false;
+            // Emit death event
+            this.io.emit('playerDied', { playerId: id });
+
+            // Clean up player from map (optional, or wait for them to reconnect?)
+            // Usually we keep the socket connection but reset their state to 'dead'
+            // In this game, death usually means respawn screen.
+
+            // Note: We don't necessarily disconnect them, just kill their snake.
+        });
+        // Reset internal list? Or wait for disconnect?
+        // If we clear this.players, we lose socket mapping. 
+        // Better to just mark dead. The client will show GameOver scene.
     }
 }
 

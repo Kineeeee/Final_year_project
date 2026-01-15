@@ -1,17 +1,23 @@
-const Item = require('../models/Item');
-const User = require('../models/User');
-const Logger = require('../utils/Logger');
-const { ITEMS } = require('../config/constants');
+const Item = require('../../models/Item');
+const User = require('../../models/User');
+const Logger = require('../../utils/Logger');
+const { ITEMS } = require('../../config/constants');
+
+const Container = require('../../core/ServiceContainer');
 
 class ShopManager {
-    constructor(io, playerManager) {
+    constructor(io, container) {
         this.io = io;
-        this.playerManager = playerManager;
+        this.container = container;
+        // this.playerManager = playerManager; // Removed direct dependency
         this.shopItems = []; // Cache for shop items
 
         // Load Items from DB immediately
         this.loadShopItems();
     }
+
+    get playerManager() { return this.container.get('playerManager'); }
+
 
     async loadShopItems() {
         try {
