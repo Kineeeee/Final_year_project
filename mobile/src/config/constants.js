@@ -1,3 +1,3 @@
 export const CONFIG = {
-    SERVER_URL: 'http://10.25.193.148:5173',
+    SERVER_URL: 'http://192.168.5.13:5173',
 };

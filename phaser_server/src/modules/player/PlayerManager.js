@@ -1,4 +1,3 @@
-// Core Modules
 const {
     WORLD_SIZE,
     BASE_SPEED,
@@ -13,7 +12,8 @@ const {
     BOOST_COST_INTERVAL,
     MAX_PLAYER_SCALE,
     PLAYER_SCALE_BASE,
-    PLAYER_SCALE_GROWTH
+    PLAYER_SCALE_GROWTH,
+    COIN_CONFIG
 } = require('../../config/constants');
 const UserRepository = require('../../repositories/UserRepository');
 const Logger = require('../../utils/Logger');
@@ -27,6 +27,17 @@ class PlayerManager {
         // Lazy getters for dependencies to avoid circular init issues
         // or resolve them in a 'init' method if preferred.
         // For now, we'll access them via Container.get() when needed
+
+        // Initialize Food Handlers
+        const RegularFoodHandler = require('../food/handlers/RegularFoodHandler');
+        const CoinFoodHandler = require('../food/handlers/CoinFoodHandler');
+        const QuizFoodHandler = require('../food/handlers/QuizFoodHandler');
+
+        this.foodHandlers = {
+            'regular': new RegularFoodHandler(container),
+            'coin': new CoinFoodHandler(container),
+            'text': new QuizFoodHandler(container) // 'text' is the type used for Quiz answers
+        };
     }
 
     get foodManager() { return this.container.get('foodManager'); }
@@ -71,30 +82,7 @@ class PlayerManager {
 
         // Convert body to food
         if (player.path) {
-            const foodBatch = [];
-            for (let i = 0; i < player.path.length; i += 4 * 2) {
-                const point = player.path[i];
-                const fx = point.x + (Math.random() * 20 - 10);
-                const fy = point.y + (Math.random() * 20 - 10);
-
-                // TỈ LỆ RƠI COIN: 50% cơ hội mỗi đốt thân sẽ biến thành Coin
-                const isCoin = Math.random() < 0.5;
-
-                let newFood;
-                if (isCoin) {
-                    newFood = this.foodManager.spawnFood(fx, fy, null, 'coin', 10, null, false); // Batch: don't emit yet
-                } else {
-                    newFood = this.foodManager.spawnFood(fx, fy, null, 'regular', 1, null, false); // Batch: don't emit yet
-                }
-
-                if (newFood) {
-                    foodBatch.push(newFood);
-                }
-            }
-
-            if (foodBatch.length > 0) {
-                this.io.emit('batchFood', foodBatch);
-            }
+            this.convertBodyToFood(player);
         }
 
         // Remove player
@@ -236,13 +224,186 @@ class PlayerManager {
         return 15 * this.getPlayerScale(score);
     }
 
+    handleEffects(player, id) {
+        const now = Date.now();
+
+        // Boost Logic with Hysteresis
+        if (!player.isBoosting && player.wantsToBoost && player.score > 5) {
+            player.isBoosting = true;
+        } else if (player.isBoosting && (!player.wantsToBoost || player.score <= 2)) {
+            player.isBoosting = false;
+        }
+
+        // Manage Active Effects
+        Object.keys(player.activeEffects).forEach(effectId => {
+            if (player.activeEffects[effectId] < now) {
+                delete player.activeEffects[effectId];
+                this.io.emit('itemDeactivated', { playerId: id, itemId: effectId });
+            }
+        });
+    }
+
+    updateMovement(player) {
+        // Calculate Speed
+        let currentSpeed = BASE_SPEED;
+
+        // 1. Item Speed Buff
+        if (player.activeEffects['speed']) {
+            let buffValue = 4;
+            if (this.shopManager) {
+                const item = this.shopManager.getShopItems().find(i => i.id === 'speed');
+                if (item) buffValue = item.buffValue;
+            }
+            currentSpeed += buffValue;
+        }
+        // 2. Manual Boost
+        else if (player.isBoosting) {
+            currentSpeed = BOOST_SPEED;
+
+            // DETERMINISTIC: Shrink every 90 frames
+            player.boostTimer++;
+            if (player.boostTimer > BOOST_COST_INTERVAL) {
+                player.boostTimer = 0; // Reset timer
+                player.score = Math.max(0, player.score - 1);
+
+                const dropPos = player.path.length > 0 ? player.path[player.path.length - 1] : { x: player.x, y: player.y };
+
+                // Spawn food at drop position
+                this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color);
+            }
+        }
+
+        // Simple movement logic based on rotation
+        player.x += Math.cos(player.rotation) * currentSpeed;
+        player.y += Math.sin(player.rotation) * currentSpeed;
+
+        // Update Path for Body Collision
+        player.totalDistance += currentSpeed;
+        player.path.unshift({
+            x: player.x,
+            y: player.y,
+            d: player.totalDistance
+        });
+
+        const neededHistoryDist = (player.score + INITIAL_LENGTH + 5) * PIXELS_PER_SEGMENT;
+
+        // Prune old points
+        while (player.path.length > 0 &&
+            (player.totalDistance - player.path[player.path.length - 1].d > neededHistoryDist)) {
+            player.path.pop();
+        }
+    }
+
+    checkCollisions(player, id) {
+        const segmentLength = 1;
+
+        // 1. Check Collision with World Bounds
+        if (player.x < 0 || player.x > WORLD_SIZE || player.y < 0 || player.y > WORLD_SIZE) {
+            this.removePlayer(id);
+            return;
+        }
+
+        // 2. Check Collision with Other Snakes
+        if (!player.activeEffects['ghost']) {
+            Object.keys(this.players).forEach(otherId => {
+                if (id === otherId) return;
+                const other = this.players[otherId];
+
+                const myRadius = this.getPlayerRadius(player.score);
+                const otherRadius = this.getPlayerRadius(other.score);
+
+                // 2a. Head-on-Head Collision
+                const distHead = Math.hypot(player.x - other.x, player.y - other.y);
+                if (distHead < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
+                    this.removePlayer(id);
+                    this.removePlayer(otherId);
+                    return; // Stop processing this player
+                }
+
+                // Check against other's body segments
+                const validCollisionDistance = (other.score + INITIAL_LENGTH) * PIXELS_PER_SEGMENT;
+
+                if (other.path) {
+                    for (let i = segmentLength; i < other.path.length; i++) {
+                        const point = other.path[i];
+                        const distFromHead = other.totalDistance - point.d;
+                        if (distFromHead > validCollisionDistance) break;
+
+                        const dist = Math.hypot(player.x - point.x, player.y - point.y);
+
+                        if (dist < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
+                            this.removePlayer(id);
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Check Food Collisions
+        this.checkFoodCollisions(player, id);
+    }
+
+    checkFoodCollisions(player, id) {
+        const allFood = this.foodManager.getAllFood();
+        Object.keys(allFood).forEach(async foodId => {
+            try {
+                const f = allFood[foodId];
+                if (!f) return;
+
+                const dx = player.x - f.x;
+                const dy = player.y - f.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                const myRadius = this.getPlayerRadius(player.score);
+
+                // Base magnet radius (increased for quiz food with larger bodies)
+                let magnetRadius = BASE_MAGNET_RADIUS;
+                if (player.activeEffects['magnet']) {
+                    let buffValue = 200;
+                    if (this.shopManager) {
+                        const item = this.shopManager.getShopItems().find(i => i.id === 'magnet');
+                        if (item) buffValue = item.buffValue;
+                    }
+                    magnetRadius = buffValue;
+                }
+
+                if (distance < myRadius + magnetRadius) {
+                    // Eat food
+                    // Use Strategy Pattern via Handlers
+                    const handler = this.foodHandlers[f.type] || this.foodHandlers['regular'];
+
+                    if (handler) {
+                        // Consuming food is now delegated
+                        this.foodManager.removeFood(foodId);
+
+                        const result = await handler.consume(player, f);
+
+                        // Common Post-Process
+                        if (result.eaten) {
+                            this.io.emit('foodEaten', {
+                                foodId: f.id,
+                                playerId: id,
+                                score: player.score,
+                                type: f.type
+                            });
+
+                            if (result.shouldRespawn) {
+                                this.foodManager.spawnFood();
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                Logger.error('PlayerManager', `Collision Error for food ${foodId}:`, err);
+            }
+        });
+    }
+
     update() {
         // NOTE: Bot spawning and AI Update is now handled by BotManager externally
         // This update() only handles physics, collision, and state for ALL players
 
-        const segmentLength = 1;
-
-        // Update all players positions
         Object.keys(this.players).forEach(id => {
             const player = this.players[id];
             if (!player) return;
@@ -250,204 +411,14 @@ class PlayerManager {
             // Apply rotation smoothing for everyone (Bots AND Players)
             this.updateRotation(player);
 
-            // Determine current speed
+            // 1. Effects & State
+            this.handleEffects(player, id);
 
-            // Boost Logic with Hysteresis
-            if (!player.isBoosting && player.wantsToBoost && player.score > 5) {
-                player.isBoosting = true;
-            } else if (player.isBoosting && (!player.wantsToBoost || player.score <= 2)) {
-                player.isBoosting = false;
-            }
+            // 2. Physics & Movement
+            this.updateMovement(player);
 
-            // Manage Active Effects
-            const now = Date.now();
-            Object.keys(player.activeEffects).forEach(effectId => {
-                if (player.activeEffects[effectId] < now) {
-                    delete player.activeEffects[effectId];
-                    // BROADCAST deactivation
-                    this.io.emit('itemDeactivated', { playerId: id, itemId: effectId });
-                }
-            });
-
-            // Calculate Speed
-            let currentSpeed = BASE_SPEED;
-
-            // 1. Item Speed Buff
-            if (player.activeEffects['speed']) {
-                let buffValue = 4;
-                if (this.shopManager) {
-                    const item = this.shopManager.getShopItems().find(i => i.id === 'speed');
-                    if (item) buffValue = item.buffValue;
-                }
-                currentSpeed += buffValue;
-            }
-            // 2. Manual Boost
-            else if (player.isBoosting) {
-                currentSpeed = BOOST_SPEED;
-
-                // DETERMINISTIC: Shrink every 90 frames (1.5s at 60fps)
-                player.boostTimer++;
-                if (player.boostTimer > BOOST_COST_INTERVAL) {
-                    player.boostTimer = 0; // Reset timer
-                    player.score = Math.max(0, player.score - 1);
-
-                    const dropPos = player.path.length > 0 ? player.path[player.path.length - 1] : { x: player.x, y: player.y };
-
-                    // Spawn food at drop position (auto-emits 'newFood')
-                    this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color);
-                }
-            }
-
-            // Simple movement logic based on rotation
-            player.x += Math.cos(player.rotation) * currentSpeed;
-            player.y += Math.sin(player.rotation) * currentSpeed;
-
-            // Update Path for Body Collision
-            player.totalDistance += currentSpeed;
-            player.path.unshift({
-                x: player.x,
-                y: player.y,
-                d: player.totalDistance
-            });
-
-            const neededHistoryDist = (player.score + INITIAL_LENGTH + 5) * PIXELS_PER_SEGMENT;
-
-            // Prune old points
-            while (player.path.length > 0 &&
-                (player.totalDistance - player.path[player.path.length - 1].d > neededHistoryDist)) {
-                player.path.pop();
-            }
-
-            // 1. Check Collision with World Bounds
-            if (player.x < 0 || player.x > WORLD_SIZE || player.y < 0 || player.y > WORLD_SIZE) {
-                this.removePlayer(id);
-                return;
-            }
-
-            // 2. Check Collision with Other Snakes
-            if (!player.activeEffects['ghost']) {
-                Object.keys(this.players).forEach(otherId => {
-                    if (id === otherId) return;
-                    const other = this.players[otherId];
-
-                    const myRadius = this.getPlayerRadius(player.score);
-                    const otherRadius = this.getPlayerRadius(other.score);
-
-                    // 2a. Head-on-Head Collision
-                    const distHead = Math.hypot(player.x - other.x, player.y - other.y);
-                    if (distHead < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
-                        this.removePlayer(id);
-                        this.removePlayer(otherId);
-                        return; // Stop processing this player
-                    }
-
-                    // Check against other's body segments
-                    const validCollisionDistance = (other.score + INITIAL_LENGTH) * PIXELS_PER_SEGMENT;
-
-                    if (other.path) {
-                        for (let i = segmentLength; i < other.path.length; i++) {
-                            const point = other.path[i];
-                            const distFromHead = other.totalDistance - point.d;
-                            if (distFromHead > validCollisionDistance) break;
-
-                            const dist = Math.hypot(player.x - point.x, player.y - point.y);
-
-                            if (dist < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
-                                this.removePlayer(id);
-                                return;
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Check collision with food
-            const allFood = this.foodManager.getAllFood();
-            Object.keys(allFood).forEach(async foodId => {
-                try {
-                    const f = allFood[foodId];
-                    if (!f) return;
-
-                    const dx = player.x - f.x;
-                    const dy = player.y - f.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    const myRadius = this.getPlayerRadius(player.score);
-
-                    // Base magnet radius (increased for quiz food with larger bodies)
-                    let magnetRadius = BASE_MAGNET_RADIUS;
-                    if (player.activeEffects['magnet']) {
-                        let buffValue = 200;
-                        if (this.shopManager) {
-                            const item = this.shopManager.getShopItems().find(i => i.id === 'magnet');
-                            if (item) buffValue = item.buffValue;
-                        }
-                        magnetRadius = buffValue;
-                    }
-
-                    if (distance < myRadius + magnetRadius) {
-                        // Eat food
-                        this.foodManager.removeFood(foodId);
-
-                        // QUIZ LOGIC
-                        let quizHandled = false;
-                        if (this.quizManager && f.type === 'text') {
-                            const result = this.quizManager.checkAnswer(f);
-                            if (result) {
-                                quizHandled = true;
-                                if (result.correct) {
-                                    player.score += result.reward; // Big Bonus
-                                } else {
-                                    player.score = Math.max(0, player.score - result.penalty); // Penalty
-                                }
-
-                                // Emit Result for Visual Feedback
-                                this.io.emit('answerResult', {
-                                    playerId: id,
-                                    correct: result.correct,
-                                    scoreChange: result.correct ? result.reward : -result.penalty,
-                                    x: player.x,
-                                    y: player.y
-                                });
-                            }
-                        }
-
-                        if (quizHandled) {
-                            // Already handled
-                        }
-                        // NORMAL LOGIC
-                        else if (f.type === 'coin') {
-                            if (!player.isBot) {
-                                try {
-                                    if (player.username && !player.username.startsWith('Guest_')) {
-                                        const newBalance = await UserRepository.addCoins(player.username, f.value);
-                                        this.io.to(id).emit('updateCoins', newBalance);
-                                    } else {
-                                        let currentCoins = parseInt(player.coins) || 0;
-                                        player.coins = currentCoins + f.value;
-                                        this.io.to(id).emit('updateCoins', player.coins);
-                                    }
-                                } catch (err) {
-                                    Logger.error('PlayerManager', 'Error updating coins:', err);
-                                }
-                            }
-                        } else {
-                            // Ăn thức ăn thường -> Tăng điểm
-                            // Reduced regular food score in Quiz Mode? Optional.
-                            player.score += 1;
-                        }
-
-                        this.io.emit('foodEaten', { foodId: f.id, playerId: id, score: player.score, type: f.type });
-
-                        // Spawn new food (auto-emits 'newFood' event)
-                        if (f.type !== 'coin') {
-                            this.foodManager.spawnFood(); // shouldEmit = true by default
-                        }
-                    }
-                } catch (err) {
-                    Logger.error('PlayerManager', `Collision Error for food ${foodId}:`, err);
-                }
-            });
+            // 3. Collisions
+            this.checkCollisions(player, id);
         });
     }
 
@@ -485,6 +456,33 @@ class PlayerManager {
         // Reset internal list? Or wait for disconnect?
         // If we clear this.players, we lose socket mapping. 
         // Better to just mark dead. The client will show GameOver scene.
+    }
+
+    convertBodyToFood(player) {
+        const foodBatch = [];
+        for (let i = 0; i < player.path.length; i += 4 * 2) {
+            const point = player.path[i];
+            const fx = point.x + (Math.random() * 20 - 10);
+            const fy = point.y + (Math.random() * 20 - 10);
+
+            // 50% chance for Coin
+            const isCoin = Math.random() < 0.5;
+
+            let newFood;
+            if (isCoin) {
+                newFood = this.foodManager.spawnFood(fx, fy, null, 'coin', COIN_CONFIG.VALUE, null, false);
+            } else {
+                newFood = this.foodManager.spawnFood(fx, fy, null, 'regular', 1, null, false);
+            }
+
+            if (newFood) {
+                foodBatch.push(newFood);
+            }
+        }
+
+        if (foodBatch.length > 0) {
+            this.io.emit('batchFood', foodBatch);
+        }
     }
 }
 

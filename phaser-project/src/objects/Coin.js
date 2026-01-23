@@ -1,4 +1,5 @@
 import { Math as PhaserMath } from 'phaser';
+import { CONFIG } from '../config/constants';
 
 export class Coin extends Phaser.GameObjects.Container {
     constructor(scene, x, y, id, value) {
@@ -12,8 +13,8 @@ export class Coin extends Phaser.GameObjects.Container {
         this.type = 'coin';
 
         // 1. Background Circle (Gold)
-        const bg = scene.add.circle(0, 0, 12, 0xFFD700);
-        bg.setStrokeStyle(2, 0xFFFFFF);
+        const bg = scene.add.circle(0, 0, CONFIG.COIN.RADIUS, CONFIG.COIN.COLOR);
+        bg.setStrokeStyle(2, CONFIG.COIN.STROKE_COLOR);
         this.add(bg);
 
         // 2. Dollar Symbol
@@ -26,14 +27,14 @@ export class Coin extends Phaser.GameObjects.Container {
         this.add(text);
 
         // Physics body size (circular)
-        this.body.setCircle(12);
-        this.body.setOffset(-12, -12);
+        this.body.setCircle(CONFIG.COIN.RADIUS);
+        this.body.setOffset(-CONFIG.COIN.RADIUS, -CONFIG.COIN.RADIUS);
 
         // Animation properties
         this.wobbleTimer = Math.random() * 100;
 
         this.target = null;
-        this.speed = 900; // Slightly faster than food
+        this.speed = CONFIG.COIN.SPEED; // Slightly faster than food
         this.magnetDistance = 15;
     }
 

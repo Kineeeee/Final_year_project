@@ -1,8 +1,8 @@
-// import { ITEMS } from '../config/items.js'; // REMOVED: Using DB data now
 import { Scene } from 'phaser';
-import io from 'socket.io-client';
-import { CONFIG } from '../config/constants';
 import { Logger } from '../utils/Logger';
+import { socketService } from '../services/SocketService';
+import { playerState } from '../services/PlayerState';
+import { UIButton } from '../ui/UIButton';
 
 export class ShopScene extends Scene {
     constructor() {
@@ -10,259 +10,241 @@ export class ShopScene extends Scene {
     }
 
     create(data) {
-        this.socket = data.socket;
+        Logger.info('Shop', 'Open Shop');
 
-        // Background overlay
-        this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, 0x000000, 0.9);
+        const { width, height } = this.scale;
+        const centerX = width / 2;
+        const centerY = height / 2;
 
-        // Title
-        this.add.text(this.scale.width / 2, 100, 'ITEM SHOP', {
-            fontSize: '48px',
-            fill: '#fff',
-            fontFamily: '"Outfit", sans-serif'
-        }).setOrigin(0.5);
+        // ===============================
+        // OVERLAY + PANEL
+        // ===============================
+        this.add.rectangle(centerX, centerY, width, height, 0x000000, 0.85);
 
-        // Coin Display
-        window.userCoins = data.coins || window.userCoins || 0;
-        this.coinText = this.add.text(this.scale.width - 50, 50, `Coins: ${window.userCoins}`, {
-            fontSize: '32px',
-            fill: '#FFD700'
-        }).setOrigin(1, 0.5);
+        const panel = this.add.container(centerX, centerY);
+        const panelBg = this.add.rectangle(0, 0, 1200, height - 120, 0x111111)
+            .setStrokeStyle(2, 0xffffff, 0.2);
+        panel.add(panelBg);
 
-        // Initialize Items Container (empty initially)
-        this.itemGroup = this.add.group();
-
-        // Show Loading Text
-        this.loadingText = this.add.text(this.scale.width / 2, 250, 'Loading Shop Items...', {
-            fontSize: '24px', fill: '#ccc'
-        }).setOrigin(0.5);
-
-        // Request items explicitly if socket is ready (handled in initPlayer response usually)
-        // But if we already have items (re-opening shop), reusing them would be nice.
-        // For now, wait for server.
-
-        // Close Button
-        const closeBtn = this.add.container(this.scale.width / 2, this.scale.height - 80);
-        const closeBg = this.add.rectangle(0, 0, 200, 60, 0xff4444).setStrokeStyle(2, 0xffffff);
-        const closeText = this.add.text(0, 0, 'CLOSE', {
-            fontSize: '28px',
-            fill: '#ffffff',
+        // ===============================
+        // HEADER
+        // ===============================
+        const title = this.add.text(0, -panelBg.height / 2 + 50, 'ITEM SHOP', {
             fontFamily: '"Outfit", sans-serif',
+            fontSize: 42,
+            color: '#ffffff',
             fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        closeBtn.add([closeBg, closeText]);
-        closeBtn.setSize(200, 60).setInteractive({ useHandCursor: true });
+        panel.add(title);
 
-        closeBtn.on('pointerover', () => {
-            closeBg.setFillStyle(0xff6666);
-            this.tweens.add({ targets: closeBtn, scale: 1.05, duration: 100 });
-        });
-        closeBtn.on('pointerout', () => {
-            closeBg.setFillStyle(0xff4444);
-            this.tweens.add({ targets: closeBtn, scale: 1.0, duration: 100 });
-        });
+        // ===============================
+        // COIN DISPLAY
+        // ===============================
+        // Ensure state is synced if passed from previous scene, though PlayerState should handle it
+        if (data.coins !== undefined) playerState.setCoins(data.coins);
 
-        closeBtn.on('pointerdown', () => {
-            this.tweens.add({
-                targets: closeBtn,
-                scale: 0.95,
-                duration: 50,
-                yoyo: true,
-                onComplete: () => {
-                    this.scene.stop();
-                    this.scene.resume('MainMenu');
-                }
-            });
-        });
-
-        // Listen for coin updates
-        if (!this.socket) {
-            // Connect if not passed (e.g. from MainMenu)
-            this.socket = io(CONFIG.SERVER_URL);
-            this.ownSocket = true; // Mark as owned
-
-            this.socket.on('connect', () => {
-                // Request data
-                this.socket.emit('initPlayer', { name: data.username });
-            });
-        } else {
-            this.ownSocket = false; // Shared socket
-        }
-
-        this.socket.on('playerState', (state) => {
-            Logger.info('Shop', 'Received playerState:', state);
-            if (state.coins !== undefined) {
-                window.userCoins = state.coins;
-                localStorage.setItem('coins', state.coins);
-                this.coinText.setText(`Coins: ${state.coins}`);
+        this.coinText = this.add.text(
+            panelBg.width / 2 - 150,
+            -panelBg.height / 2 + 40,
+            `💰 ${playerState.getCoins()}`,
+            {
+                fontFamily: '"Outfit", sans-serif',
+                fontSize: 28,
+                color: '#FFD700',
+                fontStyle: 'bold'
             }
+        ).setOrigin(1, 0.5);
+
+        panel.add(this.coinText);
+
+        // ===============================
+        // CLOSE BUTTON
+        // ===============================
+        const closeBtn = new UIButton(
+            this,
+            panelBg.width / 2 - 90,
+            -panelBg.height / 2 + 40,
+            '✕',
+            () => {
+                this.scene.stop();
+                this.scene.resume('MainMenu');
+            },
+            { width: 60, height: 44, color: 0xaa3333 }
+        );
+
+        panel.add(closeBtn);
+
+        // ===============================
+        // SCROLLABLE ITEM AREA
+        // ===============================
+        const maskShape = this.make.graphics();
+        maskShape.fillRect(
+            centerX - 560,
+            centerY - 260,
+            1120,
+            height - 240
+        );
+
+        const mask = maskShape.createGeometryMask();
+
+        this.itemsContainer = this.add.container(centerX, centerY - 40);
+        this.itemsContainer.setMask(mask);
+
+        this.itemsY = 0;
+        this.itemCards = [];
+        this.itemQuantityTexts = {};
+
+        this.loadingText = this.add.text(centerX, centerY, 'Loading items...', {
+            fontFamily: '"Outfit", sans-serif',
+            fontSize: 24,
+            color: '#cccccc'
+        }).setOrigin(0.5);
+
+        // Scroll
+        this.input.on('wheel', (_, __, ___, deltaY) => {
+            if (!this.itemsContainer) return;
+            this.itemsY -= deltaY * 0.4;
+            this.itemsY = Phaser.Math.Clamp(this.itemsY, -this.maxScroll, 0);
+            this.itemsContainer.y = centerY - 40 + this.itemsY;
+        });
+
+        // ===============================
+        // SOCKET INIT
+        // ===============================
+        this.socket = socketService.connect();
+
+        // Ensure we are identified (idempotent if already connected)
+        socketService.emit('initPlayer', { name: playerState.getUsername() });
+
+        socketService.on('playerState', (state) => {
+            if (state.coins !== undefined) {
+                playerState.setCoins(state.coins);
+                this.coinText.setText(`💰 ${state.coins}`);
+            }
+
             if (state.inventory) {
-                window.playerInventory = state.inventory;
-                localStorage.setItem('inventory', JSON.stringify(state.inventory));
+                playerState.setInventory(state.inventory);
                 this.updateInventoryUI();
             }
+
             if (state.highScore !== undefined) {
-                localStorage.setItem('highScore', state.highScore);
+                playerState.setHighScore(state.highScore);
             }
         });
 
-        // Listen for updates
-        this.socket.on('updateCoins', (coins) => {
-            window.userCoins = coins;
-            this.coinText.setText(`Coins: ${coins}`);
-        });
+        socketService.on('shopItems', (items) => {
+            Logger.info('Shop', 'Items received:', items);
+            if (this.loadingText) this.loadingText.destroy();
 
-        this.socket.on('updateInventory', (inventory) => {
-            window.playerInventory = inventory;
-            this.updateInventoryUI();
-        });
+            this.itemsContainer.removeAll(true);
+            this.itemCards = [];
+            this.itemQuantityTexts = {};
 
-        // ...
-
-        // Listen for DB Items
-        this.socket.on('shopItems', (items) => {
-            Logger.info('Shop', 'Received Shop Items from DB:', items);
-            this.loadingText.destroy(); // Remove loading text
-            this.itemGroup.clear(true, true); // Clear old items
-            this.itemQuantityTexts = {}; // Reset text references
-
-            let y = 250;
+            let y = 0;
             items.forEach(item => {
-                this.createItemRow(this.scale.width / 2, y, item);
-                y += 210; // 1.5x spacing
+                const card = this.createItemCard(0, y, item);
+                this.itemsContainer.add(card);
+                y += 170;
             });
-            this.updateInventoryUI();
+
+            this.maxScroll = Math.max(0, y - (height - 260));
         });
 
-        this.socket.on('disconnect', () => {
-            // Handle disconnect if needed
-        });
-
-        // Cleanup listeners when scene stops to prevent errors
         this.events.on('shutdown', () => {
-            if (this.socket) {
-                this.socket.off('updateCoins');
-                this.socket.off('updateInventory');
-                this.socket.off('playerState');
-                this.socket.off('shopItems');
-                if (this.ownSocket) {
-                    this.socket.disconnect();
-                }
-            }
+            socketService.off('playerState');
+            socketService.off('shopItems');
+            socketService.disconnect();
         });
     }
 
+    // ===============================
+    // ITEM CARD
+    // ===============================
+    createItemCard(x, y, item) {
+        const card = this.add.container(x, y);
 
-
-    updateInventoryUI() {
-        if (!this.itemQuantityTexts) return;
-        const inventory = window.playerInventory || {};
-
-        Object.keys(this.itemQuantityTexts).forEach(itemId => {
-            const count = inventory[itemId] || 0;
-            const textObj = this.itemQuantityTexts[itemId];
-            if (textObj && textObj.active) {
-                textObj.setText(`Owned: ${count}`);
-            }
-        });
-    }
-
-    createItemRow(x, y, item) {
-        // Main Row Background (1.5x size: 1275x180)
-        const bg = this.add.rectangle(x, y, 1275, 180, 0x1a1a1a).setOrigin(0.5);
-        bg.setStrokeStyle(2, 0x444444);
-        this.itemGroup.add(bg);
-
-        // Icon Background (1.5x size: 120x120, offset -525)
-        const iconBg = this.add.rectangle(x - 525, y, 120, 120, 0x000000).setOrigin(0.5);
-        iconBg.setStrokeStyle(1, 0x666666);
-        this.itemGroup.add(iconBg);
+        const bg = this.add.rectangle(0, 0, 1080, 150, 0x1a1a1a)
+            .setStrokeStyle(2, 0x444444);
 
         // Icon
-        const iconKey = item.id;
-        if (this.textures.exists(iconKey)) {
-            const icon = this.add.image(x - 525, y, iconKey);
-            // Fit within 108x108 (approx 1.5x of 72)
-            const scale = 108 / Math.max(icon.width, icon.height);
+        const iconBg = this.add.rectangle(-480, 0, 96, 96, 0x000000)
+            .setStrokeStyle(1, 0x666666);
+
+        let icon;
+        if (this.textures.exists(item.id)) {
+            icon = this.add.image(-480, 0, item.id);
+            const scale = 80 / Math.max(icon.width, icon.height);
             icon.setScale(scale);
-            this.itemGroup.add(icon);
         } else {
-            // Fallback
-            const icon = this.add.rectangle(x - 525, y, 96, 96, 0x888888).setOrigin(0.5);
-            this.itemGroup.add(icon);
+            icon = this.add.rectangle(-480, 0, 72, 72, 0x777777);
         }
 
-        // Name (1.5x: x-435, y-37, 42px)
-        const nameText = this.add.text(x - 435, y - 37, item.name, {
-            fontSize: '42px',
-            fill: '#ffffff',
+        // Text
+        const nameText = this.add.text(-410, -30, item.name, {
             fontFamily: '"Outfit", sans-serif',
+            fontSize: 28,
+            color: '#ffffff',
             fontStyle: 'bold'
         });
-        this.itemGroup.add(nameText);
 
-        // Description (1.5x: x-435, y+15, 24px, wrap 600)
-        const descText = this.add.text(x - 435, y + 15, item.description, {
-            fontSize: '24px',
-            fill: '#aaaaaa',
+        const descText = this.add.text(-410, 10, item.description, {
             fontFamily: '"Outfit", sans-serif',
-            wordWrap: { width: 600 }
+            fontSize: 20,
+            color: '#aaaaaa',
+            wordWrap: { width: 500 }
         });
-        this.itemGroup.add(descText);
 
-        // Owned Count (1.5x: x+270, y+45, 27px)
-        const currentQty = (window.playerInventory && window.playerInventory[item.id]) || 0;
-        const ownedText = this.add.text(x + 270, y + 45, `Owned: ${currentQty}`, {
-            fontSize: '27px',
-            fill: '#00ffaa',
-            fontFamily: '"Outfit", sans-serif'
+        const owned = playerState.getItemCount(item.id);
+        const ownedText = this.add.text(220, 30, `Owned: ${owned}`, {
+            fontFamily: '"Outfit", sans-serif',
+            fontSize: 18,
+            color: '#00ffaa'
         }).setOrigin(0.5);
-        this.itemGroup.add(ownedText);
 
-        // Store reference for updates
-        if (!this.itemQuantityTexts) this.itemQuantityTexts = {};
         this.itemQuantityTexts[item.id] = ownedText;
 
-        // Price (1.5x: x+270, y-30, 39px)
-        const priceText = this.add.text(x + 270, y - 30, `${item.price} G`, {
-            fontSize: '39px',
-            fill: '#FFD700',
+        const priceText = this.add.text(220, -20, `${item.price} G`, {
             fontFamily: '"Outfit", sans-serif',
-            fontStyle: 'bold'
-        }).setOrigin(0.5);
-        this.itemGroup.add(priceText);
-
-        // Buy Button (1.5x: x+480, 180x75, 36px)
-        const btnWidth = 180;
-        const btnHeight = 75;
-        const btnX = x + 480;
-
-        const btnBg = this.add.rectangle(btnX, y, btnWidth, btnHeight, 0x00cc00).setInteractive({ useHandCursor: true });
-        const btnText = this.add.text(btnX, y, 'BUY', {
-            fontSize: '36px',
-            fill: '#000000',
+            fontSize: 26,
+            color: '#FFD700',
             fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        this.itemGroup.add(btnBg);
-        this.itemGroup.add(btnText);
+        // BUY BUTTON
+        const buyBtn = new UIButton(
+            this,
+            420, 0,
+            'BUY',
+            () => {
+                socketService.emit('buyItem', item.id);
+            },
+            { width: 120, height: 52, color: 0x00aa44 }
+        );
 
-        // Button Hover Effect
-        btnBg.on('pointerover', () => btnBg.setFillStyle(0x00ff00));
-        btnBg.on('pointerout', () => btnBg.setFillStyle(0x00cc00));
+        card.add([
+            bg,
+            iconBg,
+            icon,
+            nameText,
+            descText,
+            ownedText,
+            priceText,
+            buyBtn
+        ]);
 
-        btnBg.on('pointerdown', () => {
-            if (this.socket) {
-                this.tweens.add({
-                    targets: [btnBg, btnText],
-                    scaleX: 0.95,
-                    scaleY: 0.95,
-                    duration: 50,
-                    yoyo: true
-                });
-                this.socket.emit('buyItem', item.id);
-            }
+        return card;
+    }
+
+    // ===============================
+    // UPDATE INVENTORY UI
+    // ===============================
+    updateInventoryUI() {
+        if (!this.itemQuantityTexts) return;
+
+        Object.keys(this.itemQuantityTexts).forEach(id => {
+            const count = playerState.getItemCount(id);
+            this.itemQuantityTexts[id].setText(`Owned: ${count}`);
         });
     }
 }

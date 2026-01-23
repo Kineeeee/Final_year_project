@@ -22,6 +22,22 @@ module.exports = {
     PLAYER_SCALE_BASE: 0.6,
     PLAYER_SCALE_GROWTH: 0.005,
 
+    // Timing & Network
+    FOOD_REFILL_INTERVAL: 15000,
+    BROADCAST_FPS: 30,
+
+    // Food & Coins
+    COIN_CONFIG: {
+        COLOR: 0xFFD700,
+        VALUE: 10
+    },
+
+    // Quiz Mode Specifics
+    QUIZ_CONFIG: {
+        INITIAL_FOOD_COUNT: 20,
+        TARGET_COIN_COUNT: 30
+    },
+
     ITEMS: {
         SPEED_UP: { id: 'speed', price: 100, duration: 10000, cooldown: 10000, buffValue: 4, description: "Speed +4 (10s)" },
         MAGNET: { id: 'magnet', price: 200, duration: 10000, cooldown: 15000, buffValue: 200, description: "Magnet Radius 200 (10s)" },

@@ -1,4 +1,4 @@
-const { MAX_FOOD, WORLD_SIZE } = require('../../config/constants');
+const { MAX_FOOD, WORLD_SIZE, COIN_CONFIG, QUIZ_CONFIG } = require('../../config/constants');
 
 class FoodManager {
     constructor(io, container) {
@@ -16,8 +16,8 @@ class FoodManager {
         if (y === undefined) y = Math.floor(Math.random() * WORLD_SIZE);
         // Nếu là Coin thì mặc định màu vàng
         if (type === 'coin') {
-            color = 0xFFD700; // Gold color
-            value = 10; // 1 Coin = 10 điểm tiền (hoặc tùy bạn chỉnh)
+            color = COIN_CONFIG.COLOR;
+            value = COIN_CONFIG.VALUE;
         } else if (color === undefined) {
             color = Math.floor(Math.random() * 0xFFFFFF);
         }
@@ -46,11 +46,10 @@ class FoodManager {
 
     spawnInitialFood(count = MAX_FOOD) {
         if (this.mode === 'quiz') {
-            // In Quiz Mode, initial food is just a few coins (e.g., 20)
-            // Answers are spawned by QuizManager later.
-            count = 20;
+            // In Quiz Mode, initial food is just a few coins
+            count = QUIZ_CONFIG.INITIAL_FOOD_COUNT;
             for (let i = 0; i < count; i++) {
-                this.spawnFood(undefined, undefined, undefined, 'coin', 10, null, false); // Don't emit individually
+                this.spawnFood(undefined, undefined, undefined, 'coin', COIN_CONFIG.VALUE, null, false); // Don't emit individually
             }
         } else {
             for (let i = 0; i < count; i++) {
@@ -84,58 +83,57 @@ class FoodManager {
     }
 
     refillFood() {
-        // Different logic for Quiz Mode
         if (this.mode === 'quiz') {
-            // Maintain Coin Count (e.g. 20 coins)
-            const COIN_TARGET = 30;
-            const ids = Object.keys(this.food);
-
-            // Count current coins
-            let coinCount = 0;
-            ids.forEach(id => {
-                if (this.food[id].type === 'coin') coinCount++;
-            });
-
-            if (coinCount < COIN_TARGET) {
-                const need = COIN_TARGET - coinCount;
-                for (let i = 0; i < need; i++) {
-                    this.spawnFood(undefined, undefined, undefined, 'coin', 10, null, true); // Emit new coins
-                }
-            }
-            // Do not remove extra food (answers are managed by QuizManager or eaten)
-
-            // Wait, if we don't remove, old answers might persist? 
-            // QuizManager handles round reset.
+            this.refillQuizMode();
         } else {
-            const TARGET = MAX_FOOD;
-            let ids = Object.keys(this.food);
-            const removedIds = [];
+            this.refillNormalMode();
+        }
+    }
 
-            // Nếu thừa thì xóa bớt ngẫu nhiên
-            if (ids.length > TARGET) {
-                // Xóa bớt cho đúng số lượng
-                const toRemove = ids.length - TARGET;
-                // Lấy ngẫu nhiên các id để xóa
-                for (let i = 0; i < toRemove; i++) {
-                    const idx = Math.floor(Math.random() * ids.length);
-                    const id = ids[idx];
-                    delete this.food[id];
-                    this.foodCount--;
-                    removedIds.push(id);
-                    ids.splice(idx, 1);
-                }
+    refillQuizMode() {
+        const COIN_TARGET = QUIZ_CONFIG.TARGET_COIN_COUNT;
+        const ids = Object.keys(this.food);
 
-                // Notify clients of removed food
-                if (removedIds.length > 0) {
-                    removedIds.forEach(id => this.io.emit('removeFood', id));
-                }
+        // Count current coins
+        let coinCount = 0;
+        ids.forEach(id => {
+            if (this.food[id].type === 'coin') coinCount++;
+        });
+
+        if (coinCount < COIN_TARGET) {
+            const need = COIN_TARGET - coinCount;
+            for (let i = 0; i < need; i++) {
+                this.spawnFood(undefined, undefined, undefined, 'coin', COIN_CONFIG.VALUE, null, true);
             }
-            // Nếu thiếu thì spawn thêm (shouldEmit = true by default)
-            else if (ids.length < TARGET) {
-                const need = TARGET - ids.length;
-                for (let i = 0; i < need; i++) {
-                    this.spawnFood(); // Will auto-emit 'newFood'
-                }
+        }
+    }
+
+    refillNormalMode() {
+        const TARGET = MAX_FOOD;
+        let ids = Object.keys(this.food);
+        const removedIds = [];
+
+        // If too many, remove random
+        if (ids.length > TARGET) {
+            const toRemove = ids.length - TARGET;
+            for (let i = 0; i < toRemove; i++) {
+                const idx = Math.floor(Math.random() * ids.length);
+                const id = ids[idx];
+                delete this.food[id];
+                this.foodCount--;
+                removedIds.push(id);
+                ids.splice(idx, 1);
+            }
+
+            if (removedIds.length > 0) {
+                removedIds.forEach(id => this.io.emit('removeFood', id));
+            }
+        }
+        // If too few, spawn more
+        else if (ids.length < TARGET) {
+            const need = TARGET - ids.length;
+            for (let i = 0; i < need; i++) {
+                this.spawnFood();
             }
         }
     }

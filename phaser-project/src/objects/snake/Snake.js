@@ -14,11 +14,11 @@ export class Snake {
         Logger.debug('Snake', 'Creating new snake at', x, y);
 
         // Server runs at 60fps. Base speed 3px/frame = 180px/s. Boost 6px/frame = 360px/s.
-        this.slowSpeed = 180;
-        this.fastSpeed = 360;
+        this.slowSpeed = CONFIG.PHYSICS.BASE_SPEED_PPS;
+        this.fastSpeed = CONFIG.PHYSICS.BOOST_SPEED_PPS;
         this.speed = this.slowSpeed;
-        this.rotationSpeed = 4.5; // Match Server Turn Speed (0.075 * 60)
-        this.scale = 0.6; // Starting scale (similar to reference)
+        this.rotationSpeed = CONFIG.PHYSICS.ROTATION_SPEED_PPS; // Match Server Turn Speed
+        this.scale = CONFIG.PHYSICS.PLAYER_SCALE_BASE; // Starting scale
 
         // Generate textures
         this.generateTextures(scene);
@@ -43,7 +43,7 @@ export class Snake {
         // Physics for head (for collision)
         scene.physics.add.existing(this.head);
         // Match Server Radius: 15 * scale
-        const radius = 15 * this.scale;
+        const radius = CONFIG.PHYSICS.FOOD_RADIUS * this.scale;
         this.head.body.setCircle(radius);
         this.head.body.setOffset(-radius, -radius); // Center the body
 
@@ -57,7 +57,7 @@ export class Snake {
 
         // Path history for body to follow
         this.movePath = [];
-        this.pixelsPerSegment = 12; // Distance-based spacing (independent of frame rate)
+        this.pixelsPerSegment = CONFIG.PHYSICS.PIXELS_PER_SEGMENT; // Distance-based spacing (independent of frame rate)
         this.totalDistance = 0; // Track total distance traveled
 
         // Growth Queue
@@ -85,10 +85,12 @@ export class Snake {
     }
 
     setName(name) {
+        this.name = name;
         if (this.nameText) this.nameText.destroy();
         this.nameText = this.scene.add.text(this.head.x, this.head.y - 25, name, {
             fontFamily: 'Arial',
             fontSize: '14px',
+            fontStyle: 'bold',
             color: '#ffffff',
             stroke: '#000000',
             strokeThickness: 3
@@ -136,7 +138,7 @@ export class Snake {
         this.scene.physics.add.existing(bodyPart);
 
         // Match Server Radius
-        const radius = 15 * this.scale;
+        const radius = CONFIG.PHYSICS.FOOD_RADIUS * this.scale;
         bodyPart.body.setCircle(radius);
 
         bodyPart.setDepth(5);
@@ -156,7 +158,7 @@ export class Snake {
         // Let's match server exactly.
 
         const score = this.score !== undefined ? this.score : this.body.length;
-        let newScale = 0.6 + (CONFIG.INITIAL_LENGTH + score) * 0.005;
+        let newScale = CONFIG.PHYSICS.PLAYER_SCALE_BASE + (CONFIG.INITIAL_LENGTH + score) * CONFIG.PHYSICS.PLAYER_SCALE_GROWTH;
 
         // Limit max scale
         if (newScale > 1.2) newScale = 1.2;
@@ -187,6 +189,17 @@ export class Snake {
     update(time, delta) {
         if (!this.alive) return;
 
+        this.updateMovement(time, delta);
+        this.updateBody();
+        this.updateVisuals(time);
+
+        // Update Eyes
+        if (this.eyes) {
+            this.eyes.update();
+        }
+    }
+
+    updateMovement(time, delta) {
         // Movement logic (Head)
         // Use temp vector to avoid GC
         if (!this.isRemote) {
@@ -212,7 +225,6 @@ export class Snake {
             }
         } else {
             // DEAD RECKONING: Always move forward based on current velocity
-            // This ensures the snake never stops moving even if packets are lost
             const moveAmount = this.speed * (delta / 1000);
             this.head.x += Math.cos(this.head.rotation) * moveAmount;
             this.head.y += Math.sin(this.head.rotation) * moveAmount;
@@ -223,9 +235,6 @@ export class Snake {
 
                 if (dist > 2) {
                     // Smooth Lerp Factor
-                    // 0.1 means we correct 10% of the error per frame (at 60fps).
-                    // This is approx 600ms to fully converge, but visually smooth.
-                    // For 30Hz updates, this is safer than 0.2 to avoid "jitter".
                     let t = 0.1 * (delta / 16.66);
                     if (t > 1) t = 1;
 
@@ -240,20 +249,13 @@ export class Snake {
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
 
-                // Slightly faster rotation smoothing
                 let rotT = 0.15 * (delta / 16.66);
                 if (rotT > 1) rotT = 1;
                 this.head.rotation += diff * rotT;
             }
         }
 
-        // Update Eyes
-        if (this.eyes) {
-            this.eyes.update();
-        }
-
         // Store position history
-        // Calculate distance moved since last frame
         let distMoved = 0;
         if (this.movePath.length > 0) {
             distMoved = PhaserMath.Distance.Between(this.head.x, this.head.y, this.movePath[0].x, this.movePath[0].y);
@@ -261,9 +263,10 @@ export class Snake {
         this.totalDistance += distMoved;
 
         this.movePath.unshift({ x: this.head.x, y: this.head.y, totalDist: this.totalDistance });
+    }
 
+    updateBody() {
         // Limit path history length
-        // We need enough history for all body parts
         const neededHistoryDist = (this.body.length + this.queuedSections + 5) * this.pixelsPerSegment;
 
         // Prune path points that are too old
@@ -313,7 +316,9 @@ export class Snake {
                 part.y = p.y;
             }
         }
+    }
 
+    updateVisuals(time) {
         // Update Shadow
         if (this.shadow) {
             this.shadow.update();
@@ -333,7 +338,7 @@ export class Snake {
 
             this.magnetGraphics.lineStyle(3 * this.scale, 0x008080, 0.8);
 
-            const headRadius = 15 * this.scale;
+            const headRadius = CONFIG.PHYSICS.FOOD_RADIUS * this.scale;
             const effectiveMaxRadius = maxRadius + headRadius;
 
             for (let i = 0; i < waveCount; i++) {
@@ -355,7 +360,6 @@ export class Snake {
             this.speedEmitter.emitParticleAt(this.head.x, this.head.y);
 
             // Emit from body (randomly to save performance/limit density)
-            // 10% chance per segment per frame -> ~6 particles/sec per segment
             this.body.forEach(part => {
                 if (Math.random() < 0.1) {
                     this.speedEmitter.emitParticleAt(part.x, part.y);
@@ -369,7 +373,7 @@ export class Snake {
         this.head.setScale(scale);
 
         // Update Head Physics Body
-        const radius = 15 * scale;
+        const radius = CONFIG.PHYSICS.FOOD_RADIUS * scale;
         if (this.head.body) {
             this.head.body.setCircle(radius);
             this.head.body.setOffset(-radius, -radius);

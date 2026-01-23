@@ -1,4 +1,4 @@
-const { FPS } = require('./config/constants');
+const { FPS, FOOD_REFILL_INTERVAL, BROADCAST_FPS } = require('./config/constants');
 const PlayerManager = require('./modules/player/PlayerManager');
 const FoodManager = require('./modules/food/FoodManager');
 const SpawnManager = require('./modules/player/SpawnManager');
@@ -25,7 +25,7 @@ const EVENT = {
     ROUND_START: 'roundStart'
 };
 
-const FOOD_REFILL_INTERVAL = 15000;
+
 
 class GameServer {
     constructor(io, config = {}) {
@@ -63,6 +63,7 @@ class GameServer {
         this.container.register('shopManager', this.shopManager);
         this.container.register('spawnManager', this.spawnManager);
         this.container.register('eventBus', this.eventBus);
+        this.container.register('io', this.io); // Register IO service
 
         // 4. Configure Managers
         this.foodManager.setConfig(this.config);
@@ -166,9 +167,9 @@ class GameServer {
         // Main Update Loop (Physics @ 60 FPS)
         setInterval(() => this.update(), 1000 / FPS);
 
-        // Broadcast Loop (Network @ 30 FPS) - Decoupled to save bandwidth
+        // Broadcast Loop (Network) - Decoupled to save bandwidth
         // 50% Reduction in traffic without affecting physics precision
-        setInterval(() => this.broadcastGameUpdate(), 1000 / 30);
+        setInterval(() => this.broadcastGameUpdate(), 1000 / BROADCAST_FPS);
 
         // Food Refill Loop
         setInterval(() => this.foodManager.refillFood(), FOOD_REFILL_INTERVAL);
@@ -196,8 +197,7 @@ class GameServer {
                 y: Math.round(p.y),
                 rotation: parseFloat(p.rotation.toFixed(2)),
                 score: p.score,
-                isBoosting: p.isBoosting,
-                name: p.name
+                isBoosting: p.isBoosting
             };
         }
 
