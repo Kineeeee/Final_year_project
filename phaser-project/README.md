@@ -1,6 +1,5 @@
 cách sử dụng log
 
-
 // import log vào file mày muốn check
 import { Logger } from '../utils/Logger';
 

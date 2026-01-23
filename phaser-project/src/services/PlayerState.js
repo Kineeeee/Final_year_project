@@ -18,7 +18,7 @@ class PlayerState {
 
     /**
      * Set coin balance and update storage
-     * @param {number} amount 
+     * @param {number} amount
      */
     setCoins(amount) {
         this.coins = amount;
@@ -33,7 +33,7 @@ class PlayerState {
 
     /**
      * Add coins to balance
-     * @param {number} amount 
+     * @param {number} amount
      */
     addCoins(amount) {
         this.setCoins(this.coins + amount);
@@ -49,7 +49,7 @@ class PlayerState {
 
     /**
      * Set high score if new score is higher
-     * @param {number} score 
+     * @param {number} score
      */
     setHighScore(score) {
         if (score > this.highScore) {
@@ -71,7 +71,7 @@ class PlayerState {
 
     /**
      * Set username
-     * @param {string} name 
+     * @param {string} name
      */
     setUsername(name) {
         this.username = name;
@@ -88,7 +88,7 @@ class PlayerState {
 
     /**
      * Update inventory
-     * @param {Object} inventory 
+     * @param {Object} inventory
      */
     setInventory(inventory) {
         this.inventory = inventory;
@@ -102,7 +102,7 @@ class PlayerState {
 
     /**
      * Check if player owns an item
-     * @param {string} itemId 
+     * @param {string} itemId
      * @returns {number} Quantity owned
      */
     getItemCount(itemId) {

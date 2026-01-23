@@ -59,7 +59,12 @@ export class Food extends Phaser.GameObjects.Container {
             this.y += velocity.y * (delta / 1000);
 
             // Check if we reached the target
-            const distance = PhaserMath.Distance.Between(this.x, this.y, this.target.x, this.target.y);
+            const distance = PhaserMath.Distance.Between(
+                this.x,
+                this.y,
+                this.target.x,
+                this.target.y
+            );
             if (distance < this.magnetDistance) {
                 this.eat();
             }

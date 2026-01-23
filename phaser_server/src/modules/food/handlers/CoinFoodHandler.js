@@ -6,7 +6,9 @@ class CoinFoodHandler {
         this.container = container;
     }
 
-    get io() { return this.container.get('io'); }
+    get io() {
+        return this.container.get('io');
+    }
 
     async consume(player, food) {
         // Coin Logic
@@ -43,7 +45,7 @@ class CoinFoodHandler {
             eaten: true,
             shouldRespawn: false,
             score: player.score, // Score doesn't change
-            type: food.type
+            type: food.type,
         };
     }
 }

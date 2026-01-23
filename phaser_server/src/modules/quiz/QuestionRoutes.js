@@ -25,7 +25,7 @@ router.post('/', async (req, res) => {
         difficulty: req.body.difficulty,
         questionText: req.body.questionText,
         correctAnswer: req.body.correctAnswer,
-        wrongAnswers: req.body.wrongAnswers
+        wrongAnswers: req.body.wrongAnswers,
     });
 
     try {

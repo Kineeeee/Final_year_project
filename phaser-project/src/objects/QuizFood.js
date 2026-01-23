@@ -16,12 +16,14 @@ export class QuizFood extends Phaser.GameObjects.Container {
 
         // 2. Text Label
         const textValue = data && data.text ? data.text : '?';
-        this.textLabel = scene.add.text(0, 0, textValue, {
-            fontSize: '40px',
-            fontFamily: 'Arial',
-            color: '#000000', // Black text
-            fontStyle: 'bold'
-        }).setOrigin(0.5);
+        this.textLabel = scene.add
+            .text(0, 0, textValue, {
+                fontSize: '40px',
+                fontFamily: 'Arial',
+                color: '#000000', // Black text
+                fontStyle: 'bold',
+            })
+            .setOrigin(0.5);
         this.add(this.textLabel);
 
         // Physics Body
@@ -36,7 +38,7 @@ export class QuizFood extends Phaser.GameObjects.Container {
             duration: 800,
             yoyo: true,
             repeat: -1,
-            ease: 'Sine.easeInOut'
+            ease: 'Sine.easeInOut',
         });
 
         this.applyColor(); // Optional: apply color if needed, but usually fixed for Quiz
@@ -68,7 +70,12 @@ export class QuizFood extends Phaser.GameObjects.Container {
             this.y += velocity.y * (delta / 1000);
 
             // Check if we reached the target
-            const distance = PhaserMath.Distance.Between(this.x, this.y, this.target.x, this.target.y);
+            const distance = PhaserMath.Distance.Between(
+                this.x,
+                this.y,
+                this.target.x,
+                this.target.y
+            );
             if (distance < 15) {
                 this.eat();
             }

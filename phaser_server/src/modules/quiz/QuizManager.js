@@ -22,9 +22,12 @@ class QuizManager {
         this.answerFoodCount = 5; // How many food items carry answers
     }
 
-    get foodManager() { return this.container.get('foodManager'); }
-    get playerManager() { return this.container.get('playerManager'); }
-
+    get foodManager() {
+        return this.container.get('foodManager');
+    }
+    get playerManager() {
+        return this.container.get('playerManager');
+    }
 
     async startRound() {
         this.isActive = true;
@@ -62,7 +65,7 @@ class QuizManager {
 
             const questions = await Question.aggregate([
                 { $match: { topic: this.topic } },
-                { $sample: { size: 1 } }
+                { $sample: { size: 1 } },
             ]);
 
             if (questions.length > 0) {
@@ -72,8 +75,8 @@ class QuizManager {
                     _id: 'fallback-' + Date.now(),
                     questionText: `(fallback) 2 + 2?`,
                     difficulty: 1,
-                    correctAnswer: "4",
-                    wrongAnswers: ["3", "5", "22"]
+                    correctAnswer: '4',
+                    wrongAnswers: ['3', '5', '22'],
                 };
             }
             // Ensure ID exists
@@ -88,11 +91,12 @@ class QuizManager {
                 Logger.info('QuizManager', `Question timeout. Moving to next question.`);
                 this.nextQuestion();
             }, this.questionDuration);
-
         } catch (e) {
             Logger.error('QuizManager', 'Error fetching question:', e);
         } finally {
-            setTimeout(() => { this.isTransitioning = false; }, 500);
+            setTimeout(() => {
+                this.isTransitioning = false;
+            }, 500);
         }
     }
 
@@ -101,7 +105,7 @@ class QuizManager {
             this.io.emit('newQuestion', {
                 text: this.currentQuestion.questionText,
                 difficulty: this.currentQuestion.difficulty,
-                endTime: this.questionEndTime
+                endTime: this.questionEndTime,
             });
         }
     }
@@ -109,7 +113,7 @@ class QuizManager {
     clearQuizFood() {
         const allFood = this.foodManager.getAllFood();
         const idsToRemove = [];
-        Object.keys(allFood).forEach(id => {
+        Object.keys(allFood).forEach((id) => {
             if (allFood[id].type === 'text') {
                 this.foodManager.removeFood(id);
                 idsToRemove.push(id);
@@ -130,7 +134,15 @@ class QuizManager {
 
         // 1. Correct Answers
         for (let i = 0; i < CORRECT_COUNT; i++) {
-            const food = this.spawnTextFoodNear(Math.random() * WORLD_SIZE, Math.random() * WORLD_SIZE, this.currentQuestion.correctAnswer, true, spawnedPositions, 2000, qId);
+            const food = this.spawnTextFoodNear(
+                Math.random() * WORLD_SIZE,
+                Math.random() * WORLD_SIZE,
+                this.currentQuestion.correctAnswer,
+                true,
+                spawnedPositions,
+                2000,
+                qId
+            );
             if (food) spawnedFoodBatch.push(food);
         }
 
@@ -138,15 +150,33 @@ class QuizManager {
         const wrongList = this.currentQuestion.wrongAnswers;
         for (let i = 0; i < WRONG_COUNT; i++) {
             const wrongAns = wrongList[Math.floor(Math.random() * wrongList.length)];
-            const food = this.spawnTextFoodNear(Math.random() * WORLD_SIZE, Math.random() * WORLD_SIZE, wrongAns, false, spawnedPositions, 2000, qId);
+            const food = this.spawnTextFoodNear(
+                Math.random() * WORLD_SIZE,
+                Math.random() * WORLD_SIZE,
+                wrongAns,
+                false,
+                spawnedPositions,
+                2000,
+                qId
+            );
             if (food) spawnedFoodBatch.push(food);
         }
 
         this.io.emit('batchFood', spawnedFoodBatch);
     }
 
-    spawnTextFoodNear(centerX, centerY, text, isCorrect, spawnedPositions, searchRadius = 400, questionId) {
-        let x, y, isValid = false;
+    spawnTextFoodNear(
+        centerX,
+        centerY,
+        text,
+        isCorrect,
+        spawnedPositions,
+        searchRadius = 400,
+        questionId
+    ) {
+        let x,
+            y,
+            isValid = false;
         let attempts = 0;
         const minDistance = 60;
 
@@ -172,12 +202,20 @@ class QuizManager {
 
         if (isValid || attempts >= 20) {
             spawnedPositions.push({ x, y });
-            const food = this.foodManager.spawnFood(x, y, isCorrect ? 0x00FF00 : 0xFF0000, 'text', isCorrect ? 50 : 10, {
-                text: text,
-                isCorrect: isCorrect,
-                isQuizFood: true,
-                questionId: questionId // Metadata
-            }, false);
+            const food = this.foodManager.spawnFood(
+                x,
+                y,
+                isCorrect ? 0x00ff00 : 0xff0000,
+                'text',
+                isCorrect ? 50 : 10,
+                {
+                    text: text,
+                    isCorrect: isCorrect,
+                    isQuizFood: true,
+                    questionId: questionId, // Metadata
+                },
+                false
+            );
             return food;
         }
         return null;
@@ -224,7 +262,7 @@ class QuizManager {
         let winner = null;
         let maxScore = -1;
 
-        Object.values(players).forEach(p => {
+        Object.values(players).forEach((p) => {
             if (p.score > maxScore) {
                 maxScore = p.score;
                 winner = p;
@@ -232,7 +270,7 @@ class QuizManager {
         });
 
         this.io.emit('roundEnd', {
-            winner: winner ? { name: winner.name, score: winner.score, color: winner.color } : null
+            winner: winner ? { name: winner.name, score: winner.score, color: winner.color } : null,
         });
 
         // FORCE KILL ALL PLAYERS
@@ -251,11 +289,11 @@ class QuizManager {
         const idsToRemove = [];
 
         // Collect non-text food (Regular, Coins, etc.)
-        // EXCEPTION: Keep a minimum amount of coins? 
+        // EXCEPTION: Keep a minimum amount of coins?
         // User said: "remove all food except answer".
         // Let's stick to strict removal to ensure performance.
 
-        Object.keys(allFood).forEach(id => {
+        Object.keys(allFood).forEach((id) => {
             if (allFood[id].type !== 'text') {
                 this.foodManager.removeFood(id, false); // Silent remove
                 idsToRemove.push(id);

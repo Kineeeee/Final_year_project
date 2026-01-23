@@ -16,14 +16,23 @@ class ShopManager {
         this.loadShopItems();
     }
 
-    get playerManager() { return this.container.get('playerManager'); }
-
+    get playerManager() {
+        return this.container.get('playerManager');
+    }
 
     async loadShopItems() {
         try {
             this.shopItems = await Item.find({});
-            Logger.info('ShopManager', `[DataSource] Loaded ${this.shopItems.length} items from MongoDB.`);
-            this.shopItems.forEach(i => Logger.info('ShopManager', `   - ${i.id}: Cooldown=${i.cooldown}, Buff=${i.buffValue}`));
+            Logger.info(
+                'ShopManager',
+                `[DataSource] Loaded ${this.shopItems.length} items from MongoDB.`
+            );
+            this.shopItems.forEach((i) =>
+                Logger.info(
+                    'ShopManager',
+                    `   - ${i.id}: Cooldown=${i.cooldown}, Buff=${i.buffValue}`
+                )
+            );
         } catch (e) {
             Logger.error('ShopManager', 'Failed to load items:', e);
         }
@@ -53,7 +62,7 @@ class ShopManager {
 
         if (!item) {
             // Fallback to constants if DB fails or empty, but prefer DB
-            item = Object.values(ITEMS).find(i => i.id === itemId);
+            item = Object.values(ITEMS).find((i) => i.id === itemId);
             Logger.warn('ShopManager', 'Using fallback item config.');
         }
 
@@ -86,11 +95,14 @@ class ShopManager {
                         // Sync Inventory Array
                         // Find if item exists in user.inventory (array)
                         // Note: user.inventory is a Mongoose Array of Subdocuments
-                        const existingItem = user.inventory.find(i => i.itemId === itemId);
+                        const existingItem = user.inventory.find((i) => i.itemId === itemId);
                         if (existingItem) {
                             existingItem.quantity = player.inventory[itemId];
                         } else {
-                            user.inventory.push({ itemId: itemId, quantity: player.inventory[itemId] });
+                            user.inventory.push({
+                                itemId: itemId,
+                                quantity: player.inventory[itemId],
+                            });
                         }
 
                         // Mark as modified just in case
@@ -99,7 +111,7 @@ class ShopManager {
                         Logger.info('ShopManager', 'User Data Saved Successfully.');
                     }
                 } catch (err) {
-                    Logger.error('ShopManager', "Buy item DB error:", err);
+                    Logger.error('ShopManager', 'Buy item DB error:', err);
                 }
             }
 
@@ -108,7 +120,7 @@ class ShopManager {
             // Also emit playerState for consistency
             this.io.to(playerId).emit('playerState', {
                 coins: player.coins,
-                inventory: player.inventory
+                inventory: player.inventory,
             });
         } else {
             Logger.info('ShopManager', `Not enough coins!`);
@@ -124,7 +136,7 @@ class ShopManager {
             player.inventory[itemId]--;
 
             // Use cached shopItems for properties like duration
-            let item = this.shopItems.find(i => i.id === itemId);
+            let item = this.shopItems.find((i) => i.id === itemId);
             if (item) {
                 // Logger.info('ShopManager', `[DataSource] Using DB Item: ${item.id} (Buff: ${item.buffValue})`);
             } else {
@@ -138,7 +150,7 @@ class ShopManager {
             const lastUse = player.lastItemUse[itemId] || 0;
             const cooldown = item.cooldown || 0;
 
-            if (now - lastUse < (cooldown + item.duration)) {
+            if (now - lastUse < cooldown + item.duration) {
                 // Cooldown active, reject use (Give back item?)
                 Logger.warn('ShopManager', `Item ${itemId} is on cooldown for player ${playerId}`);
                 player.inventory[itemId]++; // Refund
@@ -156,17 +168,19 @@ class ShopManager {
 
             // Save to DB if logged in (inventory change)
             if (player.username && !player.username.startsWith('Guest_')) {
-                User.findOne({ username: player.username }).then(user => {
-                    if (user) {
-                        if (!user.inventory) user.inventory = [];
-                        const existingItem = user.inventory.find(i => i.itemId === itemId);
-                        if (existingItem) {
-                            existingItem.quantity = player.inventory[itemId];
+                User.findOne({ username: player.username })
+                    .then((user) => {
+                        if (user) {
+                            if (!user.inventory) user.inventory = [];
+                            const existingItem = user.inventory.find((i) => i.itemId === itemId);
+                            if (existingItem) {
+                                existingItem.quantity = player.inventory[itemId];
+                            }
+                            user.markModified('inventory');
+                            return user.save();
                         }
-                        user.markModified('inventory');
-                        return user.save();
-                    }
-                }).catch(err => Logger.error('ShopManager', "Use Item DB Error:", err));
+                    })
+                    .catch((err) => Logger.error('ShopManager', 'Use Item DB Error:', err));
             }
 
             this.io.to(playerId).emit('updateInventory', player.inventory);
@@ -178,7 +192,7 @@ class ShopManager {
                     itemId,
                     duration: item.duration,
                     buffValue: item.buffValue,
-                    cooldown: item.cooldown
+                    cooldown: item.cooldown,
                 });
             }
         }

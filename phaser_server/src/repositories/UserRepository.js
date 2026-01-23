@@ -4,7 +4,7 @@ const Logger = require('../utils/Logger');
 class UserRepository {
     /**
      * Find a user by their username.
-     * @param {string} username 
+     * @param {string} username
      * @returns {Promise<Object|null>} User document or null
      */
     async findByUsername(username) {
@@ -18,8 +18,8 @@ class UserRepository {
 
     /**
      * Update the high score for a user if the new score is higher.
-     * @param {string} username 
-     * @param {number} newScore 
+     * @param {string} username
+     * @param {number} newScore
      * @returns {Promise<Object|null>} Updated user document or null
      */
     async updateHighScore(username, newScore) {
@@ -42,25 +42,22 @@ class UserRepository {
 
     /**
      * Add coins to a user's balance.
-     * @param {string} username 
-     * @param {number} amount 
+     * @param {string} username
+     * @param {number} amount
      * @returns {Promise<number>} New coin balance
      */
     async addCoins(username, amount) {
         try {
             // atomic update
-            await User.findOneAndUpdate(
-                { username },
-                { $inc: { coins: amount } }
-            );
+            await User.findOneAndUpdate({ username }, { $inc: { coins: amount } });
 
             // fetch updated to return correct balance
             // (findOneAndUpdate can return new doc with {new: true} but logic below was two steps originally)
-            // Sticking to separate fetch to match original logic precisely if needed, 
+            // Sticking to separate fetch to match original logic precisely if needed,
             // OR use {new: true} which is better. Let's use {new: true} for optimization.
             const updatedUser = await User.findOneAndUpdate(
                 { username },
-                { $inc: { coins: 0 } }, // No-op to just get the document? or just findOne. 
+                { $inc: { coins: 0 } } // No-op to just get the document? or just findOne.
                 // Using findOne as per original code style might be safer to ensure consistency
             );
 

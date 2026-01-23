@@ -11,6 +11,9 @@ export class MainMenu extends Scene {
     create() {
         Logger.info('MainMenu', 'Showing Main Menu');
 
+        // UIScene is session-scoped (Game only). Ensure it never leaks into menus.
+        this.scene.stop('UIScene');
+
         const { width, height } = this.scale;
         const centerX = width / 2;
         const centerY = height / 2;

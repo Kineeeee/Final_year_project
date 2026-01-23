@@ -7,8 +7,9 @@ class SpawnManager {
         // Dependencies resolved via Container
     }
 
-    get playerManager() { return this.container.get('playerManager'); }
-
+    get playerManager() {
+        return this.container.get('playerManager');
+    }
 
     getSafeSpawnPosition() {
         let safe = false;
@@ -34,7 +35,8 @@ class SpawnManager {
                 }
                 // Check distance to body segments
                 if (p.path) {
-                    for (let i = 0; i < p.path.length; i += 10) { // Check every 10th point for performance
+                    for (let i = 0; i < p.path.length; i += 10) {
+                        // Check every 10th point for performance
                         const point = p.path[i];
                         const distBody = Math.hypot(x - point.x, y - point.y);
                         if (distBody < safeRadius) {
@@ -49,7 +51,7 @@ class SpawnManager {
         }
 
         if (!safe) {
-            Logger.warn("SpawnManager", "Could not find safe spawn, using random");
+            Logger.warn('SpawnManager', 'Could not find safe spawn, using random');
         }
         return { x, y };
     }

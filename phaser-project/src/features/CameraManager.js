@@ -24,7 +24,7 @@ export class CameraManager {
         const scaleDiff = player.scale - CONFIG.PHYSICS.PLAYER_SCALE_BASE;
 
         // Use calculated baseZoom instead of fixed 1.0
-        let targetZoom = this.baseZoom - (scaleDiff * 0.4);
+        let targetZoom = this.baseZoom - scaleDiff * 0.4;
 
         // Limit zoom relative to baseZoom
         // Min zoom is half of baseZoom

@@ -14,7 +14,7 @@ export const CONFIG = {
         PLAYER_SCALE_BASE: 0.6,
         PLAYER_SCALE_GROWTH: 0.005,
         PIXELS_PER_SEGMENT: 12,
-        FOOD_RADIUS: 15 // Base radius scaled
+        FOOD_RADIUS: 15, // Base radius scaled
     },
 
     // Food & Coins
@@ -24,16 +24,29 @@ export const CONFIG = {
         RADIUS_QUIZ: 35,
         COLORS: [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x00ffff, 0xff00ff],
         QUIZ_BG_COLOR: 0xffffff,
-        QUIZ_TEXT_COLOR: '#000000'
+        QUIZ_TEXT_COLOR: '#000000',
     },
     COIN: {
-        COLOR: 0xFFD700,
-        STROKE_COLOR: 0xFFFFFF,
+        COLOR: 0xffd700,
+        STROKE_COLOR: 0xffffff,
         RADIUS: 12,
-        SPEED: 900
+        SPEED: 900,
     },
 
     SERVER_URL: 'http://192.168.5.13:3000',
+
+    NETWORK: {
+        // Opt-in: when true, the client will apply server-authoritative interest-managed deltas
+        // from the `worldDelta` event. Keep false until the client interpolation path is ready.
+        USE_WORLD_DELTA: true,
+
+        // Render delay (ms) for interpolation. Typical values: 80-140.
+        INTERPOLATION_DELAY_MS: 60,
+
+        // Exponential smoothing factor for serverTime offset (0..1).
+        // Higher = reacts faster, lower = more stable.
+        SERVER_TIME_OFFSET_ALPHA: 0.1,
+    },
 
     // UI Constants
     UI: {
@@ -42,7 +55,7 @@ export const CONFIG = {
         TOAST_ERROR: '#ff0000',
         TEXT_CORRECT: 0x00ff00,
         TEXT_WRONG: 0xff0000,
-        FALLBACK_FOOD_COLOR: 0xff0000
+        FALLBACK_FOOD_COLOR: 0xff0000,
     },
 
     // Zoom & Camera
@@ -51,7 +64,7 @@ export const CONFIG = {
         MIN: 0.5,
         MAX: 1.0,
         TARGET_WIDTH: 1440,
-        SMOOTH_FACTOR: 0.05
+        SMOOTH_FACTOR: 0.05,
     },
 
     // Intervals (ms)
@@ -59,31 +72,31 @@ export const CONFIG = {
         PING: 1000,
         MINIMAP_UPDATE: 1000,
         FLOAT_TEXT_DURATION: 1000,
-        BATCH_SPAWN: 16
+        BATCH_SPAWN: 16,
     },
 
     // Game Modes
     GAME_MODES: {
         NORMAL: 'normal',
         MATH: 'math',
-        ENGLISH: 'english'
+        ENGLISH: 'english',
     },
 
     // Item/Buff Keys
     ITEMS: {
         GHOST: 'ghost',
         MAGNET: 'magnet',
-        SPEED: 'speed'
+        SPEED: 'speed',
     },
 
     // Asset Keys
     ASSETS: {
-        BACKGROUND: 'background'
+        BACKGROUND: 'background',
     },
 
     // Batching
     BATCH: {
-        SPAWN_SIZE: 20
+        SPAWN_SIZE: 20,
     },
 
     // Text Styles
@@ -94,8 +107,8 @@ export const CONFIG = {
             fontStyle: 'bold',
             color: '#ffffff',
             stroke: '#000000',
-            strokeThickness: 4
-        }
+            strokeThickness: 4,
+        },
     },
 
     SCENES: {
@@ -106,6 +119,6 @@ export const CONFIG = {
         PRELOADER: 'Preloader',
         BOOT: 'Boot',
         CUSTOMIZE: 'CustomizeScene',
-        SHOP: 'ShopScene'
-    }
+        SHOP: 'ShopScene',
+    },
 };

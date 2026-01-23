@@ -4,11 +4,13 @@ import { CONFIG } from '../config/constants';
 import { effectManager } from '../features/EffectManager';
 
 export class NetworkManager {
-    constructor(scene) {
+    constructor(scene, gameState = null) {
         this.scene = scene;
+        this.gameState = gameState;
         this.socket = null;
         this.pingTimer = null;
         this.lastPingTime = 0;
+        this._didEmitLocalDied = false;
     }
 
     sendPlayerInput(angle, isBoosting) {
@@ -38,13 +40,17 @@ export class NetworkManager {
         return this.socket;
     }
 
-    disconnect() {
+    disconnect({ disconnectSocket = false } = {}) {
         if (this.pingTimer) {
             this.scene.time.removeEvent(this.pingTimer);
         }
 
         if (this.socket) {
             this.socket.removeAllListeners();
+            if (disconnectSocket) {
+                socketService.disconnect();
+                this.socket = null;
+            }
             // We don't forcefully disconnect socketService here if we want to reuse it, 
             // but the Scene shutdown logic suggests we might want to.
             // For now, remove listeners is key.
@@ -112,9 +118,12 @@ export class NetworkManager {
     }
 
     setupGameplayEvents() {
+        // New: server-authoritative deltas (opt-in)
+        this.socket.on('worldDelta', (delta) => this.handleWorldDelta(delta));
+
         // Player Updates
         this.socket.on('currentPlayers', (players) => this.handleCurrentPlayers(players));
-        this.socket.on('newPlayer', (playerInfo) => this.scene.addOtherPlayers(playerInfo));
+        this.socket.on('newPlayer', (playerInfo) => this.handleNewPlayer(playerInfo));
         this.socket.on('playerDisconnected', (playerId) => this.handlePlayerDisconnect(playerId));
         this.socket.on('playerUpdates', (players) => this.handlePlayerUpdates(players));
         this.socket.on('playerDied', (playerId) => this.handlePlayerDeath(playerId));
@@ -122,7 +131,7 @@ export class NetworkManager {
 
         // Food Updates
         this.socket.on('currentFood', (foodData) => this.handleCurrentFood(foodData));
-        this.socket.on('newFood', (f) => this.scene.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data));
+        this.socket.on('newFood', (f) => this.handleNewFood(f));
         this.socket.on('foodEaten', (data) => this.handleFoodEaten(data));
         this.socket.on('removeFood', (foodId) => this.handleRemoveFood(foodId));
         this.socket.on('batchFood', (foodArray) => this.handleBatchFood(foodArray));
@@ -146,37 +155,133 @@ export class NetworkManager {
         this.socket.on('roundEnd', (data) => this.scene.events.emit('roundEnd', data));
         this.socket.on('clearQuizFood', (foodIds) => this.handleClearQuizFood(foodIds));
         this.socket.on('answerResult', (data) => this.handleAnswerResult(data));
+
+        // Leaderboard (global, server-authoritative)
+        this.socket.on('leaderboard', (payload) => this.handleLeaderboard(payload));
+    }
+
+    handleLeaderboard(payload) {
+        const top = payload && Array.isArray(payload.top) ? payload.top : [];
+        let text = 'Leaderboard:\n';
+        top.slice(0, 5).forEach((p, index) => {
+            text += `${index + 1}. ${p.name || 'Unknown'}: ${p.score || 0}\n`;
+        });
+        this.scene.events.emit('updateLeaderboard', text);
+    }
+
+    handleWorldDelta(delta) {
+        if (!CONFIG.NETWORK || !CONFIG.NETWORK.USE_WORLD_DELTA) return;
+        if (!this.gameState || !delta) return;
+
+        // Ensure local player id is set (socket.id is authoritative for local)
+        if (!this.gameState.localPlayerId && this.socket?.id) {
+            this.gameState.setLocalPlayerId(this.socket.id);
+        }
+
+        this.gameState.setServerClock({
+            serverTick: delta.serverTick,
+            serverTime: delta.serverTime,
+            offsetAlpha: CONFIG.NETWORK?.SERVER_TIME_OFFSET_ALPHA
+        });
+
+        // Players upsert/remove (interest-managed)
+        const playersUpsert = delta.playersUpsert || {};
+        Object.keys(playersUpsert).forEach((id) => {
+            this.gameState.upsertPlayer(id, { playerId: id, ...playersUpsert[id] });
+        });
+        const playersRemove = delta.playersRemove || [];
+        playersRemove.forEach((id) => this.gameState.removePlayer(id));
+
+        // Foods upsert/remove (interest-managed)
+        const foodsUpsert = delta.foodsUpsert || {};
+        Object.keys(foodsUpsert).forEach((id) => {
+            const f = foodsUpsert[id];
+            if (!f) return;
+            this.gameState.upsertFood({
+                id: f.id || id,
+                x: f.x,
+                y: f.y,
+                color: f.color,
+                type: f.type,
+                value: f.value,
+                data: f.data
+            });
+        });
+        const foodsRemove = delta.foodsRemove || [];
+        foodsRemove.forEach((id) => this.gameState.removeFood(id));
+
+        // Drive rendering via state events
+        this.scene.events.emit('state:players:update');
+        this.scene.events.emit('state:foods:reconcile');
+    }
+
+    _emitLeaderboardFromState() {
+        if (!this.gameState) return;
+        const players = Array.from(this.gameState.players.values());
+        const top = players
+            .map(p => ({ name: p.name || 'Unknown', score: p.score || 0 }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5);
+
+        let text = 'Leaderboard:\n';
+        top.forEach((p, index) => {
+            text += `${index + 1}. ${p.name}: ${p.score}\n`;
+        });
+        this.scene.events.emit('updateLeaderboard', text);
     }
 
     // --- Handlers (Logic moved from Game.js) ---
 
     handleCurrentPlayers(players) {
-        // Clear existing
-        this.scene.snakes.forEach(snake => snake.destroy());
-        this.scene.snakes = [];
-        this.scene.otherSnakes.clear();
-        this.scene.player = null;
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
+        if (this.gameState) {
+            this.gameState.setLocalPlayerId(this.socket.id);
+            this.gameState.setAllPlayers(players);
+        }
 
-        Object.keys(players).forEach((id) => {
-            if (players[id].playerId === this.socket.id) {
-                this.scene.createPlayer(players[id]);
-            } else {
-                this.scene.addOtherPlayers(players[id]);
-            }
-        });
+        // Rebuild entities from state
+        this.scene.events.emit('state:players:reset');
+    }
+
+    handleNewPlayer(playerInfo) {
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
+        if (this.gameState && playerInfo && playerInfo.playerId) {
+            this.gameState.upsertPlayer(playerInfo.playerId, playerInfo);
+        }
+        this.scene.events.emit('state:players:update');
     }
 
     handlePlayerDisconnect(playerId) {
-        if (this.scene.otherSnakes.has(playerId)) {
-            const snake = this.scene.otherSnakes.get(playerId);
-            snake.destroy();
-            this.scene.otherSnakes.delete(playerId);
-            this.scene.snakes = this.scene.snakes.filter(s => s !== snake);
+        const localId = this.gameState?.localPlayerId || this.socket?.id;
+        const isLocal = playerId === localId;
+
+        // Capture last-known score before removal for GameOver payload
+        const lastScore = this.gameState?.players.get(playerId)?.score ?? this.scene.player?.score ?? 0;
+        const coins = this.gameState?.coinsCollected ?? this.scene.coinsCollected ?? 0;
+
+        if (this.gameState) {
+            this.gameState.removePlayer(playerId);
         }
+
+        // Fallback: if server couldn't deliver 'playerDied' (disconnect race), still transition to GameOver
+        if (isLocal && !this._didEmitLocalDied) {
+            this._didEmitLocalDied = true;
+            this.scene.events.emit('state:localDied', { score: lastScore, coins, socket: this.socket });
+            return;
+        }
+
+        this.scene.events.emit('state:players:update');
     }
 
     handlePlayerUpdates(players) {
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
         const scene = this.scene;
+
+        if (this.gameState) {
+            Object.keys(players).forEach((id) => {
+                this.gameState.upsertPlayer(id, players[id]);
+            });
+        }
 
         // Leaderboard Construction
         // We map the update packet to a list that includes resolved names
@@ -201,97 +306,78 @@ export class NetworkManager {
         });
         scene.events.emit('updateLeaderboard', text);
 
-        Object.keys(players).forEach((id) => {
-            // Update Local Player
-            if (scene.player && id === this.socket.id) {
-                this.updateSnakeState(scene.player, players[id]);
-
-                const uiScene = scene.scene.get(CONFIG.SCENES.UI);
-                if (uiScene) {
-                    uiScene.updateMinimapPlayer(scene.player.head.x, scene.player.head.y);
-                }
-            } else {
-                // Update Remote Players
-                if (scene.otherSnakes.has(id)) {
-                    this.updateSnakeState(scene.otherSnakes.get(id), players[id]);
-                }
-            }
-        });
-    }
-
-    updateSnakeState(snake, data) {
-        snake.targetX = data.x;
-        snake.targetY = data.y;
-        snake.targetRotation = data.rotation;
-
-        // Score/Length sync w/ smooth growth
-        if (data.score > snake.score) {
-            snake.addSections(data.score - snake.score);
-            snake.score = data.score;
-        } else if (data.score < snake.score) {
-            const diff = snake.score - data.score;
-            for (let i = 0; i < diff; i++) snake.shrink();
-            snake.score = data.score;
-        }
-
-        // Boosting visual
-        if (data.isBoosting) {
-            if (snake.shadow) snake.shadow.setLightingUp(true);
-            snake.speed = snake.fastSpeed;
-        } else {
-            if (snake.shadow) snake.shadow.setLightingUp(false);
-            snake.speed = snake.slowSpeed;
-        }
+        // Apply snapshot to entities via EntityManager
+        scene.events.emit('state:players:update');
     }
 
     handlePlayerDeath(playerId) {
-        if (this.scene.player && this.scene.player.playerId === playerId) {
-            this.scene.keepSocketAlive = true;
-            this.scene.scene.start(CONFIG.SCENES.GAME_OVER, {
-                score: this.scene.player.score,
-                coins: this.scene.coinsCollected,
-                socket: this.socket
-            });
+        const localId = this.gameState?.localPlayerId || this.socket?.id;
+        if (playerId === localId) {
+            this._didEmitLocalDied = true;
+            const score = this.gameState?.players.get(localId)?.score ?? this.scene.player?.score ?? 0;
+            const coins = this.gameState?.coinsCollected ?? this.scene.coinsCollected ?? 0;
+            this.scene.events.emit('state:localDied', { score, coins, socket: this.socket });
+        } else {
+            if (this.gameState) this.gameState.removePlayer(playerId);
+            this.scene.events.emit('state:players:update');
         }
     }
 
     handleCurrentFood(foodData) {
-        this.scene.foodGroup.clear(true, true);
-        Object.keys(foodData).forEach((id) => {
-            const f = foodData[id];
-            this.scene.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data);
-        });
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
+        if (this.gameState) {
+            this.gameState.setAllFoods(foodData);
+        }
+
+        this.scene.events.emit('state:foods:reconcile');
+    }
+
+    handleNewFood(f) {
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
+        if (this.gameState) {
+            this.gameState.upsertFood({
+                id: f.id,
+                x: f.x,
+                y: f.y,
+                color: f.color,
+                type: f.type,
+                value: f.value,
+                data: f.data
+            });
+        }
+        this.scene.events.emit('state:foods:reconcile');
     }
 
     handleFoodEaten(data) {
-        const food = this.scene.foodGroup.getChildren().find(f => f.id == data.foodId);
-        if (food) {
-            let eater = null;
-            if (this.scene.player && this.scene.player.playerId === data.playerId) {
-                eater = this.scene.player;
-            } else if (this.scene.otherSnakes.has(data.playerId)) {
-                eater = this.scene.otherSnakes.get(data.playerId);
-            }
+        // Visual magnet is entity-side, but we keep it driven by server event
+        this.scene.events.emit('state:foodEaten', data);
 
-            if (eater && eater.head) {
-                food.magnetTo(eater.head);
-                if (eater === this.scene.player && data.type === 'coin') {
-                    this.scene.coinsCollected += 10;
-                }
-            } else {
-                food.destroy();
-            }
+        // IMPORTANT: Server removes eaten food silently (doesn't emit removeFood).
+        // So the client must remove it from GameState here to avoid accumulating stale foods.
+        if (this.gameState && data && data.foodId) {
+            this.gameState.removeFood(data.foodId);
+            this.scene.events.emit('state:foods:reconcile');
+        }
+
+        // Session coin counter is state-owned
+        const localId = this.gameState?.localPlayerId || this.socket?.id;
+        if (this.gameState && data.playerId === localId && data.type === 'coin') {
+            this.gameState.coinsCollected += 10;
+            // Keep existing field for compatibility in GameOver payload
+            this.scene.coinsCollected = this.gameState.coinsCollected;
         }
     }
 
     handleRemoveFood(foodId) {
-        const food = this.scene.foodGroup.getChildren().find(f => f.id == foodId);
-        if (food) {
-            food.destroy();
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
+        if (this.gameState) {
+            this.gameState.removeFood(foodId);
         }
+        this.scene.events.emit('state:foods:reconcile');
     }
 
     handleBatchFood(foodArray) {
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
         // Cancel any previous staggered spawn
         if (this.scene.staggeredSpawnTimer) {
             this.scene.staggeredSpawnTimer.destroy();
@@ -305,9 +391,22 @@ export class NetworkManager {
             const end = Math.min(index + BATCH_SIZE, foodArray.length);
             for (let i = index; i < end; i++) {
                 const f = foodArray[i];
-                this.scene.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data);
+                if (this.gameState) {
+                    this.gameState.upsertFood({
+                        id: f.id,
+                        x: f.x,
+                        y: f.y,
+                        color: f.color,
+                        type: f.type,
+                        value: f.value,
+                        data: f.data
+                    });
+                }
+                // Defer entity creation to reconciliation
             }
             index = end;
+
+            this.scene.events.emit('state:foods:reconcile');
 
             if (index < foodArray.length) {
                 this.scene.staggeredSpawnTimer = this.scene.time.delayedCall(CONFIG.INTERVALS.BATCH_SPAWN, spawnBatch);
@@ -320,40 +419,33 @@ export class NetworkManager {
     }
 
     handleBatchRemove(ids) {
-        const allFood = [...this.scene.foodGroup.getChildren()];
-        const idSet = new Set(ids);
-        allFood.forEach(food => {
-            if (idSet.has(food.id)) {
-                food.destroy();
-            }
-        });
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
+        if (this.gameState) {
+            ids.forEach(id => this.gameState.removeFood(id));
+        }
+        this.scene.events.emit('state:foods:reconcile');
     }
 
     handleClearQuizFood(foodIds) {
+        if (CONFIG.NETWORK && CONFIG.NETWORK.USE_WORLD_DELTA) return;
         if (this.scene.staggeredSpawnTimer) {
             this.scene.staggeredSpawnTimer.destroy();
             this.scene.staggeredSpawnTimer = null;
         }
-        const allFood = [...this.scene.foodGroup.getChildren()];
-        allFood.forEach(food => {
-            if (food.type === 'text') {
-                food.destroy();
+        if (this.gameState) {
+            // Best-effort: remove all quiz foods we know about by type
+            for (const [id, f] of this.gameState.foods.entries()) {
+                if (f.type === 'text') this.gameState.removeFood(id);
             }
-        });
+        }
+        this.scene.events.emit('state:foods:reconcile');
     }
 
     handlePlayerProperties(data) {
-        let snake;
-        if (this.scene.player && this.scene.player.playerId === data.id) {
-            snake = this.scene.player;
-        } else if (this.scene.otherSnakes.has(data.id)) {
-            snake = this.scene.otherSnakes.get(data.id);
+        if (this.gameState && data && data.id) {
+            this.gameState.upsertPlayer(data.id, data);
         }
-
-        if (snake) {
-            if (data.color) snake.setColor(data.color);
-            if (data.name) snake.setName(data.name);
-        }
+        this.scene.events.emit('state:players:update');
     }
 
     handleItemActivated(data) {

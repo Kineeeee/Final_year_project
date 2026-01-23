@@ -1,28 +1,27 @@
-
 // Default Configuration
 // You can toggle these values to filter logs
 const LOG_CONFIG = {
     enabled: true, // Master Switch
     minLevel: 'DEBUG', // DEBUG, INFO, WARN, ERROR
     categories: {
-        'Server': true,
-        'PlayerManager': true,
-        'FoodManager': false,
-        'SpawnManager': false,
-        'Database': true,
-        'Auth': true,
-        'Network': false, // Example: Disable network logs if too noisy
-        'QuizManager': false,
-        'ShopManager': false,
-        'GameServer': true,
-    }
+        Server: true,
+        PlayerManager: true,
+        FoodManager: false,
+        SpawnManager: false,
+        Database: true,
+        Auth: true,
+        Network: false, // Example: Disable network logs if too noisy
+        QuizManager: false,
+        ShopManager: false,
+        GameServer: true,
+    },
 };
 
 const LEVELS = {
-    'DEBUG': 0,
-    'INFO': 1,
-    'WARN': 2,
-    'ERROR': 3
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
 };
 
 class Logger {

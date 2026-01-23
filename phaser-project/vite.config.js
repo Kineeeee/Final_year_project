@@ -7,12 +7,12 @@ export default defineConfig({
         rollupOptions: {
             output: {
                 manualChunks: {
-                    phaser: ['phaser']
-                }
-            }
-        }
+                    phaser: ['phaser'],
+                },
+            },
+        },
     },
     server: {
-        host: '0.0.0.0'
-    }
+        host: '0.0.0.0',
+    },
 });

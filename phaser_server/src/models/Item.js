@@ -9,7 +9,7 @@ const ItemSchema = new mongoose.Schema({
     duration: { type: Number, default: 0 }, // For effects (ms)
     cooldown: { type: Number, default: 0 }, // Cooldown in ms
     buffValue: { type: Number, default: 0 }, // Magnitude of effect (speed, radius)
-    iconColor: { type: String } // Hex string for usage in client
+    iconColor: { type: String }, // Hex string for usage in client
 });
 
 module.exports = mongoose.model('Item', ItemSchema);

@@ -1,4 +1,4 @@
-const { FPS, FOOD_REFILL_INTERVAL, BROADCAST_FPS } = require('./config/constants');
+const { FPS, FOOD_REFILL_INTERVAL, BROADCAST_FPS, INTEREST_VIEW_RADIUS, LEADERBOARD_FPS, LEADERBOARD_TOP_N } = require('./config/constants');
 const PlayerManager = require('./modules/player/PlayerManager');
 const FoodManager = require('./modules/food/FoodManager');
 const SpawnManager = require('./modules/player/SpawnManager');
@@ -20,9 +20,12 @@ const EVENT = {
     PLAYER_UPDATES: 'playerUpdates',
     CURRENT_PLAYERS: 'currentPlayers',
     CURRENT_FOOD: 'currentFood',
+    WORLD_DELTA: 'worldDelta',
     SHOP_ITEMS: 'shopItems',
     NEW_QUESTION: 'newQuestion',
     ROUND_START: 'roundStart'
+    ,
+    LEADERBOARD: 'leaderboard'
 };
 
 
@@ -31,6 +34,9 @@ class GameServer {
     constructor(io, config = {}) {
         this.io = io;
         this.config = config; // { mode: 'normal'|'quiz', topic: 'math'|'english' }
+
+        // Server-authoritative tick counter for snapshots/deltas
+        this.serverTick = 0;
 
         this.setupManagers();
         this.setupGameLoop();
@@ -99,6 +105,13 @@ class GameServer {
 
     handleConnection(socket) {
         Logger.info('GameServer', `User connected: ${socket.id}`);
+
+        // Per-socket interest tracking (used for worldDelta)
+        if (!socket.data) socket.data = {};
+        socket.data._interest = {
+            players: new Set(),
+            foods: new Set()
+        };
 
         this.initializePlayer(socket);
         this.sendInitialState(socket);
@@ -173,6 +186,9 @@ class GameServer {
 
         // Food Refill Loop
         setInterval(() => this.foodManager.refillFood(), FOOD_REFILL_INTERVAL);
+
+        // Leaderboard Loop (global)
+        setInterval(() => this.broadcastLeaderboard(), 1000 / LEADERBOARD_FPS);
     }
 
     update() {
@@ -186,6 +202,9 @@ class GameServer {
     }
 
     broadcastGameUpdate() {
+        this.serverTick++;
+        const serverTime = Date.now();
+
         const players = this.playerManager.getAllPlayers();
         const updatePacket = {};
 
@@ -202,6 +221,126 @@ class GameServer {
         }
 
         this.io.emit(EVENT.PLAYER_UPDATES, updatePacket);
+
+        // --- New: server-authoritative interest-managed delta (non-breaking, opt-in on client) ---
+        this.broadcastWorldDelta({ serverTime });
+    }
+
+    broadcastLeaderboard() {
+        const players = this.playerManager.getAllPlayers();
+
+        const list = Object.keys(players).map((id) => {
+            const p = players[id];
+            return {
+                id,
+                name: p.name || 'Unknown',
+                score: p.score || 0
+            };
+        });
+
+        list.sort((a, b) => b.score - a.score);
+        const top = list.slice(0, LEADERBOARD_TOP_N);
+
+        this.io.emit(EVENT.LEADERBOARD, {
+            serverTick: this.serverTick,
+            serverTime: Date.now(),
+            top
+        });
+    }
+
+    broadcastWorldDelta({ serverTime }) {
+        const players = this.playerManager.getAllPlayers();
+        const foods = this.foodManager.getAllFood();
+
+        const r = INTEREST_VIEW_RADIUS;
+        const r2 = r * r;
+
+        const socketsIter = this.io?.sockets?.sockets?.values
+            ? this.io.sockets.sockets.values()
+            : (this.io?.sockets?.values ? this.io.sockets.values() : []);
+
+        for (const socket of socketsIter) {
+            const me = players[socket.id];
+            if (!me) continue;
+
+            if (!socket.data) socket.data = {};
+            if (!socket.data._interest) {
+                socket.data._interest = { players: new Set(), foods: new Set() };
+            }
+
+            const prevPlayers = socket.data._interest.players;
+            const prevFoods = socket.data._interest.foods;
+
+            const nextPlayers = new Set();
+            const nextFoods = new Set();
+
+            const playersUpsert = {};
+            const playersRemove = [];
+            const foodsUpsert = {};
+            const foodsRemove = [];
+
+            // Players in view
+            for (const id in players) {
+                const p = players[id];
+                const dx = p.x - me.x;
+                const dy = p.y - me.y;
+                if (dx * dx + dy * dy > r2) continue;
+
+                nextPlayers.add(id);
+                playersUpsert[id] = {
+                    x: Math.round(p.x),
+                    y: Math.round(p.y),
+                    rotation: parseFloat(p.rotation.toFixed(2)),
+                    score: p.score,
+                    isBoosting: p.isBoosting,
+
+                    // Non-positional properties needed for correct client rendering
+                    name: p.name,
+                    color: p.color,
+                    activeEffects: p.activeEffects
+                };
+            }
+
+            // Foods in view (foods are static most of the time; full upsert for in-view is acceptable)
+            for (const id in foods) {
+                const f = foods[id];
+                const dx = f.x - me.x;
+                const dy = f.y - me.y;
+                if (dx * dx + dy * dy > r2) continue;
+
+                nextFoods.add(id);
+                foodsUpsert[id] = {
+                    id: f.id,
+                    x: f.x,
+                    y: f.y,
+                    color: f.color,
+                    type: f.type,
+                    value: f.value,
+                    data: f.data
+                };
+            }
+
+            // Compute removals
+            for (const id of prevPlayers) {
+                if (!nextPlayers.has(id)) playersRemove.push(id);
+            }
+            for (const id of prevFoods) {
+                if (!nextFoods.has(id)) foodsRemove.push(id);
+            }
+
+            // Update interest state
+            socket.data._interest.players = nextPlayers;
+            socket.data._interest.foods = nextFoods;
+
+            socket.emit(EVENT.WORLD_DELTA, {
+                serverTick: this.serverTick,
+                serverTime,
+                playersUpsert,
+                playersRemove,
+                foodsUpsert,
+                foodsRemove
+            });
+        }
     }
 }
 

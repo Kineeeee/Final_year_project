@@ -2,8 +2,11 @@ export class Leaderboard {
     constructor(scene) {
         this.scene = scene;
         this.text = this.scene.add.text(0, 0, 'Leaderboard', {
-            fontFamily: 'Arial', fontSize: '16px', color: '#ffffff',
-            backgroundColor: '#00000088', padding: { x: 10, y: 10 }
+            fontFamily: 'Arial',
+            fontSize: '16px',
+            color: '#ffffff',
+            backgroundColor: '#00000088',
+            padding: { x: 10, y: 10 },
         });
     }
 

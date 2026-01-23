@@ -20,7 +20,7 @@ export class Shadow {
 
     initShadows() {
         // Clear existing
-        this.shadows.forEach(s => s.destroy());
+        this.shadows.forEach((s) => s.destroy());
         this.shadows = [];
         this.shadowGroup.clear(true, true);
 
@@ -28,7 +28,7 @@ export class Shadow {
         this.addShadow(this.snake.head.x, this.snake.head.y);
 
         // Create shadows for the body
-        this.snake.body.forEach(part => {
+        this.snake.body.forEach((part) => {
             this.addShadow(part.x, part.y);
         });
     }
@@ -79,9 +79,9 @@ export class Shadow {
         if (this.isLightingUp) {
             this.lightUp();
         } else {
-            this.shadows.forEach(shadow => {
+            this.shadows.forEach((shadow) => {
                 shadow.setTint(this.darkTint);
-                // Reference doesn't explicitly set alpha to 0.3 in update loop for dark mode, 
+                // Reference doesn't explicitly set alpha to 0.3 in update loop for dark mode,
                 // but it sets alpha to 1 or 0 based on position overlap.
                 // I'll stick to tinting.
                 shadow.setAlpha(1);

@@ -21,7 +21,7 @@ export class AuthService {
             const response = await fetch(`${this.apiUrl}/${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
+                body: JSON.stringify(body),
             });
 
             Logger.info('AuthService', `API Response Status: ${response.status}`);

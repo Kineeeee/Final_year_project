@@ -12,11 +12,7 @@ const syncItems = async () => {
 
     for (const itemData of itemsToSync) {
         try {
-            await Item.findOneAndUpdate(
-                { id: itemData.id },
-                itemData,
-                { upsert: true, new: true }
-            );
+            await Item.findOneAndUpdate({ id: itemData.id }, itemData, { upsert: true, new: true });
             Logger.info('Sync', `Synced Item: ${itemData.id} (Buff: ${itemData.buffValue})`);
         } catch (error) {
             Logger.error('Sync', `Failed to sync ${itemData.id}:`, error);

@@ -24,10 +24,8 @@ export class Preloader extends Scene {
 
         //  Use the 'progress' event emitted by the LoaderPlugin to update the loading bar
         this.load.on('progress', (progress) => {
-
             //  Update the progress bar (our bar is 464px wide, so 100% = 464px)
-            bar.width = 4 + (460 * progress);
-
+            bar.width = 4 + 460 * progress;
         });
     }
 
@@ -36,7 +34,7 @@ export class Preloader extends Scene {
         this.load.setPath('assets');
 
         this.load.image('logo', 'logo.png');
-        
+
         // for snake
         this.load.image('snake-circle', 'circle.png');
         this.load.image('background', 'tile.png');
@@ -46,8 +44,12 @@ export class Preloader extends Scene {
         this.load.image('snake-shadow', 'white-shadow.png');
 
         // for joystick
-        this.load.plugin('rexvirtualjoystickplugin', 'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js', true);
-        
+        this.load.plugin(
+            'rexvirtualjoystickplugin',
+            'https://raw.githubusercontent.com/rexrainbow/phaser3-rex-notes/master/dist/rexvirtualjoystickplugin.min.js',
+            true
+        );
+
         // for shop
         this.load.image('speed', 'speedUp.png');
         this.load.image('magnet', 'magnet.png');

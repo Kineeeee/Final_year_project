@@ -12,7 +12,9 @@ class QuizFoodHandler {
         return null;
     }
 
-    get io() { return this.container.get('io'); }
+    get io() {
+        return this.container.get('io');
+    }
 
     async consume(player, food) {
         // Quiz Logic
@@ -38,19 +40,19 @@ class QuizFoodHandler {
                     correct: result.correct,
                     scoreChange: result.correct ? result.reward : -result.penalty,
                     x: player.x,
-                    y: player.y
+                    y: player.y,
                 });
             }
         }
 
         // Return result
-        // Current logic says non-coin food spawns new food. 
+        // Current logic says non-coin food spawns new food.
         // We preserve this behavior for now.
         return {
             eaten: true,
             shouldRespawn: true,
             score: player.score,
-            type: food.type
+            type: food.type,
         };
     }
 }

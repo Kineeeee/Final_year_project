@@ -1,5 +1,4 @@
 import { Scene } from 'phaser';
-import { NetworkManager } from '../network/NetworkManager';
 import { CameraManager } from '../features/CameraManager';
 import { effectManager } from '../features/EffectManager';
 import { PlayerSnake } from '../objects/snake/PlayerSnake';
@@ -10,11 +9,14 @@ import { QuizFood } from '../objects/QuizFood';
 import { Logger } from '../utils/Logger';
 import { GestureController } from '../input/GestureController';
 import { CONFIG } from '../config/constants';
+import { GameSession } from '../session/GameSession';
 
 export class Game extends Scene {
     constructor() {
         super('Game');
         this.controlMode = 'MOUSE'; // 'MOUSE' or 'GESTURE'
+        this._didShutdown = false;
+        this._onToggleControlMode = null;
     }
 
     init(data) {
@@ -26,6 +28,14 @@ export class Game extends Scene {
 
     create() {
         Logger.info('Game', 'Game Scene Created');
+
+        // Scene instances are reused across restarts; reset teardown guards each run
+        this._didShutdown = false;
+        this._isExiting = false;
+
+        // Ensure teardown always runs on Scene stop/restart
+        this.events.once('shutdown', this.shutdown, this);
+        this.events.once('destroy', this.shutdown, this);
 
         // Detect device
         const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -39,22 +49,26 @@ export class Game extends Scene {
         this.scene.launch(CONFIG.SCENES.UI, { mode: this.gameMode });
         this.scene.bringToTop(CONFIG.SCENES.UI);
 
-        // Initialize State
+        // Scene-owned collections (session will reconcile into these)
         this.snakes = [];
         this.coinsCollected = 0;
         this.otherSnakes = new Map(); // Map<playerId, Snake>
-        this.foodGroup = this.add.group({
+
+        // Food lifecycle: separate pooled regular foods from special (coin/quiz) to avoid mixed-type pooling bugs
+        this.regularFoodGroup = this.add.group({
             classType: Food,
             runChildUpdate: true
         });
-
-        // Initialize Network Manager
-        this.networkManager = new NetworkManager(this);
-        this.networkManager.connect(this.gameMode, {
-            color: this.myColor,
-            name: this.myName
+        this.specialFoodGroup = this.add.group({
+            runChildUpdate: true
         });
-        this.setupGameLoops();
+
+        // Start session-owned state/network/input
+        this.session = new GameSession(this, {
+            mode: this.gameMode,
+            playerDetails: { color: this.myColor, name: this.myName }
+        });
+        this.session.start();
 
         // Initialize Gesture (but don't start loop until needed? Or always run but ignore?)
         // Better to always init to be ready, or init on demand. 
@@ -62,9 +76,13 @@ export class Game extends Scene {
         this.setupGestureControl();
 
         // Input Toggle
-        this.input.keyboard.on('keydown-G', () => {
-            this.toggleControlMode();
-        });
+        if (this.input && this.input.keyboard) {
+            if (this._onToggleControlMode) {
+                this.input.keyboard.off('keydown-G', this._onToggleControlMode);
+            }
+            this._onToggleControlMode = () => this.toggleControlMode();
+            this.input.keyboard.on('keydown-G', this._onToggleControlMode);
+        }
     }
 
     async setupGestureControl() {
@@ -74,12 +92,33 @@ export class Game extends Scene {
 
 
     shutdown() {
+        if (this._didShutdown) return;
+        this._didShutdown = true;
+
+        this._isExiting = true;
+        // Session (socket listeners/state/timers)
+        if (this.session) {
+            this.session.destroy();
+            this.session = null;
+        }
+
+        if (this.staggeredSpawnTimer) {
+            this.staggeredSpawnTimer.destroy();
+            this.staggeredSpawnTimer = null;
+        }
+
         if (this.cameraManager) {
             this.cameraManager.destroy();
         }
-        if (this.networkManager) {
-            this.networkManager.disconnect();
+
+        if (this.input && this.input.keyboard && this._onToggleControlMode) {
+            this.input.keyboard.off('keydown-G', this._onToggleControlMode);
+            this._onToggleControlMode = null;
         }
+        this.networkManager = null;
+        this.entityManager = null;
+        this.inputController = null;
+        this.commandQueue = null;
 
         if (this.gestureController) {
             this.gestureController.cleanup();
@@ -88,6 +127,52 @@ export class Game extends Scene {
         // Don't stop UIScene here if we want it to persist or if it handles its own input, 
         // but typically UIScene is tied to Game.
         this.scene.stop(CONFIG.SCENES.UI);
+
+        // Destroy remaining entities owned by the scene
+        if (this.player) {
+            this.player.destroy();
+            this.player = null;
+        }
+        if (this.otherSnakes) {
+            this.otherSnakes.forEach(s => s.destroy());
+            this.otherSnakes.clear();
+        }
+        if (Array.isArray(this.snakes)) {
+            this.snakes.forEach(s => s && s.destroy && s.destroy());
+            this.snakes = [];
+        }
+        this.destroyFoodGroups();
+
+        // gameState is owned by session; leave as-is
+    }
+
+    destroyFoodGroups() {
+        const safeDestroyGroup = (group) => {
+            if (!group) return;
+            if (group.destroy) group.destroy(true);
+        };
+
+        safeDestroyGroup(this.regularFoodGroup);
+        safeDestroyGroup(this.specialFoodGroup);
+        this.regularFoodGroup = null;
+        this.specialFoodGroup = null;
+    }
+
+    getFoodChildren() {
+        const regular = this.regularFoodGroup ? this.regularFoodGroup.getChildren() : [];
+        const special = this.specialFoodGroup ? this.specialFoodGroup.getChildren() : [];
+        return [...regular, ...special];
+    }
+
+    findFoodById(id) {
+        const all = this.getFoodChildren();
+        return all.find(f => f && f.id == id);
+    }
+
+    clearAllFood() {
+        // Note: during teardown, prefer destroyFoodGroups() to avoid clear() on a destroyed Group.
+        if (this.regularFoodGroup && this.regularFoodGroup.clear) this.regularFoodGroup.clear(true, true);
+        if (this.specialFoodGroup && this.specialFoodGroup.clear) this.specialFoodGroup.clear(true, true);
     }
 
     setupWorld() {
@@ -107,26 +192,7 @@ export class Game extends Scene {
 
 
 
-    setupGameLoops() {
-        // Minimap Food Update Loop (1Hz)
-        this.time.addEvent({
-            delay: CONFIG.INTERVALS.MINIMAP_UPDATE,
-            loop: true,
-            callback: () => {
-                const uiScene = this.scene.get(CONFIG.SCENES.UI);
-                if (uiScene) {
-                    // Convert Group to simple array of {x,y,type,color}
-                    const foodData = this.foodGroup.getChildren().map(f => ({
-                        x: f.x,
-                        y: f.y,
-                        type: f.type,
-                        color: f.color
-                    }));
-                    uiScene.updateMinimapFood(foodData);
-                }
-            }
-        });
-    }
+
     createPlayer(playerInfo) {
         this.player = new PlayerSnake(this, playerInfo.x, playerInfo.y, playerInfo.color);
         this.player.isRemote = true; // Server decides position (Interpolation)
@@ -181,7 +247,7 @@ export class Game extends Scene {
         // 1. Coins
         if (type === 'coin') {
             const coin = new Coin(this, x, y, id, value);
-            this.foodGroup.add(coin);
+            if (this.specialFoodGroup) this.specialFoodGroup.add(coin);
             return;
         }
 
@@ -189,33 +255,19 @@ export class Game extends Scene {
         if (type === 'text') {
             const quizFood = new QuizFood(this, x, y, data);
             quizFood.id = id;
-            this.foodGroup.add(quizFood);
+            if (this.specialFoodGroup) this.specialFoodGroup.add(quizFood);
             return;
         }
 
         // 3. Regular Food (Pooled)
-        let food = this.foodGroup.get(x, y);
+        let food = this.regularFoodGroup ? this.regularFoodGroup.get(x, y) : null;
         if (food) {
-            // Check if we accidentally got a Coin/QuizFood from pool if mixed (shouldn't happen if properly destroyed/typed)
-            // But to be safe, if the pooled object isn't 'Food', creating new one is safer, or explicit pool groups.
-            // For now, assuming foodGroup might contain mixed types if we add them all there.
-            // Actually, we added Coin/QuizFood to foodGroup.
-            // When we call `get`, we might get a dead Coin.
-            // Fix: Check instance type.
-            if (!(food instanceof Food)) {
-                // If we got the wrong type, ignore it and create new (or handle properly)
-                // Better: Create Separate Groups?
-                // For now: Just create new if type mismatch.
-                food = new Food(this, x, y, color);
-                this.foodGroup.add(food);
-            }
-
             food.onSpawn(x, y, color, type, value, data, id);
         } else {
             food = new Food(this, x, y, color);
             food.id = id;
             food.onSpawn(x, y, color, type, value, data, id);
-            this.foodGroup.add(food);
+            if (this.regularFoodGroup) this.regularFoodGroup.add(food);
         }
 
         food.setScale(1.0);
@@ -223,6 +275,13 @@ export class Game extends Scene {
     }
 
     update(time, delta) {
+        // If we're transitioning out (death/restart), avoid running mid-frame updates on torn-down objects.
+        if (this._isExiting || !this.sys.isActive()) return;
+
+        if (this.session) {
+            this.session.tick(time, delta);
+        }
+
         // Update Snakes
         this.snakes.forEach(snake => {
             if (snake.alive) {
@@ -230,75 +289,7 @@ export class Game extends Scene {
             }
         });
 
-        // Send Input
-        if (this.player && this.player.alive) {
-            let angle;
-            let isBoosting = false;
-
-            if (this.isMobile) {
-                // MOBILE: Only use Joystick input
-                // Default to current rotation if no input
-                angle = this.player.rotation;
-
-                // Get input from UIScene
-                const uiScene = this.scene.get(CONFIG.SCENES.UI);
-                if (uiScene && uiScene.getMobileInput) {
-                    const mobileInput = uiScene.getMobileInput();
-                    if (mobileInput) {
-                        if (mobileInput.angle !== null) {
-                            angle = mobileInput.angle;
-                        }
-                        isBoosting = mobileInput.isBoosting;
-                    }
-                }
-            } else {
-                // Check for Gesture Input
-                let gestureActive = false;
-
-                if (this.controlMode === 'GESTURE' && this.gestureController && this.gestureController.running) {
-                    const gestureParams = this.gestureController.getParams();
-
-                    // Only update if we have a valid angle (or keep last)
-                    if (gestureParams.angle !== null) {
-                        angle = gestureParams.angle;
-                        isBoosting = gestureParams.isBoosting;
-                        gestureActive = true;
-                    } else {
-                        // Lost hand tracking: Maintain last known angle (Cruise Control)
-                        // logic is implicitly handled because 'angle' var holds previous value? 
-                        // No, 'angle' needs to be defined each frame. 
-                        // We should store lastAngle in Game class or rely on GestureController's persistence.
-                        // GestureController persists 'angle'.
-                        if (this.gestureController.angle !== null) {
-                            angle = this.gestureController.angle;
-                            isBoosting = false; // Safety: stop boosting if lost
-                            gestureActive = true;
-                        }
-                    }
-                }
-
-                if (!gestureActive) {
-                    // DESKTOP: Mouse + Space/Click
-                    // Only use if Mode is MOUSE (or fallthrough?)
-                    // Let's enforce mode strictly
-                    if (this.controlMode === 'MOUSE') {
-                        angle = this.player.getLookAngle();
-                        isBoosting = (this.player.spaceKey.isDown || this.input.activePointer.isDown);
-                    } else if (this.controlMode === 'GESTURE') {
-                        // In Gesture Mode but no gesture? 
-                        // Keep angle = player.rotation (Go Straight)
-                        if (typeof angle === 'undefined') angle = this.player.rotation;
-                    }
-                }
-            }
-
-            this.networkManager.sendPlayerInput(angle, isBoosting);
-        }
-
-
-
-
-        this.cameraManager.update(this.player);
+        if (this.cameraManager) this.cameraManager.update(this.player);
     }
 
 
@@ -316,7 +307,12 @@ export class Game extends Scene {
         this.snakes = this.snakes.filter(s => s !== snake);
 
         if (snake === this.player) {
-            this.scene.start(CONFIG.SCENES.GAME_OVER, { score: this.player.score, coins: this.coinsCollected });
+            const payload = { score: this.player?.score ?? 0, coins: this.coinsCollected };
+            if (this.session && this.session.startGameOverOnce) {
+                this.session.startGameOverOnce(payload);
+            } else {
+                this.scene.start(CONFIG.SCENES.GAME_OVER, payload);
+            }
         } else {
             // Remove from otherSnakes map if it's a remote snake
             if (snake.playerId && this.otherSnakes.has(snake.playerId)) {
@@ -326,9 +322,8 @@ export class Game extends Scene {
     }
 
     useItem(itemId) {
-        if (this.networkManager) {
-            this.networkManager.sendUseItem(itemId);
-        }
+        // Backward compatible entrypoint: convert to intent
+        this.events.emit('intent:useItem', itemId);
     }
 
     showFloatingText(x, y, message, color) {

@@ -15,7 +15,7 @@ class RegularFoodHandler {
             eaten: true,
             shouldRespawn: true,
             score: player.score,
-            type: food.type
+            type: food.type,
         };
     }
 }

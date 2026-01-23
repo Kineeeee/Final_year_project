@@ -21,7 +21,7 @@ exports.register = async (req, res) => {
         // Tạo user mới
         const newUser = new User({
             username,
-            password: hashedPassword
+            password: hashedPassword,
         });
 
         await newUser.save();
@@ -68,7 +68,7 @@ exports.login = async (req, res) => {
             currentSkin: user.currentSkin,
             color: user.color,
             highScore: user.highScore,
-            inventory: user.inventory
+            inventory: user.inventory,
         });
     } catch (error) {
         Logger.error('Auth', 'Login error:', error);
@@ -101,5 +101,3 @@ exports.updateColor = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-
-

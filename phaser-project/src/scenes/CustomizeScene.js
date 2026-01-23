@@ -6,10 +6,23 @@ import { Snake } from '../objects/snake/Snake';
 export class CustomizeScene extends Scene {
     constructor() {
         super('CustomizeScene');
+        this._didShutdown = false;
+        this._wiggleTween = null;
     }
 
     create() {
         Logger.info('CustomizeScene', 'Creating Customize Scene');
+
+        // UIScene is session-scoped (Game only). Ensure it never leaks into customization.
+        this.scene.stop('UIScene');
+
+        // Scene instances are reused across restarts; reset per-run guards.
+        this._didShutdown = false;
+
+        this.events.off('shutdown', this._onShutdown, this);
+        this.events.off('destroy', this._onShutdown, this);
+        this.events.once('shutdown', this._onShutdown, this);
+        this.events.once('destroy', this._onShutdown, this);
 
         const { width, height } = this.scale;
 
@@ -27,6 +40,9 @@ export class CustomizeScene extends Scene {
 
         // Instantiate the Snake
         // Position it at center initially
+        if (this.previewSnake && this.previewSnake.destroy) {
+            this.previewSnake.destroy();
+        }
         this.previewSnake = new Snake(this, width / 2, height / 2, this.selectedColor);
 
         // Force grow to desired length immediately
@@ -61,7 +77,7 @@ export class CustomizeScene extends Scene {
         // ---------------------------------------------------------
         const segmentSpacing = 12 * 0.8; // Spacing * scale
 
-        this.tweens.addCounter({
+        this._wiggleTween = this.tweens.addCounter({
             from: 0,
             to: 360,
             duration: 1500,
@@ -231,6 +247,22 @@ export class CustomizeScene extends Scene {
     updatePreviewColor(color) {
         if (this.previewSnake) {
             this.previewSnake.setColor(color);
+        }
+    }
+
+    _onShutdown() {
+        if (this._didShutdown) return;
+        this._didShutdown = true;
+
+        if (this._wiggleTween) {
+            this._wiggleTween.stop();
+            this._wiggleTween.remove();
+            this._wiggleTween = null;
+        }
+
+        if (this.previewSnake && this.previewSnake.destroy) {
+            this.previewSnake.destroy();
+            this.previewSnake = null;
         }
     }
 }

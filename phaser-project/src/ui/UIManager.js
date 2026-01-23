@@ -31,12 +31,14 @@ export class UIManager {
 
     update() {
         // Update Mobile Controls (Joystick)
-        if (this.components.controls) { // Changed from this.mobileControls to this.components.controls
+        if (this.components.controls) {
+            // Changed from this.mobileControls to this.components.controls
             this.components.controls.update();
         }
 
         // Update FPS
-        if (this.components.hud) { // Changed from this.gameHUD to this.components.hud
+        if (this.components.hud) {
+            // Changed from this.gameHUD to this.components.hud
             this.components.hud.updateFPS(this.scene.game.loop.actualFps);
         }
     }
@@ -58,11 +60,11 @@ export class UIManager {
             left: isMobile ? 60 : 20,
             right: width - (isMobile ? 60 : 20),
             centerX: width / 2,
-            centerY: height / 2
+            centerY: height / 2,
         };
 
         // Update all components with new layout
-        Object.values(this.components).forEach(comp => {
+        Object.values(this.components).forEach((comp) => {
             if (comp && comp.resize) comp.resize(safeArea);
         });
     }
@@ -116,9 +118,13 @@ export class UIManager {
     }
 
     destroy() {
-        Object.values(this.components).forEach(comp => {
+        if (this.scene && this.scene.scale && this.scene.scale.off) {
+            this.scene.scale.off('resize', this.handleResize, this);
+        }
+        Object.values(this.components).forEach((comp) => {
             if (comp && comp.destroy) comp.destroy();
         });
         this.components = {};
+        this.scene = null;
     }
 }

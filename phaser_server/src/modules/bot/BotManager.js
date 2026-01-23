@@ -1,7 +1,4 @@
-const {
-    BOT_COUNT,
-    BOT_NAMES
-} = require('../../config/constants');
+const { BOT_COUNT, BOT_NAMES } = require('../../config/constants');
 const Logger = require('../../utils/Logger');
 
 class BotManager {
@@ -11,10 +8,15 @@ class BotManager {
         // Dependencies resolved via Container
     }
 
-    get playerManager() { return this.container.get('playerManager'); }
-    get foodManager() { return this.container.get('foodManager'); }
-    get spawnManager() { return this.container.get('spawnManager'); }
-
+    get playerManager() {
+        return this.container.get('playerManager');
+    }
+    get foodManager() {
+        return this.container.get('foodManager');
+    }
+    get spawnManager() {
+        return this.container.get('spawnManager');
+    }
 
     createBot() {
         if (!this.spawnManager) {
@@ -36,7 +38,7 @@ class BotManager {
             score: Math.floor(Math.random() * 5),
             path: [],
             isBot: true,
-            color: Math.floor(Math.random() * 0xFFFFFF),
+            color: Math.floor(Math.random() * 0xffffff),
             name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
             totalDistance: 0,
             isBoosting: false,
@@ -44,7 +46,7 @@ class BotManager {
             activeEffects: {},
             coins: 0,
             inventory: {},
-            boostTimer: 0
+            boostTimer: 0,
         };
 
         // Add to PlayerManager
@@ -58,16 +60,17 @@ class BotManager {
     update() {
         // Spawn Bots if needed
         const players = this.playerManager.getAllPlayers();
-        const currentBotCount = Object.values(players).filter(p => p.isBot).length;
+        const currentBotCount = Object.values(players).filter((p) => p.isBot).length;
 
         if (currentBotCount < BOT_COUNT) {
-            if (Math.random() < 0.05) { // Don't spawn all at once
+            if (Math.random() < 0.05) {
+                // Don't spawn all at once
                 this.createBot();
             }
         }
 
         // Update AI for existing bots
-        Object.keys(players).forEach(id => {
+        Object.keys(players).forEach((id) => {
             const player = players[id];
             if (player && player.isBot) {
                 this.updateBotAI(player);
@@ -83,7 +86,7 @@ class BotManager {
 
         // Search for food
         const allFood = this.foodManager.getAllFood();
-        Object.keys(allFood).forEach(fid => {
+        Object.keys(allFood).forEach((fid) => {
             const f = allFood[fid];
             const dx = f.x - bot.x;
             const dy = f.y - bot.y;

@@ -19,7 +19,7 @@ class FoodManager {
             color = COIN_CONFIG.COLOR;
             value = COIN_CONFIG.VALUE;
         } else if (color === undefined) {
-            color = Math.floor(Math.random() * 0xFFFFFF);
+            color = Math.floor(Math.random() * 0xffffff);
         }
         this.food[id] = {
             id,
@@ -28,7 +28,7 @@ class FoodManager {
             color,
             type, // 'regular', 'coin', 'text'
             value,
-            data // Custom data (e.g. quiz text)
+            data, // Custom data (e.g. quiz text)
         };
         this.foodCount++;
 
@@ -49,7 +49,15 @@ class FoodManager {
             // In Quiz Mode, initial food is just a few coins
             count = QUIZ_CONFIG.INITIAL_FOOD_COUNT;
             for (let i = 0; i < count; i++) {
-                this.spawnFood(undefined, undefined, undefined, 'coin', COIN_CONFIG.VALUE, null, false); // Don't emit individually
+                this.spawnFood(
+                    undefined,
+                    undefined,
+                    undefined,
+                    'coin',
+                    COIN_CONFIG.VALUE,
+                    null,
+                    false
+                ); // Don't emit individually
             }
         } else {
             for (let i = 0; i < count; i++) {
@@ -96,14 +104,22 @@ class FoodManager {
 
         // Count current coins
         let coinCount = 0;
-        ids.forEach(id => {
+        ids.forEach((id) => {
             if (this.food[id].type === 'coin') coinCount++;
         });
 
         if (coinCount < COIN_TARGET) {
             const need = COIN_TARGET - coinCount;
             for (let i = 0; i < need; i++) {
-                this.spawnFood(undefined, undefined, undefined, 'coin', COIN_CONFIG.VALUE, null, true);
+                this.spawnFood(
+                    undefined,
+                    undefined,
+                    undefined,
+                    'coin',
+                    COIN_CONFIG.VALUE,
+                    null,
+                    true
+                );
             }
         }
     }
@@ -126,7 +142,7 @@ class FoodManager {
             }
 
             if (removedIds.length > 0) {
-                removedIds.forEach(id => this.io.emit('removeFood', id));
+                removedIds.forEach((id) => this.io.emit('removeFood', id));
             }
         }
         // If too few, spawn more

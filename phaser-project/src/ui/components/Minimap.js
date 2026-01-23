@@ -14,7 +14,8 @@ export class Minimap {
         this.container = this.scene.add.container(0, 0).setDepth(90); // Below HUD text
 
         // Background
-        this.bg = this.scene.add.rectangle(0, 0, this.size, this.size, 0x000000, 0.5)
+        this.bg = this.scene.add
+            .rectangle(0, 0, this.size, this.size, 0x000000, 0.5)
             .setOrigin(0, 0)
             .setStrokeStyle(2, 0xffffff);
         this.container.add(this.bg);
@@ -34,7 +35,7 @@ export class Minimap {
     resize(safeArea) {
         // Position Bottom-Right
         // safeArea.right, safeArea.bottom
-        // Just above the Mobile Controls (if any)? 
+        // Just above the Mobile Controls (if any)?
         // Let's verify Mobile Controls position. Usually bottom-left or bottom-right.
         // Assuming Bottom-Left for Joystick, Bottom-Right for Button.
         // Let's put Minimap Top-Left? Or Top-Right below HUD?
@@ -63,7 +64,7 @@ export class Minimap {
         // Simple dot drawing is fast in Canvas/WebGL.
 
         // Draw Dots
-        Object.values(foodData).forEach(f => {
+        Object.values(foodData).forEach((f) => {
             // Filter: Standard Food only? Or Coins too?
             // Density implies all food.
             let color = 0xffffff;

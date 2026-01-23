@@ -6,42 +6,76 @@ export class GameHUD {
 
     createElements() {
         // Ping Text (Will be positioned Top-Right)
-        this.pingText = this.scene.add.text(0, 0, 'Ping: 0ms', {
-            fontFamily: 'Arial', fontSize: '14px', color: '#00ff00',
-            backgroundColor: '#00000088', padding: { x: 5, y: 5 }
-        }).setOrigin(1, 0);
+        this.pingText = this.scene.add
+            .text(0, 0, 'Ping: 0ms', {
+                fontFamily: 'Arial',
+                fontSize: '14px',
+                color: '#00ff00',
+                backgroundColor: '#00000088',
+                padding: { x: 5, y: 5 },
+            })
+            .setOrigin(1, 0);
 
         // Coin Text (Will be positioned Top-Left, below Leaderboard)
         this.coinText = this.scene.add.text(0, 0, 'Coins: 0', {
-            fontFamily: 'Arial', fontSize: '16px', color: '#FFD700',
-            backgroundColor: '#00000088', padding: { x: 10, y: 10 }
+            fontFamily: 'Arial',
+            fontSize: '16px',
+            color: '#FFD700',
+            backgroundColor: '#00000088',
+            padding: { x: 10, y: 10 },
         });
 
         // FPS Text (Below Ping)
-        this.fpsText = this.scene.add.text(0, 0, 'FPS: 60', {
-            fontFamily: 'Arial', fontSize: '14px', color: '#00ff00',
-            backgroundColor: '#00000088', padding: { x: 5, y: 5 }
-        }).setOrigin(1, 0).setDepth(100);
+        this.fpsText = this.scene.add
+            .text(0, 0, 'FPS: 60', {
+                fontFamily: 'Arial',
+                fontSize: '14px',
+                color: '#00ff00',
+                backgroundColor: '#00000088',
+                padding: { x: 5, y: 5 },
+            })
+            .setOrigin(1, 0)
+            .setDepth(100);
 
         // Quiz Question (Center)
-        this.questionText = this.scene.add.text(0, 0, '', {
-            fontFamily: '"Outfit", sans-serif', fontSize: '24px', color: '#ffffff',
-            stroke: '#000000', strokeThickness: 4,
-            backgroundColor: '#00000066', padding: { x: 20, y: 10 },
-            align: 'center', wordWrap: { width: 600 }
-        }).setOrigin(0.5).setVisible(false);
+        this.questionText = this.scene.add
+            .text(0, 0, '', {
+                fontFamily: '"Outfit", sans-serif',
+                fontSize: '24px',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 4,
+                backgroundColor: '#00000066',
+                padding: { x: 20, y: 10 },
+                align: 'center',
+                wordWrap: { width: 600 },
+            })
+            .setOrigin(0.5)
+            .setVisible(false);
 
         // Question Timer (Below Question)
-        this.timerText = this.scene.add.text(0, 0, '', {
-            fontFamily: 'Monospace', fontSize: '20px', color: '#ff0000',
-            stroke: '#000000', strokeThickness: 3
-        }).setOrigin(0.5).setVisible(false);
+        this.timerText = this.scene.add
+            .text(0, 0, '', {
+                fontFamily: 'Monospace',
+                fontSize: '20px',
+                color: '#ff0000',
+                stroke: '#000000',
+                strokeThickness: 3,
+            })
+            .setOrigin(0.5)
+            .setVisible(false);
 
         // Round Timer (Top Right, below Ping)
-        this.roundTimerText = this.scene.add.text(0, 0, '', {
-            fontFamily: 'Arial', fontSize: '16px', color: '#00ffff',
-            backgroundColor: '#00000088', padding: { x: 8, y: 5 }
-        }).setOrigin(1, 0).setVisible(false);
+        this.roundTimerText = this.scene.add
+            .text(0, 0, '', {
+                fontFamily: 'Arial',
+                fontSize: '16px',
+                color: '#00ffff',
+                backgroundColor: '#00000088',
+                padding: { x: 8, y: 5 },
+            })
+            .setOrigin(1, 0)
+            .setVisible(false);
     }
 
     resize(safeArea) {
@@ -97,7 +131,7 @@ export class GameHUD {
             scale: 1.2,
             duration: 100,
             yoyo: true,
-            ease: 'Sine.easeInOut'
+            ease: 'Sine.easeInOut',
         });
     }
 
@@ -111,7 +145,7 @@ export class GameHUD {
             scale: { from: 1, to: 1.1 },
             duration: 200,
             yoyo: true,
-            ease: 'Bounce.easeOut'
+            ease: 'Bounce.easeOut',
         });
 
         if (data.endTime) {
@@ -138,7 +172,7 @@ export class GameHUD {
                     this.timerText.setText("TIME'S UP!");
                     this.quizTimerEvent.remove();
                 }
-            }
+            },
         });
     }
 
@@ -156,10 +190,10 @@ export class GameHUD {
                 const secs = Math.floor((timeLeft % 60000) / 1000);
                 this.roundTimerText.setText(`Round: ${mins}:${secs < 10 ? '0' : ''}${secs}`);
                 if (timeLeft <= 0) {
-                    this.roundTimerText.setText("Round Over");
+                    this.roundTimerText.setText('Round Over');
                     this.roundTimerEvent.remove();
                 }
-            }
+            },
         });
     }
 
@@ -174,28 +208,42 @@ export class GameHUD {
         container.add(bg);
 
         const titleStyle = {
-            fontFamily: '"Outfit", sans-serif', fontSize: '48px', fontStyle: 'bold',
-            color: '#ffffff', stroke: '#000000', strokeThickness: 6, align: 'center'
+            fontFamily: '"Outfit", sans-serif',
+            fontSize: '48px',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 6,
+            align: 'center',
         };
 
-        const title = this.scene.add.text(0, -100, "ROUND OVER", titleStyle).setOrigin(0.5);
+        const title = this.scene.add.text(0, -100, 'ROUND OVER', titleStyle).setOrigin(0.5);
         container.add(title);
 
         if (data.winner) {
-            const winnerText = this.scene.add.text(0, 0,
-                `WINNER\n${data.winner.name}\nScore: ${data.winner.score}`,
-                { ...titleStyle, fontSize: '32px', color: '#FFD700' }
-            ).setOrigin(0.5);
+            const winnerText = this.scene.add
+                .text(0, 0, `WINNER\n${data.winner.name}\nScore: ${data.winner.score}`, {
+                    ...titleStyle,
+                    fontSize: '32px',
+                    color: '#FFD700',
+                })
+                .setOrigin(0.5);
             winnerText.setTint(data.winner.color);
             container.add(winnerText);
         } else {
-            const noWinnerText = this.scene.add.text(0, 0, "No Winner", { ...titleStyle, fontSize: '32px' }).setOrigin(0.5);
+            const noWinnerText = this.scene.add
+                .text(0, 0, 'No Winner', { ...titleStyle, fontSize: '32px' })
+                .setOrigin(0.5);
             container.add(noWinnerText);
         }
 
-        const nextText = this.scene.add.text(0, 150, "Next round starts in 10s...", {
-            fontFamily: 'Arial', fontSize: '20px', color: '#aaaaaa'
-        }).setOrigin(0.5);
+        const nextText = this.scene.add
+            .text(0, 150, 'Next round starts in 10s...', {
+                fontFamily: 'Arial',
+                fontSize: '20px',
+                color: '#aaaaaa',
+            })
+            .setOrigin(0.5);
         container.add(nextText);
 
         this.scene.time.delayedCall(10000, () => {

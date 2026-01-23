@@ -12,6 +12,9 @@ export class GameOver extends Scene {
     create(data) {
         Logger.info('GameOver', 'Showing Game Over Screen');
 
+        // UIScene is launched in parallel with Game; ensure it never leaks into GameOver/MainMenu.
+        this.scene.stop('UIScene');
+
         const score = data.score || 0;
         const coins = data.coins || 0;
 
@@ -38,7 +41,8 @@ export class GameOver extends Scene {
         // ===============================
         // LOGO (FADED MEMORY FEEL)
         // ===============================
-        const logo = this.add.image(centerX, centerY - 220, 'logo')
+        const logo = this.add
+            .image(centerX, centerY - 220, 'logo')
             .setScale(0.09)
             .setAlpha(0.6);
 
@@ -48,7 +52,7 @@ export class GameOver extends Scene {
             duration: 1500,
             yoyo: true,
             repeat: -1,
-            ease: 'Sine.easeInOut'
+            ease: 'Sine.easeInOut',
         });
 
         uiRoot.add(logo);
@@ -56,21 +60,25 @@ export class GameOver extends Scene {
         // ===============================
         // GAME OVER TITLE (IMPACT)
         // ===============================
-        const title = this.add.text(centerX, centerY - 140, 'GAME OVER', {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: 64,
-            color: '#ff4444',
-            stroke: '#000000',
-            strokeThickness: 10,
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setScale(1.4).setAlpha(0);
+        const title = this.add
+            .text(centerX, centerY - 140, 'GAME OVER', {
+                fontFamily: '"Outfit", sans-serif',
+                fontSize: 64,
+                color: '#ff4444',
+                stroke: '#000000',
+                strokeThickness: 10,
+                fontStyle: 'bold',
+            })
+            .setOrigin(0.5)
+            .setScale(1.4)
+            .setAlpha(0);
 
         this.tweens.add({
             targets: title,
             scale: 1,
             alpha: 1,
             duration: 500,
-            ease: 'Back.out'
+            ease: 'Back.out',
         });
 
         uiRoot.add(title);
@@ -80,28 +88,36 @@ export class GameOver extends Scene {
         // ===============================
         const panel = this.add.container(centerX, centerY + 10);
 
-        const panelBg = this.add.rectangle(0, 0, 420, 200, 0x000000, 0.45)
+        const panelBg = this.add
+            .rectangle(0, 0, 420, 200, 0x000000, 0.45)
             .setStrokeStyle(2, 0xffffff, 0.3);
 
-        const scoreText = this.add.text(0, -40, `FINAL SCORE`, {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: 20,
-            color: '#bbbbbb'
-        }).setOrigin(0.5);
+        const scoreText = this.add
+            .text(0, -40, `FINAL SCORE`, {
+                fontFamily: '"Outfit", sans-serif',
+                fontSize: 20,
+                color: '#bbbbbb',
+            })
+            .setOrigin(0.5);
 
-        const scoreValue = this.add.text(0, -5, score.toString(), {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: 48,
-            color: '#ffffff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5);
+        const scoreValue = this.add
+            .text(0, -5, score.toString(), {
+                fontFamily: '"Outfit", sans-serif',
+                fontSize: 48,
+                color: '#ffffff',
+                fontStyle: 'bold',
+            })
+            .setOrigin(0.5);
 
-        const coinText = this.add.text(0, 55, `+ ${coins} COINS`, {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: 26,
-            color: '#FFD700',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setAlpha(0);
+        const coinText = this.add
+            .text(0, 55, `+ ${coins} COINS`, {
+                fontFamily: '"Outfit", sans-serif',
+                fontSize: 26,
+                color: '#FFD700',
+                fontStyle: 'bold',
+            })
+            .setOrigin(0.5)
+            .setAlpha(0);
 
         panel.add([panelBg, scoreText, scoreValue, coinText]);
         uiRoot.add(panel);
@@ -112,7 +128,7 @@ export class GameOver extends Scene {
             alpha: 1,
             duration: 500,
             delay: 300,
-            ease: 'Sine.easeOut'
+            ease: 'Sine.easeOut',
         });
 
         this.tweens.add({
@@ -121,30 +137,48 @@ export class GameOver extends Scene {
             y: '-=5',
             duration: 400,
             delay: 700,
-            ease: 'Sine.easeOut'
+            ease: 'Sine.easeOut',
         });
 
         // ===============================
         // HIGH SCORE SOCKET EVENT
         // ===============================
-        socketService.on('updateHighScore', (newHighScore) => {
+        const onUpdateHighScore = (newHighScore) => {
             Logger.info('GameOver', `New High Score: ${newHighScore}`);
             playerState.setHighScore(newHighScore);
 
-            const record = this.add.text(centerX, centerY + 140, '🏆 NEW RECORD!', {
-                fontFamily: '"Outfit", sans-serif',
-                fontSize: 34,
-                color: '#00ff88',
-                fontStyle: 'bold'
-            }).setOrigin(0.5).setScale(0);
+            const record = this.add
+                .text(centerX, centerY + 140, '🏆 NEW RECORD!', {
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: 34,
+                    color: '#00ff88',
+                    fontStyle: 'bold',
+                })
+                .setOrigin(0.5)
+                .setScale(0);
 
             this.tweens.add({
                 targets: record,
                 scale: 1,
                 duration: 500,
-                ease: 'Back.out'
+                ease: 'Back.out',
             });
-        });
+
+            // Listener should only fire once per GameOver screen
+            const socket = socketService.getSocket();
+            if (socket && socket.off) socket.off('updateHighScore', onUpdateHighScore);
+        };
+
+        const socket = socketService.getSocket();
+        if (socket && socket.once) {
+            socket.once('updateHighScore', onUpdateHighScore);
+        } else {
+            // Fallback (older socket.io client): attach and ensure cleanup
+            socketService.on('updateHighScore', onUpdateHighScore);
+            this.events.once('shutdown', () => {
+                socketService.off('updateHighScore', onUpdateHighScore);
+            });
+        }
 
         // ===============================
         // ACTION BUTTONS
@@ -158,6 +192,7 @@ export class GameOver extends Scene {
             () => {
                 Logger.info('GameOver', 'Restart Game');
                 socketService.disconnect();
+                this.scene.stop('UIScene');
                 this.scene.start('Game');
             },
             { width: 260, height: 64, color: 0x1e90ff }
@@ -172,6 +207,7 @@ export class GameOver extends Scene {
             'MAIN MENU',
             () => {
                 socketService.disconnect();
+                this.scene.stop('UIScene');
                 this.scene.start('MainMenu');
             },
             { width: 260, height: 64, color: 0x555555 }

@@ -7,10 +7,23 @@ import { UIButton } from '../ui/UIButton';
 export class ShopScene extends Scene {
     constructor() {
         super('ShopScene');
+        this._didShutdown = false;
+        this._wheelHandler = null;
     }
 
     create(data) {
         Logger.info('Shop', 'Open Shop');
+
+        // UIScene is session-scoped (Game only). Ensure it never leaks into the shop overlay.
+        this.scene.stop('UIScene');
+
+        // Scene instances are reused across restarts; reset per-run guards.
+        this._didShutdown = false;
+
+        this.events.off('shutdown', this._onShutdown, this);
+        this.events.off('destroy', this._onShutdown, this);
+        this.events.once('shutdown', this._onShutdown, this);
+        this.events.once('destroy', this._onShutdown, this);
 
         const { width, height } = this.scale;
         const centerX = width / 2;
@@ -101,13 +114,17 @@ export class ShopScene extends Scene {
             color: '#cccccc'
         }).setOrigin(0.5);
 
-        // Scroll
-        this.input.on('wheel', (_, __, ___, deltaY) => {
+        // Scroll (ensure we don't stack listeners across opens)
+        if (this._wheelHandler) {
+            this.input.off('wheel', this._wheelHandler);
+        }
+        this._wheelHandler = (_, __, ___, deltaY) => {
             if (!this.itemsContainer) return;
             this.itemsY -= deltaY * 0.4;
             this.itemsY = Phaser.Math.Clamp(this.itemsY, -this.maxScroll, 0);
             this.itemsContainer.y = centerY - 40 + this.itemsY;
-        });
+        };
+        this.input.on('wheel', this._wheelHandler);
 
         // ===============================
         // SOCKET INIT
@@ -116,6 +133,10 @@ export class ShopScene extends Scene {
 
         // Ensure we are identified (idempotent if already connected)
         socketService.emit('initPlayer', { name: playerState.getUsername() });
+
+        // Defensive: ensure no stale handlers remain if shutdown didn't run (e.g., hot-reload)
+        socketService.off('playerState');
+        socketService.off('shopItems');
 
         socketService.on('playerState', (state) => {
             if (state.coins !== undefined) {
@@ -150,12 +171,20 @@ export class ShopScene extends Scene {
 
             this.maxScroll = Math.max(0, y - (height - 260));
         });
+    }
 
-        this.events.on('shutdown', () => {
-            socketService.off('playerState');
-            socketService.off('shopItems');
-            socketService.disconnect();
-        });
+    _onShutdown() {
+        if (this._didShutdown) return;
+        this._didShutdown = true;
+
+        if (this._wheelHandler) {
+            this.input.off('wheel', this._wheelHandler);
+            this._wheelHandler = null;
+        }
+
+        socketService.off('playerState');
+        socketService.off('shopItems');
+        socketService.disconnect();
     }
 
     // ===============================

@@ -13,7 +13,7 @@ const {
     MAX_PLAYER_SCALE,
     PLAYER_SCALE_BASE,
     PLAYER_SCALE_GROWTH,
-    COIN_CONFIG
+    COIN_CONFIG,
 } = require('../../config/constants');
 const UserRepository = require('../../repositories/UserRepository');
 const Logger = require('../../utils/Logger');
@@ -34,14 +34,18 @@ class PlayerManager {
         const QuizFoodHandler = require('../food/handlers/QuizFoodHandler');
 
         this.foodHandlers = {
-            'regular': new RegularFoodHandler(container),
-            'coin': new CoinFoodHandler(container),
-            'text': new QuizFoodHandler(container) // 'text' is the type used for Quiz answers
+            regular: new RegularFoodHandler(container),
+            coin: new CoinFoodHandler(container),
+            text: new QuizFoodHandler(container), // 'text' is the type used for Quiz answers
         };
     }
 
-    get foodManager() { return this.container.get('foodManager'); }
-    get shopManager() { return this.container.get('shopManager'); }
+    get foodManager() {
+        return this.container.get('foodManager');
+    }
+    get shopManager() {
+        return this.container.get('shopManager');
+    }
     get quizManager() {
         if (this.container.has('quizManager')) {
             return this.container.get('quizManager');
@@ -56,18 +60,18 @@ class PlayerManager {
             x: spawnPos.x,
             y: spawnPos.y,
             playerId: socket.id,
-            team: (Math.floor(Math.random() * 2) == 0) ? 'red' : 'blue',
+            team: Math.floor(Math.random() * 2) == 0 ? 'red' : 'blue',
             score: 0, // Initial score/length
             path: [], // History of positions for body collision
             totalDistance: 0, // Track total distance for accurate path pruning
-            name: "Player " + Math.floor(Math.random() * 1000),
-            color: Math.floor(Math.random() * 0xFFFFFF),
+            name: 'Player ' + Math.floor(Math.random() * 1000),
+            color: Math.floor(Math.random() * 0xffffff),
             isBoosting: false,
             wantsToBoost: false,
             coins: 0, // Track session coins for Guest/Economy
             inventory: {}, // itemId -> count
             activeEffects: {}, // itemId -> expireTime (ms)
-            boostTimer: 0 // Deterministic shrink counter
+            boostTimer: 0, // Deterministic shrink counter
         };
         return this.players[socket.id];
     }
@@ -96,18 +100,21 @@ class PlayerManager {
             if (player.username && !player.username.startsWith('Guest_')) {
                 // Use Repository
                 UserRepository.updateHighScore(player.username, player.score)
-                    .then(user => {
+                    .then((user) => {
                         if (user && user.highScore === player.score) {
                             // Only log/emit if it was actually a new high score (or equal)
                             // The Repo logic updates only if higher.
                             // To be perfectly faithful to original feedback:
                             // Original emitted 'updateHighScore' whenever it SAVED.
                             // Accessing user.highScore is safe.
-                            Logger.info('PlayerManager', `High Score Check/Update for ${user.username}: ${user.highScore}`);
+                            Logger.info(
+                                'PlayerManager',
+                                `High Score Check/Update for ${user.username}: ${user.highScore}`
+                            );
                             this.io.to(playerId).emit('updateHighScore', user.highScore);
                         }
                     })
-                    .catch(err => Logger.error('PlayerManager', "Save High Score Error:", err));
+                    .catch((err) => Logger.error('PlayerManager', 'Save High Score Error:', err));
             }
         }
 
@@ -139,46 +146,57 @@ class PlayerManager {
                 this.players[id].username = data.name;
             }
             // Inventory Logic: Priority to DB for logged-in users
-            const isGuest = !this.players[id].username || this.players[id].username.startsWith('Guest_');
+            const isGuest =
+                !this.players[id].username || this.players[id].username.startsWith('Guest_');
 
             if (!isGuest) {
-                Logger.info('PlayerManager', `handleInitPlayer: Loading DB for ${this.players[id].username}`);
+                Logger.info(
+                    'PlayerManager',
+                    `handleInitPlayer: Loading DB for ${this.players[id].username}`
+                );
                 // Load from DB if verified user
-                UserRepository.findByUsername(this.players[id].username).then(user => {
-                    if (user) {
-                        Logger.info('PlayerManager', `Found user in DB: ${user.username}, coins: ${user.coins}`);
-                        this.players[id].coins = user.coins;
+                UserRepository.findByUsername(this.players[id].username)
+                    .then((user) => {
+                        if (user) {
+                            Logger.info(
+                                'PlayerManager',
+                                `Found user in DB: ${user.username}, coins: ${user.coins}`
+                            );
+                            this.players[id].coins = user.coins;
 
-                        // Load Inventory (Array -> Object)
-                        if (user.inventory && Array.isArray(user.inventory)) {
-                            this.players[id].inventory = {};
-                            user.inventory.forEach(item => {
-                                this.players[id].inventory[item.itemId] = item.quantity;
+                            // Load Inventory (Array -> Object)
+                            if (user.inventory && Array.isArray(user.inventory)) {
+                                this.players[id].inventory = {};
+                                user.inventory.forEach((item) => {
+                                    this.players[id].inventory[item.itemId] = item.quantity;
+                                });
+                            }
+
+                            // Emit updates
+                            this.io.to(id).emit('updateCoins', this.players[id].coins);
+                            this.io.to(id).emit('updateInventory', this.players[id].inventory);
+
+                            this.io.to(id).emit('playerState', {
+                                coins: this.players[id].coins,
+                                inventory: this.players[id].inventory,
+                                id: id,
+                                color: this.players[id].color,
+                                name: this.players[id].name,
+                                highScore: user.highScore,
                             });
+
+                            // Send Shop Items from DB (delegated via ShopManager potentially, but here directly or via ShopManager)
+                            if (this.shopManager) {
+                                this.io.to(id).emit('shopItems', this.shopManager.getShopItems());
+                            }
+                        } else {
+                            Logger.warn(
+                                'PlayerManager',
+                                `User not found in DB: ${this.players[id].username}`
+                            );
                         }
-
-                        // Emit updates
-                        this.io.to(id).emit('updateCoins', this.players[id].coins);
-                        this.io.to(id).emit('updateInventory', this.players[id].inventory);
-
-                        this.io.to(id).emit('playerState', {
-                            coins: this.players[id].coins,
-                            inventory: this.players[id].inventory,
-                            id: id,
-                            color: this.players[id].color,
-                            name: this.players[id].name,
-                            highScore: user.highScore
-                        });
-
-                        // Send Shop Items from DB (delegated via ShopManager potentially, but here directly or via ShopManager)
-                        if (this.shopManager) {
-                            this.io.to(id).emit('shopItems', this.shopManager.getShopItems());
-                        }
-
-                    } else {
-                        Logger.warn('PlayerManager', `User not found in DB: ${this.players[id].username}`);
-                    }
-                }).catch(err => Logger.error('PlayerManager', `DB Error: ${err}`));
+                    })
+                    .catch((err) => Logger.error('PlayerManager', `DB Error: ${err}`));
             } else {
                 // Guest: Use client sent data
                 if (data.inventory) {
@@ -193,7 +211,7 @@ class PlayerManager {
             this.io.emit('playerProperties', {
                 id: id,
                 color: this.players[id].color,
-                name: this.players[id].name
+                name: this.players[id].name,
             });
         }
     }
@@ -235,7 +253,7 @@ class PlayerManager {
         }
 
         // Manage Active Effects
-        Object.keys(player.activeEffects).forEach(effectId => {
+        Object.keys(player.activeEffects).forEach((effectId) => {
             if (player.activeEffects[effectId] < now) {
                 delete player.activeEffects[effectId];
                 this.io.emit('itemDeactivated', { playerId: id, itemId: effectId });
@@ -251,7 +269,7 @@ class PlayerManager {
         if (player.activeEffects['speed']) {
             let buffValue = 4;
             if (this.shopManager) {
-                const item = this.shopManager.getShopItems().find(i => i.id === 'speed');
+                const item = this.shopManager.getShopItems().find((i) => i.id === 'speed');
                 if (item) buffValue = item.buffValue;
             }
             currentSpeed += buffValue;
@@ -266,7 +284,10 @@ class PlayerManager {
                 player.boostTimer = 0; // Reset timer
                 player.score = Math.max(0, player.score - 1);
 
-                const dropPos = player.path.length > 0 ? player.path[player.path.length - 1] : { x: player.x, y: player.y };
+                const dropPos =
+                    player.path.length > 0
+                        ? player.path[player.path.length - 1]
+                        : { x: player.x, y: player.y };
 
                 // Spawn food at drop position
                 this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color);
@@ -282,14 +303,16 @@ class PlayerManager {
         player.path.unshift({
             x: player.x,
             y: player.y,
-            d: player.totalDistance
+            d: player.totalDistance,
         });
 
         const neededHistoryDist = (player.score + INITIAL_LENGTH + 5) * PIXELS_PER_SEGMENT;
 
         // Prune old points
-        while (player.path.length > 0 &&
-            (player.totalDistance - player.path[player.path.length - 1].d > neededHistoryDist)) {
+        while (
+            player.path.length > 0 &&
+            player.totalDistance - player.path[player.path.length - 1].d > neededHistoryDist
+        ) {
             player.path.pop();
         }
     }
@@ -305,7 +328,7 @@ class PlayerManager {
 
         // 2. Check Collision with Other Snakes
         if (!player.activeEffects['ghost']) {
-            Object.keys(this.players).forEach(otherId => {
+            Object.keys(this.players).forEach((otherId) => {
                 if (id === otherId) return;
                 const other = this.players[otherId];
 
@@ -346,7 +369,7 @@ class PlayerManager {
 
     checkFoodCollisions(player, id) {
         const allFood = this.foodManager.getAllFood();
-        Object.keys(allFood).forEach(async foodId => {
+        Object.keys(allFood).forEach(async (foodId) => {
             try {
                 const f = allFood[foodId];
                 if (!f) return;
@@ -362,7 +385,7 @@ class PlayerManager {
                 if (player.activeEffects['magnet']) {
                     let buffValue = 200;
                     if (this.shopManager) {
-                        const item = this.shopManager.getShopItems().find(i => i.id === 'magnet');
+                        const item = this.shopManager.getShopItems().find((i) => i.id === 'magnet');
                         if (item) buffValue = item.buffValue;
                     }
                     magnetRadius = buffValue;
@@ -385,7 +408,7 @@ class PlayerManager {
                                 foodId: f.id,
                                 playerId: id,
                                 score: player.score,
-                                type: f.type
+                                type: f.type,
                             });
 
                             if (result.shouldRespawn) {
@@ -404,7 +427,7 @@ class PlayerManager {
         // NOTE: Bot spawning and AI Update is now handled by BotManager externally
         // This update() only handles physics, collision, and state for ALL players
 
-        Object.keys(this.players).forEach(id => {
+        Object.keys(this.players).forEach((id) => {
             const player = this.players[id];
             if (!player) return;
 
@@ -427,7 +450,7 @@ class PlayerManager {
     }
 
     resetScores() {
-        Object.values(this.players).forEach(p => {
+        Object.values(this.players).forEach((p) => {
             p.score = 0;
             // Also reset length/sections if needed, but score=0 usually implies restart
             if (p.sections && p.sections.length > 0) {
@@ -441,7 +464,7 @@ class PlayerManager {
     }
 
     killAllPlayers() {
-        Object.keys(this.players).forEach(id => {
+        Object.keys(this.players).forEach((id) => {
             const player = this.players[id];
             player.alive = false;
             // Emit death event
@@ -454,7 +477,7 @@ class PlayerManager {
             // Note: We don't necessarily disconnect them, just kill their snake.
         });
         // Reset internal list? Or wait for disconnect?
-        // If we clear this.players, we lose socket mapping. 
+        // If we clear this.players, we lose socket mapping.
         // Better to just mark dead. The client will show GameOver scene.
     }
 
@@ -470,7 +493,15 @@ class PlayerManager {
 
             let newFood;
             if (isCoin) {
-                newFood = this.foodManager.spawnFood(fx, fy, null, 'coin', COIN_CONFIG.VALUE, null, false);
+                newFood = this.foodManager.spawnFood(
+                    fx,
+                    fy,
+                    null,
+                    'coin',
+                    COIN_CONFIG.VALUE,
+                    null,
+                    false
+                );
             } else {
                 newFood = this.foodManager.spawnFood(fx, fy, null, 'regular', 1, null, false);
             }
