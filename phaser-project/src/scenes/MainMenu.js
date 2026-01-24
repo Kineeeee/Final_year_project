@@ -210,6 +210,11 @@ export class MainMenu extends Scene {
         this.cameras.main.once(
             Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
             () => {
+                if (mode === 'shooting') {
+                    this.scene.start('ShootingScene');
+                    return;
+                }
+
                 const username = playerState.getUsername();
                 const gameData = { name: username, mode };
                 const savedColor = localStorage.getItem('preferredColor');
