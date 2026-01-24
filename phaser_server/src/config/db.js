@@ -3,9 +3,11 @@ const Logger = require('../utils/Logger');
 
 const connectDB = async () => {
     try {
-        // Thay đổi chuỗi kết nối nếu bạn dùng MongoDB Atlas
-        const MONGO_URI =
-            'mongodb+srv://snakeGame:YuMEH7LpCBx1AbPX@cluster0.fuf8svx.mongodb.net/?appName=Cluster0';
+        const MONGO_URI = process.env.MONGO_URI;
+
+        if (!MONGO_URI) {
+            throw new Error('MONGO_URI is not defined in .env file');
+        }
 
         await mongoose.connect(MONGO_URI);
         Logger.info('Database', '✅ MongoDB connected successfully');

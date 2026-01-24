@@ -1,7 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const http = require('http');
 const { Server } = require('socket.io');
+const parser = require('socket.io-msgpack-parser');
 const cors = require('cors');
 const connectDB = require('./src/config/db');
 const authRoutes = require('./src/modules/auth/AuthRoutes.js');
@@ -47,6 +49,7 @@ app.get('/', function (req, res) {
 
 const server = http.createServer(app);
 const io = new Server(server, {
+    parser,
     cors: {
         origin: '*',
         methods: ['GET', 'POST'],
@@ -68,3 +71,4 @@ new GameServer(englishIO, { mode: 'quiz', topic: 'english' });
 server.listen(PORT, () => {
     Logger.info('Server', `Server is running on port ${PORT}`);
 });
+process.on('unhandledRejection', (reason, p) => { console.error('Unhandled Rejection at:', p, 'reason:', reason); });

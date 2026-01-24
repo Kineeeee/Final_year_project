@@ -1,4 +1,5 @@
 import io from 'socket.io-client';
+import parser from 'socket.io-msgpack-parser';
 import { CONFIG } from '../config/constants';
 import { Logger } from '../utils/Logger';
 
@@ -32,7 +33,8 @@ class SocketService {
 
         if (!this.socket) {
             Logger.info('Network', `Connecting to ${targetUrl}`);
-            this.socket = io(targetUrl, options);
+            const finalOptions = Object.assign({ parser }, options);
+            this.socket = io(targetUrl, finalOptions);
 
             this.socket.on('connect', () => {
                 Logger.info('Network', `Connected with ID: ${this.socket.id}`);

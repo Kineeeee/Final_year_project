@@ -1,0 +1,41 @@
+const { createClient } = require('redis');
+const Logger = require('../utils/Logger');
+
+class RedisClient {
+    constructor() {
+        this.client = null;
+        this.isConnected = false;
+    }
+
+    async connect() {
+        if (this.isConnected) return;
+
+        const url = process.env.REDIS_URL || 'redis://localhost:6379';
+
+        try {
+            this.client = createClient({ url });
+
+            this.client.on('error', (err) => Logger.error('Redis', 'Client Error', err));
+            this.client.on('connect', () => Logger.info('Redis', 'Connected to Redis'));
+
+            await this.client.connect();
+            this.isConnected = true;
+        } catch (err) {
+            Logger.error('Redis', 'Failed to connect', err);
+            // Non-fatal? Game can run without Redis if we fallback, but for P3 we assume it's needed
+            // For now, let's just log error.
+        }
+    }
+
+    async zAdd(key, score, member) {
+        if (!this.isConnected) return;
+        return this.client.zAdd(key, { score, value: member });
+    }
+
+    async zRevRangeWithScores(key, start, stop) {
+        if (!this.isConnected) return [];
+        return this.client.zRangeWithScores(key, start, stop, { REV: true });
+    }
+}
+
+module.exports = new RedisClient();

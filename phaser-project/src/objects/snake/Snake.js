@@ -223,6 +223,19 @@ export class Snake {
                     this.head.y = PhaserMath.Linear(this.head.y, this.targetY, 0.05);
                 }
             }
+
+            // RECONCILIATION: Rotation
+            // Fixes "Direction mismatch over time"
+            if (this.targetRotation !== undefined) {
+                let diff = this.targetRotation - this.head.rotation;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+
+                // If deviation is significant (> 10 degrees), gently correct it
+                if (Math.abs(diff) > 0.17) {
+                    this.head.rotation += diff * 0.05;
+                }
+            }
         } else {
             // DEAD RECKONING: Always move forward based on current velocity
             const moveAmount = this.speed * (delta / 1000);

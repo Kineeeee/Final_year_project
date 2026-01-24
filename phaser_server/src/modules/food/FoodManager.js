@@ -9,6 +9,10 @@ class FoodManager {
         this.foodCount = 0; // Initialize food counter
     }
 
+    get spatialGrid() {
+        return this.container.get('spatialGrid');
+    }
+
     spawnFood(x, y, color, type = 'regular', value = 1, data = null, shouldEmit = true) {
         // ID Generation: Use String to ensure network precision vs Float
         const id = `food_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
@@ -31,6 +35,11 @@ class FoodManager {
             data, // Custom data (e.g. quiz text)
         };
         this.foodCount++;
+
+        // SPATIAL GRID: Register
+        if (this.spatialGrid) {
+            this.spatialGrid.add(this.food[id]);
+        }
 
         // DEFAULT: Emit to clients (unless explicitly disabled for batch operations)
         if (shouldEmit && this.io) {
@@ -72,6 +81,11 @@ class FoodManager {
 
     removeFood(id, shouldEmit = false) {
         if (this.food[id]) {
+            // SPATIAL GRID: Remove
+            if (this.spatialGrid) {
+                this.spatialGrid.remove(this.food[id]);
+            }
+
             delete this.food[id];
             this.foodCount--;
 
@@ -135,8 +149,10 @@ class FoodManager {
             for (let i = 0; i < toRemove; i++) {
                 const idx = Math.floor(Math.random() * ids.length);
                 const id = ids[idx];
-                delete this.food[id];
-                this.foodCount--;
+
+                // Use the proper remove method to clear from SpatialGrid
+                this.removeFood(id, false);
+
                 removedIds.push(id);
                 ids.splice(idx, 1);
             }

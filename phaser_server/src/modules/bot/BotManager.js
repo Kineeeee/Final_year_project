@@ -33,6 +33,7 @@ class BotManager {
             targetRotation: rot,
             x: spawnPos.x,
             y: spawnPos.y,
+            id: id, // Compatible with SpatialGrid
             playerId: id,
             team: 'red',
             score: Math.floor(Math.random() * 5),
@@ -53,6 +54,11 @@ class BotManager {
         // Note: Direct access for now, but cleaner would be an addPlayer method in PlayerManager
         const players = this.playerManager.getAllPlayers();
         players[id] = botData;
+
+        // SPATIAL GRID: Add Bot
+        if (this.playerManager.spatialGrid) {
+            this.playerManager.spatialGrid.add(botData);
+        }
 
         this.io.emit('newPlayer', players[id]);
     }

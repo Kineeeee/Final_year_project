@@ -10,7 +10,7 @@ export const CONFIG = {
     PHYSICS: {
         BASE_SPEED_PPS: 180, // 3 * 60
         BOOST_SPEED_PPS: 360, // 6 * 60
-        ROTATION_SPEED_PPS: 4.5, // 0.075 * 60
+        ROTATION_SPEED_PPS: 3.0, // 0.05 * 60
         PLAYER_SCALE_BASE: 0.6,
         PLAYER_SCALE_GROWTH: 0.005,
         PIXELS_PER_SEGMENT: 12,
@@ -33,7 +33,7 @@ export const CONFIG = {
         SPEED: 900,
     },
 
-    SERVER_URL: 'http://192.168.6.140:3000',
+    SERVER_URL: 'http://localhost:3000',
 
     NETWORK: {
         // Opt-in: when true, the client will apply server-authoritative interest-managed deltas

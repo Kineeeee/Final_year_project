@@ -7,11 +7,10 @@ module.exports = {
     FOOD_RADIUS: 10,
     BASE_SPEED: 3,
     BOOST_SPEED: 6,
-    TURN_SPEED: 0.075,
+    TURN_SPEED: 0.05,
     PIXELS_PER_SEGMENT: 12,
     INITIAL_LENGTH: 5,
-    BOT_COUNT: 20,
-    BOT_COUNT: 20,
+    BOT_COUNT: 500,
     BOT_NAMES: [
         'Viper',
         'Python',

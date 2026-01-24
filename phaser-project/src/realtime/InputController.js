@@ -33,6 +33,10 @@ export class InputController {
         if (!scene.isMobile) {
             // DESKTOP: Always Mouse
             angle = player.getLookAngle();
+            // Sanitize: If NaN (e.g. mouse off screen or startup), default to rotation
+            if (angle === null || isNaN(angle)) {
+                angle = player.rotation;
+            }
             isBoosting = player.spaceKey.isDown || scene.input.activePointer.isDown;
         }
 

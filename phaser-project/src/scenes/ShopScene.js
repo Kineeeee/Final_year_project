@@ -131,9 +131,6 @@ export class ShopScene extends Scene {
         // ===============================
         this.socket = socketService.connect();
 
-        // Ensure we are identified (idempotent if already connected)
-        socketService.emit('initPlayer', { name: playerState.getUsername() });
-
         // Defensive: ensure no stale handlers remain if shutdown didn't run (e.g., hot-reload)
         socketService.off('playerState');
         socketService.off('shopItems');
@@ -171,6 +168,9 @@ export class ShopScene extends Scene {
 
             this.maxScroll = Math.max(0, y - (height - 260));
         });
+
+        // Ensure we are identified (triggers server to send shopItems via PlayerManager)
+        socketService.emit('initPlayer', { name: playerState.getUsername() });
     }
 
     _onShutdown() {

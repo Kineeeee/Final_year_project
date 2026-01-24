@@ -129,6 +129,38 @@ export class GameSession {
                     isBoosting: intent.isBoosting,
                     ts: time
                 }));
+
+                // CLIENT PREDICTION: Apply rotation immediately for responsive controls
+                // We rely on 'intent.angle' which is sanitized.
+                if (this.scene.player && this.scene.player.head && typeof intent.angle === 'number') {
+                    // Smoothly rotate towards intent (or snap if desired). Snapping is most responsive.
+                    // For "Smoother Turns" requested by user, we might want to rotate towards it at TURN_SPEED.
+                    // But let's check constants. CONFIG.PHYSICS.ROTATION_SPEED_PPS.
+
+                    const player = this.scene.player;
+                    const targetRot = intent.angle;
+                    let currentRot = player.head.rotation;
+
+                    // Simple Lerp or Turn Speed Logic?
+                    // Let's match the server's turn speed logic to predict accurately.
+                    // CONFIG.PHYSICS.ROTATION_SPEED_PPS (radians per second?)
+                    // PPS usually pixels, but here logic is Radians/sec * delta.
+                    // Server TURN_SPEED is rad/tick (0.05). 60fps -> 3 rad/s.
+                    // Client ROTATION_SPEED_PPS is 3.0.
+
+                    let diff = targetRot - currentRot;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+
+                    const rotationSpeed = CONFIG.PHYSICS.ROTATION_SPEED_PPS || 3.0; // rad/s
+                    const maxStep = rotationSpeed * (delta / 1000);
+
+                    if (Math.abs(diff) < maxStep) {
+                        player.head.rotation = targetRot;
+                    } else {
+                        player.head.rotation += Math.sign(diff) * maxStep;
+                    }
+                }
             }
             this.commandQueue.flush({ networkManager: this.networkManager });
         }

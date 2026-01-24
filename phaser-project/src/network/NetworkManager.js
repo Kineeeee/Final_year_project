@@ -1,4 +1,5 @@
 import { socketService } from '../services/SocketService';
+import parser from 'socket.io-msgpack-parser';
 import { Logger } from '../utils/Logger';
 import { CONFIG } from '../config/constants';
 import { effectManager } from '../features/EffectManager';
@@ -15,6 +16,9 @@ export class NetworkManager {
 
     sendPlayerInput(angle, isBoosting) {
         if (this.socket) {
+            // DEBUG: Trace Input Send
+            // if (Math.random() < 0.01) 
+            console.log(`Sending Input: angle=${angle}`);
             this.socket.emit('playerInput', { angle, isBoosting });
         }
     }
@@ -31,7 +35,10 @@ export class NetworkManager {
         if (gameMode === CONFIG.GAME_MODES.ENGLISH) serverUrl += '/english';
 
         Logger.info('NetworkManager', `Connecting to Server: ${serverUrl}`);
-        this.socket = socketService.connect(serverUrl, { forceNew: true });
+        this.socket = socketService.connect(serverUrl, {
+            forceNew: true,
+            parser
+        });
 
         this.setupConnectionEvents(playerDetails);
         this.setupGameplayEvents();
@@ -173,42 +180,83 @@ export class NetworkManager {
         if (!CONFIG.NETWORK || !CONFIG.NETWORK.USE_WORLD_DELTA) return;
         if (!this.gameState || !delta) return;
 
-        // Ensure local player id is set (socket.id is authoritative for local)
+        // Unpack protocol (supports both Array and Object formats)
+        let serverTick, serverTime, playersUpsert, playersRemove, foodsUpsert, foodsRemove;
+
+        if (Array.isArray(delta)) {
+            // Binary Protocol: [tick, time, pUp, pRem, fUp, fRem]
+            [serverTick, serverTime, playersUpsert, playersRemove, foodsUpsert, foodsRemove] = delta;
+        } else {
+            // JSON Protocol (Fallback)
+            serverTick = delta.serverTick;
+            serverTime = delta.serverTime;
+            playersUpsert = delta.playersUpsert;
+            playersRemove = delta.playersRemove;
+            foodsUpsert = delta.foodsUpsert;
+            foodsRemove = delta.foodsRemove;
+        }
+
         if (!this.gameState.localPlayerId && this.socket?.id) {
             this.gameState.setLocalPlayerId(this.socket.id);
         }
 
         this.gameState.setServerClock({
-            serverTick: delta.serverTick,
-            serverTime: delta.serverTime,
+            serverTick: serverTick,
+            serverTime: serverTime,
             offsetAlpha: CONFIG.NETWORK?.SERVER_TIME_OFFSET_ALPHA
         });
 
         // Players upsert/remove (interest-managed)
-        const playersUpsert = delta.playersUpsert || {};
-        Object.keys(playersUpsert).forEach((id) => {
-            this.gameState.upsertPlayer(id, { playerId: id, ...playersUpsert[id] });
-        });
-        const playersRemove = delta.playersRemove || [];
-        playersRemove.forEach((id) => this.gameState.removePlayer(id));
+        if (playersUpsert) {
+            if (Array.isArray(delta)) {
+                // Array format: [id, x, y, rot, score, boost, name, color, activeEffects]
+                playersUpsert.forEach(pData => {
+                    const [id, x, y, rot, score, isBoosting, name, color, activeEffects] = pData;
+                    this.gameState.upsertPlayer(id, {
+                        playerId: id, x, y, rotation: rot, score, isBoosting, name, color, activeEffects
+                    });
+                });
+            } else {
+                // Object format
+                Object.keys(playersUpsert).forEach((id) => {
+                    this.gameState.upsertPlayer(id, { playerId: id, ...playersUpsert[id] });
+                });
+            }
+        }
+
+        if (playersRemove) {
+            playersRemove.forEach((id) => this.gameState.removePlayer(id));
+        }
 
         // Foods upsert/remove (interest-managed)
-        const foodsUpsert = delta.foodsUpsert || {};
-        Object.keys(foodsUpsert).forEach((id) => {
-            const f = foodsUpsert[id];
-            if (!f) return;
-            this.gameState.upsertFood({
-                id: f.id || id,
-                x: f.x,
-                y: f.y,
-                color: f.color,
-                type: f.type,
-                value: f.value,
-                data: f.data
-            });
-        });
-        const foodsRemove = delta.foodsRemove || [];
-        foodsRemove.forEach((id) => this.gameState.removeFood(id));
+        if (foodsUpsert) {
+            if (Array.isArray(delta)) {
+                // Array format: [id, x, y, type, value, color, data]
+                foodsUpsert.forEach(fData => {
+                    const [id, x, y, type, value, color, data] = fData;
+                    this.gameState.upsertFood({ id, x, y, type, value, color, data });
+                });
+            } else {
+                // Object format
+                Object.keys(foodsUpsert).forEach((id) => {
+                    const f = foodsUpsert[id];
+                    if (!f) return;
+                    this.gameState.upsertFood({
+                        id: f.id || id,
+                        x: f.x,
+                        y: f.y,
+                        color: f.color,
+                        type: f.type,
+                        value: f.value,
+                        data: f.data
+                    });
+                });
+            }
+        }
+
+        if (foodsRemove) {
+            foodsRemove.forEach((id) => this.gameState.removeFood(id));
+        }
 
         // Drive rendering via state events
         this.scene.events.emit('state:players:update');

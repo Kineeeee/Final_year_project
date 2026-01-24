@@ -1,231 +1,109 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Snake Edu - Question Admin</title>
-        <style>
-            body {
-                font-family: sans-serif;
-                padding: 20px;
-                background: #f0f2f5;
-            }
-            .container {
-                max-width: 800px;
-                margin: 0 auto;
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }
-            h1,
-            h2 {
-                color: #333;
-            }
-            .form-group {
-                margin-bottom: 15px;
-            }
-            label {
-                display: block;
-                margin-bottom: 5px;
-                font-weight: bold;
-            }
-            input,
-            select,
-            textarea {
-                width: 100%;
-                padding: 8px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                box-sizing: border-box;
-            }
-            button {
-                background: #007bff;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 4px;
-                cursor: pointer;
-            }
-            button:hover {
-                background: #0056b3;
-            }
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-            }
-            th,
-            td {
-                padding: 12px;
-                text-align: left;
-                border-bottom: 1px solid #ddd;
-            }
-            th {
-                background: #f8f9fa;
-            }
-            .delete-btn {
-                background: #dc3545;
-                padding: 5px 10px;
-                font-size: 0.9em;
-            }
-            .delete-btn:hover {
-                background: #c82333;
-            }
-            .difficulty-badge {
-                display: inline-block;
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-size: 0.8em;
-                color: white;
-                background: #6c757d;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🐍 Snake Edu - Question Manager</h1>
 
-            <div class="card">
-                <h2>Add New Question</h2>
-                <form id="addForm">
-                    <div class="form-group">
-                        <label>Topic</label>
-                        <select id="topic" required>
-                            <option value="math">Math (Toán học)</option>
-                            <option value="english">English (Tiếng Anh)</option>
-                        </select>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake Quiz Admin</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .question-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .wrong-input {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="mb-4 text-center">Snake Quiz Management</h1>
+
+        <div class="row">
+            <!-- Add Question Form -->
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">Add New Question</div>
+                    <div class="card-body">
+                        <form id="addQuestionForm">
+                            <div class="mb-3">
+                                <label class="form-label">Topic</label>
+                                <select class="form-select" id="topic" required>
+                                    <option value="math">Math</option>
+                                    <option value="english">English</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Difficulty</label>
+                                <select class="form-select" id="difficulty">
+                                    <option value="1">1 (8-9 years old)</option>
+                                    <option value="2">2 (10-11 years old)</option>
+                                    <option value="3">3 (12-13 years old)</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Question Text</label>
+                                <input type="text" class="form-control" id="questionText" required
+                                    placeholder="e.g. 2 + 2 = ?">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label text-success">Correct Answer</label>
+                                <input type="text" class="form-control" id="correctAnswer" required
+                                    placeholder="e.g. 4">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label text-danger">Wrong Answers</label>
+                                <div id="wrongAnswersContainer">
+                                    <input type="text" class="form-control wrong-input" placeholder="Wrong 1" required>
+                                    <input type="text" class="form-control wrong-input" placeholder="Wrong 2" required>
+                                    <input type="text" class="form-control wrong-input" placeholder="Wrong 3" required>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100">Add Question</button>
+                        </form>
                     </div>
-                    <div class="form-group">
-                        <label>Difficulty (Age Group)</label>
-                        <select id="difficulty" required>
-                            <option value="1">Level 1 (8-9 years)</option>
-                            <option value="2">Level 2 (10-11 years)</option>
-                            <option value="3">Level 3 (12-13 years)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Question Text</label>
-                        <input
-                            type="text"
-                            id="questionText"
-                            placeholder="e.g., 5 + 3 = ? or 'Cat' means?"
-                            required
-                        />
-                    </div>
-                    <div class="form-group">
-                        <label>Correct Answer</label>
-                        <input
-                            type="text"
-                            id="correctAnswer"
-                            placeholder="e.g., 8 or Con mèo"
-                            required
-                        />
-                    </div>
-                    <div class="form-group">
-                        <label>Wrong Answers (comma separated)</label>
-                        <input
-                            type="text"
-                            id="wrongAnswers"
-                            placeholder="e.g., 6, 10, 15"
-                            required
-                        />
-                    </div>
-                    <button type="submit">Add Question</button>
-                </form>
+                </div>
             </div>
 
-            <h2>Existing Questions</h2>
-            <div class="form-group">
-                <label>Filter by Topic:</label>
-                <select id="filterTopic" onchange="loadQuestions()">
-                    <option value="">All</option>
-                    <option value="math">Math</option>
-                    <option value="english">English</option>
-                </select>
+            <!-- Question List -->
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                        <span>Existing Questions</span>
+                        <select class="form-select form-select-sm w-auto" id="filterTopic">
+                            <option value="">All Topics</option>
+                            <option value="math">Math</option>
+                            <option value="english">English</option>
+                        </select>
+                    </div>
+                    <div class="card-body question-list" id="questionList">
+                        <!-- Loaded dynamically -->
+                        <div class="text-center text-muted">Loading...</div>
+                    </div>
+                </div>
             </div>
-            <table id="questionsTable">
-                <thead>
-                    <tr>
-                        <th>Topic</th>
-                        <th>Level</th>
-                        <th>Question</th>
-                        <th>Answer</th>
-                        <th>Wrong Choices</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
         </div>
+    </div>
 
-        <script>
-            const API_URL = '/api/questions';
+    <script src="js/admin.js"></script>
+</body>
 
-            // Load questions on start
-            loadQuestions();
-
-            document.getElementById('addForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const data = {
-                    topic: document.getElementById('topic').value,
-                    difficulty: parseInt(document.getElementById('difficulty').value),
-                    questionText: document.getElementById('questionText').value,
-                    correctAnswer: document.getElementById('correctAnswer').value,
-                    wrongAnswers: document
-                        .getElementById('wrongAnswers')
-                        .value.split(',')
-                        .map((s) => s.trim())
-                        .filter((s) => s),
-                };
-
-                const res = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data),
-                });
-
-                if (res.ok) {
-                    alert('Question Added!');
-                    document.getElementById('addForm').reset();
-                    loadQuestions();
-                } else {
-                    alert('Error adding question');
-                }
-            });
-
-            async function loadQuestions() {
-                const topic = document.getElementById('filterTopic').value;
-                const url = topic ? `${API_URL}?topic=${topic}` : API_URL;
-
-                const res = await fetch(url);
-                const questions = await res.json();
-
-                const tbody = document.querySelector('#questionsTable tbody');
-                tbody.innerHTML = '';
-
-                questions.forEach((q) => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                    <td>${q.topic.toUpperCase()}</td>
-                    <td><span class="difficulty-badge">Lvl ${q.difficulty}</span></td>
-                    <td>${q.questionText}</td>
-                    <td style="color:green; font-weight:bold;">${q.correctAnswer}</td>
-                    <td>${q.wrongAnswers.join(', ')}</td>
-                    <td>
-                        <button class="delete-btn" onclick="deleteQuestion('${q._id}')">Delete</button>
-                    </td>
-                `;
-                    tbody.appendChild(tr);
-                });
-            }
-
-            async function deleteQuestion(id) {
-                if (confirm('Are you sure?')) {
-                    await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-                    loadQuestions();
-                }
-            }
-        </script>
-    </body>
 </html>

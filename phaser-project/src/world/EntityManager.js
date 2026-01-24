@@ -37,7 +37,7 @@ export class EntityManager {
 
     createPlayer(playerInfo) {
         const player = new PlayerSnake(this.scene, playerInfo.x, playerInfo.y, playerInfo.color);
-        player.isRemote = true;
+        player.isRemote = false; // Local player controls itself (client-prediction)
         player.playerId = playerInfo.playerId;
         if (playerInfo.name) player.setName(playerInfo.name);
 
