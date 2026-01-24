@@ -82,6 +82,14 @@ export class UIManager {
         this.components.hud.updateCoins(coins);
     }
 
+    updateScore(score) {
+        this.components.hud.updateScore(score);
+    }
+
+    updateRank(rank, total) {
+        this.components.hud.updateRank(rank, total);
+    }
+
     updateInventory(inventory) {
         this.components.items.updateInventory(inventory);
     }

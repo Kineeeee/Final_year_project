@@ -1,13 +1,11 @@
 import { ITEMS } from '../../config/items.js';
+import { COLORS, TEXT_STYLES } from '../UIConstants';
 
 export class ItemSlots {
     constructor(scene, mode = 'normal') {
         this.scene = scene;
         this.mode = mode;
 
-        // Define available slots based on mode
-        // Define available slots based on mode
-        // Any non-normal mode (quiz, math, english) gets limited items
         if (this.mode !== 'normal') {
             this.slotKeys = ['speed', 'ghost'];
         } else {
@@ -15,15 +13,10 @@ export class ItemSlots {
         }
 
         this.slots = {};
-
         this.createElements();
     }
 
     createElements() {
-        // Map keys to ITEMS IDs
-        // speed -> SPEED_UP
-        // magnet -> MAGNET
-        // ghost -> GHOST
         const keyMap = {
             'speed': 'SPEED_UP',
             'magnet': 'MAGNET',
@@ -35,56 +28,59 @@ export class ItemSlots {
             return ITEMS[itemKey] ? ITEMS[itemKey].id : null;
         }).filter(id => id !== null);
 
-        // Create container for all slots to manage centering easily
         this.container = this.scene.add.container(0, 0);
 
         itemIds.forEach((id, index) => {
-            // Individual Slot Container
             const slotContainer = this.scene.add.container(0, 0);
 
-            // Background
-            const bg = this.scene.add.rectangle(0, 0, 72, 72, 0x000000, 0.5).setStrokeStyle(2, 0xffffff);
+            // Background (Rounded Graphics)
+            const bg = this.scene.add.graphics();
+            bg.fillStyle(COLORS.PANEL_BG, 0.8);
+            bg.fillRoundedRect(-36, -36, 72, 72, 16);
+            bg.lineStyle(2, COLORS.PANEL_BORDER, 1);
+            bg.strokeRoundedRect(-36, -36, 72, 72, 16);
             slotContainer.add(bg);
 
             // Icon
             let icon;
             if (this.scene.textures.exists(id)) {
                 icon = this.scene.add.image(0, 0, id);
-                // Scale to fit 48x48 box
                 const scale = 48 / Math.max(icon.width, icon.height);
                 icon.setScale(scale);
             } else {
-                const color = Object.values(ITEMS).find(i => i.id === id).iconColor;
+                // Fallback
+                const color = (ITEMS && Object.values(ITEMS).find(i => i.id === id)?.iconColor) || 0x888888;
                 icon = this.scene.add.rectangle(0, 0, 48, 48, color);
             }
             slotContainer.add(icon);
 
-            // Key Hint (Desktop only)
+            // Key Hint
             if (this.scene.sys.game.device.os.desktop) {
-                const hint = this.scene.add.text(-30, -30, `${index + 1}`, {
-                    fontSize: '14px', fill: '#fff', backgroundColor: '#000000'
-                }).setPadding(2);
-                slotContainer.add(hint);
+                const hintBg = this.scene.add.circle(-28, -28, 12, COLORS.PANEL_BG).setStrokeStyle(1, COLORS.TEXT.MUTED);
+                const hint = this.scene.add.text(-28, -28, `${index + 1}`, {
+                    fontSize: '14px', fill: '#ffffff', fontFamily: '"Outfit", sans-serif'
+                }).setOrigin(0.5);
+                slotContainer.add([hintBg, hint]);
             }
 
             // Badge (Quantity)
-            const badge = this.scene.add.circle(24, 24, 14, 0xff0000);
+            const badge = this.scene.add.circle(28, 28, 14, COLORS.DANGER);
             slotContainer.add(badge);
 
             let initialQty = 0;
-            // Try load initial (though Game scene syncs this too)
             try {
                 const saved = JSON.parse(localStorage.getItem('inventory'));
                 if (saved && saved[id]) initialQty = saved[id];
             } catch (e) { }
 
-            const qtyText = this.scene.add.text(24, 24, initialQty.toString(), {
-                fontSize: '16px', fill: '#fff', fontStyle: 'bold'
+            const qtyText = this.scene.add.text(28, 28, initialQty.toString(), {
+                fontSize: '16px', fill: '#ffffff', fontStyle: 'bold', fontFamily: '"Outfit", sans-serif'
             }).setOrigin(0.5);
             slotContainer.add(qtyText);
 
-            // Interaction
-            const zone = this.scene.add.zone(0, 0, 72, 72).setInteractive();
+            // Interaction Zone
+            const zone = this.scene.add.zone(0, 0, 72, 72).setInteractive({ useHandCursor: true });
+
             zone.on('pointerdown', () => {
                 this.scene.scene.get('Game').useItem(id);
                 this.scene.tweens.add({
@@ -94,46 +90,28 @@ export class ItemSlots {
             });
             slotContainer.add(zone);
 
-            // Store Reference
             this.slots[id] = {
                 container: slotContainer,
                 qtyText,
                 icon,
+                bg, // Store ref if needed
                 activeBar: null,
                 cdOverlay: null,
                 cdTimer: null
             };
 
-            // Add to Main Container
-            // StartX will be calculated in resize
             this.container.add(slotContainer);
         });
     }
 
     resize(safeArea) {
-        // Position: Top Center (below HUD) or Bottom Center?
-        // Original was safeMargin + 80 (Top).
-        // Let's put it Top Center, below Quiz Question/Timer?
-        // Or Top Center, but if Quiz is active, Quiz pushes it down?
-        // Safer: Put it Bottom Center for consistency, but Mobile has controls there.
-        // Let's stick to Top Center, below the "Safe Top".
-
-        // 3 slots, gap 96px
-        const gap = 96;
-        const totalWidth = gap * 2; // (0, 1, 2) * gap? index 0 is -gap, 1 is 0, 2 is +gap?
-
-        // We want them centered.
-        // Index 0: -96
-        // Index 1: 0
-        // Index 2: 96
-
+        const gap = 100;
         const slotIds = Object.keys(this.slots);
         const startX = -((slotIds.length - 1) * gap) / 2;
 
-        this.container.setDepth(100);
-        // Move UP to avoid Quiz UI (Swap positions)
-        // Position at top + 80 (Original position)
-        this.container.setPosition(safeArea.centerX, safeArea.top + 80);
+        this.container.setDepth(90);
+        // Position Top Center, slightly below the "top" margin to clear the HUD text
+        this.container.setPosition(safeArea.centerX, safeArea.top + 100);
 
         slotIds.forEach((id, index) => {
             const slot = this.slots[id];
@@ -145,20 +123,21 @@ export class ItemSlots {
         Object.keys(this.slots).forEach(id => {
             const count = inventory[id] || 0;
             this.slots[id].qtyText.setText(count.toString());
-            // Pop effect
+
+            // Pop effect on badge
             this.scene.tweens.add({
-                targets: this.slots[id].qtyText.parentContainer, // Works if text is in container?
-                // Actually target the badge or text
-                scale: 1.1, duration: 100, yoyo: true
+                targets: this.slots[id].qtyText.parentContainer, // N/A, qtyText is in slotContainer
+                // Let's target the badge circle if we had a ref, or just scaled the text
+                targets: this.slots[id].qtyText,
+                scale: 1.3, duration: 100, yoyo: true
             });
         });
     }
 
     onItemActivated(data) {
-        // data: { itemId, duration, buffValue, cooldown }
         const slot = this.slots[data.itemId];
         if (slot) {
-            // 1. ACTIVE DURATION DISPLAY
+            // ACTIVE BAR
             if (slot.activeBar) slot.activeBar.destroy();
 
             const barSize = 72;
@@ -173,15 +152,18 @@ export class ItemSlots {
                     if (!slot.container.scene) return;
                     const t = tween.getValue();
                     bar.clear();
-                    bar.fillStyle(0x00ffff, 0.8);
+                    bar.fillStyle(COLORS.PRIMARY, 0.6); // Greenish active state
+                    // Fill from bottom up
                     const h = barSize * t;
+                    // Draw inside rounded rect constraints roughly
+                    // Simple rect clipped by standard shape? Or just draw rect.
+                    // For simplicity, just draw rect behind icon.
                     bar.fillRect(-36, 36 - h, 72, h);
                 },
                 onComplete: () => {
                     if (slot.activeBar) slot.activeBar.destroy();
                     slot.activeBar = null;
 
-                    // 2. COOLDOWN DISPLAY
                     const remainingCooldown = data.cooldown || 0;
                     if (remainingCooldown > 0) {
                         this.startCooldown(slot, remainingCooldown);
@@ -195,12 +177,15 @@ export class ItemSlots {
         if (slot.cdOverlay) slot.cdOverlay.destroy();
         if (slot.cdText) slot.cdText.destroy();
 
-        const cdOverlay = this.scene.add.rectangle(0, 0, 72, 72, 0x000000, 0.7);
+        // Dark overlay with rounded mask effect (simple circle or rect)
+        const cdOverlay = this.scene.add.graphics();
+        cdOverlay.fillStyle(0x000000, 0.6);
+        cdOverlay.fillRoundedRect(-36, -36, 72, 72, 16);
         slot.container.add(cdOverlay);
         slot.cdOverlay = cdOverlay;
 
         const cdText = this.scene.add.text(0, 0, Math.ceil(duration / 1000).toString(), {
-            fontSize: '24px', fontStyle: 'bold', color: '#ffffff'
+            fontSize: '28px', fontStyle: 'bold', color: '#ffffff', fontFamily: '"Outfit", sans-serif'
         }).setOrigin(0.5);
         slot.container.add(cdText);
         slot.cdText = cdText;

@@ -184,8 +184,8 @@ export class NetworkManager {
         let serverTick, serverTime, playersUpsert, playersRemove, foodsUpsert, foodsRemove;
 
         if (Array.isArray(delta)) {
-            // Binary Protocol: [tick, time, pUp, pRem, fUp, fRem]
-            [serverTick, serverTime, playersUpsert, playersRemove, foodsUpsert, foodsRemove] = delta;
+            // Binary Protocol: [tick, time, pUp, pRem, fUp, fRem, myRank, totalPlayers]
+            [serverTick, serverTime, playersUpsert, playersRemove, foodsUpsert, foodsRemove, this.myRank, this.totalPlayers] = delta;
         } else {
             // JSON Protocol (Fallback)
             serverTick = delta.serverTick;
@@ -215,6 +215,11 @@ export class NetworkManager {
                     this.gameState.upsertPlayer(id, {
                         playerId: id, x, y, rotation: rot, score, isBoosting, name, color, activeEffects
                     });
+
+                    // Emit Score Update for Local Player
+                    if (this.gameState && id === this.gameState.localPlayerId) {
+                        this.scene.events.emit('updateScore', score);
+                    }
                 });
             } else {
                 // Object format
@@ -261,6 +266,11 @@ export class NetworkManager {
         // Drive rendering via state events
         this.scene.events.emit('state:players:update');
         this.scene.events.emit('state:foods:reconcile');
+
+        // Emit Rank Update
+        if (this.myRank !== undefined) {
+            this.scene.events.emit('updateRank', { rank: this.myRank, total: this.totalPlayers });
+        }
     }
 
     _emitLeaderboardFromState() {
@@ -328,6 +338,11 @@ export class NetworkManager {
         if (this.gameState) {
             Object.keys(players).forEach((id) => {
                 this.gameState.upsertPlayer(id, players[id]);
+
+                // Emit Score Update
+                if (id === this.gameState.localPlayerId) {
+                    this.scene.events.emit('updateScore', players[id].score);
+                }
             });
         }
 

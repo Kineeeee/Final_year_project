@@ -1,3 +1,5 @@
+import { COLORS, TEXT_STYLES } from '../UIConstants';
+
 export class GameHUD {
     constructor(scene) {
         this.scene = scene;
@@ -5,48 +7,46 @@ export class GameHUD {
     }
 
     createElements() {
-        // Ping Text (Will be positioned Top-Right)
+        // Ping Text (Top-Right, Small & Unobtrusive)
         this.pingText = this.scene.add
             .text(0, 0, 'Ping: 0ms', {
-                fontFamily: 'Arial',
+                fontFamily: '"Outfit", sans-serif',
                 fontSize: '14px',
                 color: '#00ff00',
-                backgroundColor: '#00000088',
-                padding: { x: 5, y: 5 },
+                shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
             })
             .setOrigin(1, 0);
-
-        // Coin Text (Will be positioned Top-Left, below Leaderboard)
-        this.coinText = this.scene.add.text(0, 0, 'Coins: 0', {
-            fontFamily: 'Arial',
-            fontSize: '16px',
-            color: '#FFD700',
-            backgroundColor: '#00000088',
-            padding: { x: 10, y: 10 },
-        });
 
         // FPS Text (Below Ping)
         this.fpsText = this.scene.add
             .text(0, 0, 'FPS: 60', {
-                fontFamily: 'Arial',
+                fontFamily: '"Outfit", sans-serif',
                 fontSize: '14px',
                 color: '#00ff00',
-                backgroundColor: '#00000088',
-                padding: { x: 5, y: 5 },
+                shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
             })
             .setOrigin(1, 0)
             .setDepth(100);
 
+        // Coin Text (Top-Left, Big & Bold)
+        this.coinText = this.scene.add.text(0, 0, 'Coins: 0', {
+            ...TEXT_STYLES.SUBHEADER,
+            fontSize: '28px',
+            color: COLORS.TEXT.ACCENT,
+            stroke: '#000000',
+            strokeThickness: 4
+        });
+
         // Quiz Question (Center)
         this.questionText = this.scene.add
             .text(0, 0, '', {
-                fontFamily: '"Outfit", sans-serif',
-                fontSize: '24px',
+                ...TEXT_STYLES.BODY,
+                fontSize: '26px',
                 color: '#ffffff',
                 stroke: '#000000',
                 strokeThickness: 4,
-                backgroundColor: '#00000066',
-                padding: { x: 20, y: 10 },
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                padding: { x: 20, y: 12 },
                 align: 'center',
                 wordWrap: { width: 600 },
             })
@@ -57,25 +57,49 @@ export class GameHUD {
         this.timerText = this.scene.add
             .text(0, 0, '', {
                 fontFamily: 'Monospace',
-                fontSize: '20px',
+                fontSize: '24px',
                 color: '#ff0000',
                 stroke: '#000000',
                 strokeThickness: 3,
+                fontStyle: 'bold'
             })
             .setOrigin(0.5)
             .setVisible(false);
 
-        // Round Timer (Top Right, below Ping)
+        // Round Timer (Top Right, below Ping/FPS)
         this.roundTimerText = this.scene.add
             .text(0, 0, '', {
-                fontFamily: 'Arial',
-                fontSize: '16px',
+                ...TEXT_STYLES.BODY,
+                fontSize: '20px',
                 color: '#00ffff',
-                backgroundColor: '#00000088',
-                padding: { x: 8, y: 5 },
+                stroke: '#000000',
+                strokeThickness: 3
             })
             .setOrigin(1, 0)
             .setVisible(false);
+
+        // Rank Text (Bottom-Left)
+        this.rankText = this.scene.add.text(0, 0, 'Rank: --', {
+            ...TEXT_STYLES.BODY,
+            fontSize: '22px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3,
+            fontStyle: 'bold'
+        }).setOrigin(0, 1);
+
+        // Score Text (Bottom-Left, below Rank? No, above Rank or stacked)
+        // Let's put Score below Rank or side-by-side?
+        // User asked for "your score and your rank".
+        // Let's stack: Rank top, Score bottom? Or Score top (larger), Rank bottom (smaller)?
+        // I will put Rank above Score. 
+        this.scoreText = this.scene.add.text(0, 0, 'Score: 0', {
+            ...TEXT_STYLES.BODY,
+            fontSize: '18px',
+            color: COLORS.TEXT.ACCENT,
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0, 1);
     }
 
     resize(safeArea) {
@@ -83,43 +107,57 @@ export class GameHUD {
         this.pingText.setPosition(safeArea.right, safeArea.top);
 
         // FPS: Below Ping
-        this.fpsText.setPosition(safeArea.right, safeArea.top + 30);
+        this.fpsText.setPosition(safeArea.right, safeArea.top + 20);
 
-        // Round Timer: Below FPS
-        this.roundTimerText.setPosition(safeArea.right, safeArea.top + 60);
+        // Round Timer: Below FPS (Give some gap)
+        this.roundTimerText.setPosition(safeArea.right, safeArea.top + 50);
 
-        // Coins: Top-Left (Below Leaderboard, assuming Leaderboard is at safeArea.top)
-        // Leaderboard typically takes ~150-200px height depending on rows.
-        // Let's safe-guess 220px down for now, or we can stack it differently.
-        // The original code had `safeMargin + 200`.
-        this.coinText.setPosition(safeArea.left, safeArea.top + 220);
+        // Coins: Top-Left
+        this.coinText.setPosition(safeArea.left, safeArea.top);
 
-        // Quiz Question: Center Top (Moved DOWN below Item Slots)
+        // Quiz Question: Center Top (Below possible Item Slots area)
+        // Ensure it doesn't overlap items.
+        // ItemSlots are typically at safeArea.top + 80.
+        // Let's push question down to safeArea.top + 180 or center of screen depending on importance.
         this.questionText.setPosition(safeArea.centerX, safeArea.top + 180);
-        this.questionText.setWordWrapWidth(safeArea.width * 0.8); // Responsive wrap
+        this.questionText.setWordWrapWidth(safeArea.width * 0.8);
 
         // Question Timer
-        this.timerText.setPosition(safeArea.centerX, safeArea.top + 240);
+        // Question Timer
+        this.timerText.setPosition(safeArea.centerX, safeArea.top + 260);
+
+        // Rank & Score: Bottom-Left
+        // If mobile, move up to avoid joystick? 
+        // Joystick is usually at bottom-left. 
+        // Let's assume safeArea takes care of screen edges, but joystick is INSIDE safe area.
+        // Let's align them slightly higher if needed? 
+        // For now, adhere to "bottom left".
+
+        const bottomY = safeArea.bottom;
+        const leftX = safeArea.left;
+
+        this.scoreText.setPosition(leftX, bottomY);
+        this.rankText.setPosition(leftX, bottomY - 25);
     }
 
     updatePing(ping) {
         if (this.pingText) {
             this.pingText.setText(`Ping: ${ping}ms`);
-            // Color code ping
-            if (ping < 100) this.pingText.setColor('#00ff00');
-            else if (ping < 200) this.pingText.setColor('#ffff00');
-            else this.pingText.setColor('#ff0000');
+
+            const color = ping < 100 ? '#00ff00' : (ping < 200 ? '#ffff00' : '#ff0000');
+            this.pingText.setColor(color);
         }
     }
 
     updateFPS(fps) {
         if (this.fpsText) {
             this.fpsText.setText(`FPS: ${Math.round(fps)}`);
-            if (fps >= 55) this.fpsText.setColor('#00ff00');
-            else if (fps >= 30) this.fpsText.setColor('#ffff00');
-            else this.fpsText.setColor('#ff0000');
+
+            const color = fps >= 55 ? '#00ff00' : (fps >= 30 ? '#ffff00' : '#ff0000');
+            this.fpsText.setColor(color);
         }
     }
+
     updateCoins(coins) {
         this.coinText.setText(`Coins: ${coins}`);
 
@@ -128,21 +166,33 @@ export class GameHUD {
         this.coinText.setScale(1);
         this.scene.tweens.add({
             targets: this.coinText,
-            scale: 1.2,
+            scale: 1.3,
             duration: 100,
             yoyo: true,
             ease: 'Sine.easeInOut',
         });
     }
 
+    updateScore(score) {
+        if (this.scoreText) {
+            this.scoreText.setText(`Score: ${score}`);
+        }
+    }
+
+    updateRank(rank, total) {
+        if (this.rankText) {
+            const totalStr = total ? `/${total}` : '';
+            this.rankText.setText(`Rank: ${rank}${totalStr}`);
+        }
+    }
+
     showQuestion(data) {
         this.questionText.setText(`Q: ${data.text}`);
         this.questionText.setVisible(true);
 
-        // Flash
         this.scene.tweens.add({
             targets: this.questionText,
-            scale: { from: 1, to: 1.1 },
+            scale: { from: 1, to: 1.05 },
             duration: 200,
             yoyo: true,
             ease: 'Bounce.easeOut',
@@ -165,8 +215,13 @@ export class GameHUD {
                 const secs = Math.ceil(timeLeft / 1000);
                 this.timerText.setText(`${secs}s`);
 
-                if (secs <= 10) this.timerText.setColor('#ff0000');
-                else this.timerText.setColor('#ffff00');
+                if (secs <= 5) {
+                    this.timerText.setColor('#ff0000');
+                    this.timerText.setScale(1.2);
+                } else {
+                    this.timerText.setColor('#ffff00');
+                    this.timerText.setScale(1.0);
+                }
 
                 if (timeLeft <= 0) {
                     this.timerText.setText("TIME'S UP!");
@@ -203,50 +258,60 @@ export class GameHUD {
         // Use a container for easier cleanup
         const container = this.scene.add.container(width / 2, height / 2).setDepth(200);
 
-        // Full screen check for background
-        const bg = this.scene.add.rectangle(0, 0, width, height, 0x000000, 0.8);
+        // Dark Overlay
+        const bg = this.scene.add.rectangle(0, 0, width, height, COLORS.OVERLAY, 0.85);
         container.add(bg);
 
-        const titleStyle = {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: '48px',
-            fontStyle: 'bold',
-            color: '#ffffff',
-            stroke: '#000000',
-            strokeThickness: 6,
-            align: 'center',
-        };
+        // Panel Background (Rounded)
+        const panelW = 600;
+        const panelH = 400;
+        const panel = this.scene.add.graphics();
+        panel.fillStyle(COLORS.PANEL_BG, 1);
+        panel.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 24);
+        panel.lineStyle(4, COLORS.ACCENT, 1);
+        panel.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 24);
+        container.add(panel);
 
-        const title = this.scene.add.text(0, -100, 'ROUND OVER', titleStyle).setOrigin(0.5);
+        // Title
+        const title = this.scene.add.text(0, -120, 'ROUND OVER', {
+            ...TEXT_STYLES.HEADER,
+            fontSize: '48px',
+            color: '#ffffff'
+        }).setOrigin(0.5);
         container.add(title);
 
         if (data.winner) {
-            const winnerText = this.scene.add
-                .text(0, 0, `WINNER\n${data.winner.name}\nScore: ${data.winner.score}`, {
-                    ...titleStyle,
-                    fontSize: '32px',
-                    color: '#FFD700',
-                })
-                .setOrigin(0.5);
-            winnerText.setTint(data.winner.color);
-            container.add(winnerText);
+            const winnerText = this.scene.add.text(0, 0, `WINNER\n${data.winner.name}`, {
+                ...TEXT_STYLES.SUBHEADER,
+                fontSize: '36px',
+                color: COLORS.TEXT.ACCENT,
+                align: 'center'
+            }).setOrigin(0.5);
+
+            const scoreText = this.scene.add.text(0, 80, `Score: ${data.winner.score}`, {
+                ...TEXT_STYLES.BODY,
+                fontSize: '28px',
+                color: '#ffffff'
+            }).setOrigin(0.5);
+
+            container.add([winnerText, scoreText]);
         } else {
-            const noWinnerText = this.scene.add
-                .text(0, 0, 'No Winner', { ...titleStyle, fontSize: '32px' })
-                .setOrigin(0.5);
+            const noWinnerText = this.scene.add.text(0, 0, 'No Winner', {
+                ...TEXT_STYLES.SUBHEADER,
+                color: COLORS.TEXT.MUTED
+            }).setOrigin(0.5);
             container.add(noWinnerText);
         }
 
-        const nextText = this.scene.add
-            .text(0, 150, 'Next round starts in 10s...', {
-                fontFamily: 'Arial',
-                fontSize: '20px',
-                color: '#aaaaaa',
-            })
-            .setOrigin(0.5);
+        const nextText = this.scene.add.text(0, 160, 'Next round starts in 10s...', {
+            ...TEXT_STYLES.BODY,
+            fontSize: '18px',
+            color: '#aaaaaa'
+        }).setOrigin(0.5);
         container.add(nextText);
 
         this.scene.time.delayedCall(10000, () => {
+            // Optional fade out?
             container.destroy();
         });
     }
@@ -254,6 +319,5 @@ export class GameHUD {
     destroy() {
         if (this.quizTimerEvent) this.quizTimerEvent.remove();
         if (this.roundTimerEvent) this.roundTimerEvent.remove();
-        // UI elements are destroyed by Scene shutdown automatically
     }
 }

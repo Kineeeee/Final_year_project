@@ -190,6 +190,12 @@ class NetworkSystem {
         // We still need food list? No, we use Grid now.
         // const foods = this.foodManager.getAllFood();
 
+        // Calculate Ranks
+        const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
+        sortedPlayers.forEach((p, i) => {
+            p.rank = i + 1;
+        });
+
         const r = INTEREST_VIEW_RADIUS;
         const r2 = r * r;
 
@@ -298,13 +304,16 @@ class NetworkSystem {
                 socket.data._interest.foods = nextFoods;
 
                 // Send Binary Packet (Array)
+                // Appending myRank and totalPlayers
                 socket.emit(EVENT.WORLD_DELTA, [
                     this.serverTick,
                     serverTime,
                     playersUpsert,
                     playersRemove,
                     foodsUpsert,
-                    foodsRemove
+                    foodsRemove,
+                    me.rank || 0,
+                    sortedPlayers.length
                 ]);
                 // DEBUG: Log emit for debug bot
                 if (me.name === 'DebugBot') {

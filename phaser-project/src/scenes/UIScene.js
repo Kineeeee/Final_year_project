@@ -43,6 +43,8 @@ export class UIScene extends Scene {
             roundEnd: (payload) => this.uiManager && this.uiManager.showWinner(payload),
             updateInventory: (payload) => this.uiManager && this.uiManager.updateInventory(payload),
             itemActivated: (payload) => this.uiManager && this.uiManager.onItemActivated(payload),
+            updateRank: (payload) => this.uiManager && this.uiManager.updateRank(payload.rank, payload.total),
+            updateScore: (score) => this.uiManager && this.uiManager.updateScore(score),
         };
 
         Object.entries(this._gameEventBindings).forEach(([event, handler]) => {
@@ -51,7 +53,7 @@ export class UIScene extends Scene {
 
         // Keyboard Inputs (Desktop) - Keep here or move to Controls component?
         // Game.js handles 'keydown', but UIScene usually sets up listeners.
-        if (this.sys.game.device.os.desktop) {
+        if (this.sys.game.device.os.desktop && this.gameMode == 'normal') {
             this._unbindKeyboard();
             const one = () => this.tryUseItem(gameScene, 'speed');
             const two = () => this.tryUseItem(gameScene, 'magnet');
@@ -63,6 +65,7 @@ export class UIScene extends Scene {
             ];
             this._keyboardBindings.forEach(([evt, fn]) => this.input.keyboard.on(evt, fn));
         }
+
     }
 
     _onShutdown() {

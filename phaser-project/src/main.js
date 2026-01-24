@@ -7,10 +7,24 @@ import { Preloader } from './scenes/Preloader';
 import { CustomizeScene } from './scenes/CustomizeScene';
 import { ShopScene } from './scenes/ShopScene';
 import { ShootingScene } from './scenes/ShootingScene';
+import { HowToPlayScene } from './scenes/HowToPlayScene';
 import { AuthManager } from './features/auth/AuthManager';
 
 // Detect Mobile Device
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+// ... (skip unchanged)
+scene: [
+    Boot,
+    Preloader,
+    MainMenu,
+    CustomizeScene,
+    Game,
+    UIScene,
+    ShopScene,
+    ShootingScene,
+    HowToPlayScene,
+    GameOver
+]
 const pixelRatio = window.devicePixelRatio || 1;
 const resolution = Math.max(pixelRatio, 2.0);
 

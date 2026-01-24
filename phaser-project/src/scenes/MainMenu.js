@@ -2,6 +2,7 @@ import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
 import { playerState } from '../services/PlayerState';
 import { UIButton } from '../ui/UIButton';
+import { COLORS, TEXT_STYLES } from '../ui/UIConstants';
 
 export class MainMenu extends Scene {
     constructor() {
@@ -10,123 +11,102 @@ export class MainMenu extends Scene {
 
     create() {
         Logger.info('MainMenu', 'Showing Main Menu');
-
-        // UIScene is session-scoped (Game only). Ensure it never leaks into menus.
         this.scene.stop('UIScene');
 
         const { width, height } = this.scale;
         const centerX = width / 2;
         const centerY = height / 2;
 
-        // ===============================
         // BACKGROUND
-        // ===============================
         this.bg = this.add.tileSprite(0, 0, width, height, 'background').setOrigin(0);
-        this.add.rectangle(0, 0, width, height, 0x000000, 0.35).setOrigin(0);
+        this.add.rectangle(0, 0, width, height, COLORS.OVERLAY, 0.4).setOrigin(0);
         this.cameras.main.fadeIn(800, 0, 0, 0);
 
-        // Root UI container
         const uiRoot = this.add.container(0, 0);
 
-        // ===============================
-        // USER DATA
-        // ===============================
+        // DATA
         const username = playerState.getUsername();
         const coins = playerState.getCoins();
         const highScore = playerState.getHighScore();
 
-        // ===============================
+        // ----------------------------------------------------
         // HEADER
-        // ===============================
-        const header = this.add.container(centerX, centerY - 220);
+        // ----------------------------------------------------
+        const headerY = centerY - 250;
 
-        const logo = this.add.image(0, -40, 'logo').setScale(0.1);
+        // Logo (Animated)
+        const logo = this.add.image(centerX, headerY - 50, 'logo').setScale(0.1);
         this.tweens.add({
             targets: logo,
-            scale: 0.115,
-            duration: 1400,
+            scale: 0.11,
+            duration: 2000,
             yoyo: true,
             repeat: -1,
             ease: 'Sine.easeInOut'
         });
 
-        const titleText = this.add.text(0, 40, 'SNAKE ARENA', {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: 48,
-            color: '#ffffff',
-            stroke: '#000000',
-            strokeThickness: 8
-        }).setOrigin(0.5);
+        // Title
+        const titleText = this.add.text(centerX, headerY + 40, 'SNAKE ARENA', TEXT_STYLES.HEADER).setOrigin(0.5);
 
-        const scoreText = this.add.text(0, 90, `Highest Score: ${highScore}`, {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: 20,
-            color: '#FFD700',
-            stroke: '#000000',
-            strokeThickness: 4
-        }).setOrigin(0.5);
+        // Subheader (Welcome & Stats)
+        const welcomeText = username.startsWith('Guest_') ? 'Guest Player' : username;
 
-        header.add([logo, titleText, scoreText]);
-        uiRoot.add(header);
+        const infoBarY = headerY + 100;
 
-        // ===============================
-        // USER INFO
-        // ===============================
-        const welcomeText = username.startsWith('Guest_')
-            ? 'Welcome, Guest! (Login to save progress)'
-            : `Welcome back, ${username}!`;
+        const userText = this.add.text(centerX - 200, infoBarY, `👤 ${welcomeText}`, { ...TEXT_STYLES.BODY, color: COLORS.TEXT.ACCENT }).setOrigin(0.5);
+        const coinText = this.add.text(centerX, infoBarY, `💰 ${coins}`, { ...TEXT_STYLES.BODY, color: COLORS.TEXT.ACCENT }).setOrigin(0.5);
+        const scoreText = this.add.text(centerX + 200, infoBarY, `🏆 Best: ${highScore}`, { ...TEXT_STYLES.BODY, color: COLORS.TEXT.ACCENT }).setOrigin(0.5);
 
-        uiRoot.add(
-            this.add.text(centerX, centerY - 80, welcomeText, {
-                fontFamily: '"Outfit", sans-serif',
-                fontSize: 22,
-                color: '#00ffaa'
-            }).setOrigin(0.5)
-        );
+        uiRoot.add([logo, titleText, userText, coinText, scoreText]);
 
-        uiRoot.add(
-            this.add.text(centerX, centerY - 50, `Coins: ${coins}`, {
-                fontFamily: '"Outfit", sans-serif',
-                fontSize: 22,
-                color: '#FFD700'
-            }).setOrigin(0.5)
-        );
+        // ----------------------------------------------------
+        // GAME MODES (Cards)
+        // ----------------------------------------------------
+        // We will layout 4 modes. 
+        // 2x2 Grid is fine, but let's make them look like "Cards"
 
-        // ===============================
-        // GAME MODES (GRID 2x2)
-        // ===============================
         const modes = [
-            { label: 'SURVIVAL', mode: 'normal', color: 0x1e90ff, primary: true },
-            { label: 'MATH QUIZ', mode: 'math', color: 0xff8c00 },
-            { label: 'ENGLISH QUIZ', mode: 'english', color: 0x8a2be2 },
-            { label: 'SHOOTING QUIZ', mode: 'shooting', color: 0xdc143c }
+            { label: 'SURVIVAL', mode: 'normal', icon: '🐍', color: 0x1e90ff, primary: true },
+            { label: 'MATH QUIZ', mode: 'math', icon: '➗', color: 0xff8c00 },
+            { label: 'ENGLISH QUIZ', mode: 'english', icon: 'ABC', color: 0x8a2be2 },
+            { label: 'SHOOTING', mode: 'shooting', icon: '🔫', color: 0xdc143c }
         ];
 
-        const startY = centerY + 10;
-        const gapX = 170;
-        const gapY = 90;
+        const gridStartY = centerY + 30;
+        const gridGapX = 220;
+        const gridGapY = 90;
 
         modes.forEach((m, i) => {
-            const x = centerX + (i % 2 === 0 ? -gapX : gapX);
-            const y = startY + Math.floor(i / 2) * gapY;
+            const col = i % 2;
+            const row = Math.floor(i / 2);
+
+            const x = centerX + (col === 0 ? -110 : 110);
+            const y = gridStartY + (row * gridGapY);
+
+            // Using UIButton but styled as a wide card
+            // Or just standard buttons but colored differently
 
             const btn = new UIButton(
                 this,
                 x, y,
-                m.label,
-                () => {
-                    this.startGame(m.mode);
-                },
-                { width: 280, height: 60, color: m.color }
+                `${m.icon}  ${m.label}`,
+                () => this.startGame(m.mode),
+                {
+                    width: 200, // Slightly smaller width to fit side-by-side
+                    height: 70,
+                    color: m.color,
+                    fontSize: 22
+                }
             );
 
             uiRoot.add(btn);
 
+            // Pulse effect for primary mode
             if (m.primary) {
                 this.tweens.add({
                     targets: btn,
-                    scale: 1.08,
-                    duration: 700,
+                    scale: 1.05,
+                    duration: 800,
                     yoyo: true,
                     repeat: -1,
                     ease: 'Sine.easeInOut'
@@ -134,87 +114,103 @@ export class MainMenu extends Scene {
             }
         });
 
-        // ===============================
-        // SECONDARY ACTIONS
-        // ===============================
-        // Customize Button
-        uiRoot.add(
-            new UIButton(
-                this,
-                centerX - 150,
-                centerY + 220,
-                '🎨 Customize',
-                () => {
-                    this.scene.start('CustomizeScene');
-                },
-                { width: 280, height: 60, color: 0x555555 }
-            )
+        // ----------------------------------------------------
+        // BOTTOM ACTIONS (Shop, Customize, Login)
+        // ----------------------------------------------------
+        const bottomY = height - 80;
+
+        // Shop
+        const shopBtn = new UIButton(
+            this,
+            centerX - 120, bottomY,
+            '🛒 SHOP',
+            () => {
+                this.scene.launch('ShopScene', { coins: playerState.getCoins() });
+                this.scene.pause();
+            },
+            {
+                type: 'secondary',
+                width: 180,
+                height: 55
+            }
         );
 
-        // Shop Button
-        uiRoot.add(
-            new UIButton(
-                this,
-                centerX + 150,
-                centerY + 220,
-                '🛒 Shop',
-                () => {
-                    // No need to pass socket or user data, ShopScene uses services
-                    this.scene.launch('ShopScene', {
-                        coins: playerState.getCoins() // Optional sync
-                    });
-                    this.scene.pause();
-                },
-                { width: 280, height: 60, color: 0x228b22 }
-            )
+        // Customize
+        const customizeBtn = new UIButton(
+            this,
+            centerX + 120, bottomY,
+            '🎨 SKINS',
+            () => this.scene.start('CustomizeScene'),
+            {
+                type: 'secondary',
+                width: 180,
+                height: 55
+            }
         );
 
-        // ===============================
-        // LOGIN / LOGOUT
-        // ===============================
+        // Login / Logout
         const isGuest = !localStorage.getItem('token');
-        const authText = isGuest ? 'Login' : 'Logout';
+        const authLabel = isGuest ? 'Login' : 'Logout';
+        const authColor = isGuest ? COLORS.PRIMARY : COLORS.DANGER;
 
-        const authBtn = this.add.text(width - 80, height - 40, authText, {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: 18,
-            color: '#ffffff',
-            backgroundColor: '#333333',
-            padding: { x: 14, y: 8 }
-        })
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true });
+        // Small button in corner
+        const authBtn = new UIButton(
+            this,
+            width - 80, 50, // Top right corner now
+            authLabel,
+            () => {
+                if (isGuest) {
+                    location.reload();
+                } else {
+                    localStorage.clear();
+                    location.reload();
+                }
+            },
+            {
+                width: 100,
+                height: 40,
+                fontSize: 18,
+                color: authColor,
+                type: isGuest ? 'primary' : 'danger'
+            }
+        );
 
-        authBtn.on('pointerdown', () => {
-            localStorage.clear();
-            location.reload();
-        });
+        // Help Button (?)
+        const helpBtn = new UIButton(
+            this,
+            width - 165, 50,
+            '?',
+            () => {
+                this.scene.launch('HowToPlayScene');
+                this.scene.pause();
+            },
+            {
+                width: 50,
+                height: 40,
+                fontSize: 24,
+                color: COLORS.SECONDARY,
+                type: 'secondary'
+            }
+        );
 
-        uiRoot.add(authBtn);
+        uiRoot.add([shopBtn, customizeBtn, helpBtn, authBtn]);
+        this.add.existing(uiRoot);
     }
 
     update() {
         if (this.bg) {
-            this.bg.tilePositionX += 0.4;
-            this.bg.tilePositionY += 0.4;
+            this.bg.tilePositionX += 0.5;
+            this.bg.tilePositionY += 0.5;
         }
     }
 
-    // ===============================
-    // START GAME
-    // ===============================
     startGame(mode) {
         Logger.info('MainMenu', `Starting Game Mode: ${mode}`);
-
         this.cameras.main.fadeOut(500, 0, 0, 0);
-        this.cameras.main.once(
-            Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-            () => {
-                if (mode === 'shooting') {
-                    this.scene.start('ShootingScene');
-                    return;
-                }
-
+        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+            if (mode === 'shooting') {
+                this.scene.start('ShootingScene');
+            } else {
                 const username = playerState.getUsername();
                 const gameData = { name: username, mode };
                 const savedColor = localStorage.getItem('preferredColor');
@@ -222,6 +218,6 @@ export class MainMenu extends Scene {
 
                 this.scene.start('Game', gameData);
             }
-        );
+        });
     }
 }
