@@ -33,7 +33,7 @@ export const CONFIG = {
         SPEED: 900,
     },
 
-    SERVER_URL: 'http://192.168.5.13:3000',
+    SERVER_URL: 'http://192.168.6.140:3000',
 
     NETWORK: {
         // Opt-in: when true, the client will apply server-authoritative interest-managed deltas

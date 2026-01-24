@@ -1,10 +1,28 @@
 import { Logger } from '../utils/Logger';
 import { Food } from '../objects/Food';
+import { PlayerSnake } from '../objects/snake/PlayerSnake';
+import { Snake } from '../objects/snake/Snake';
+import { Coin } from '../objects/Coin';
+import { QuizFood } from '../objects/QuizFood';
+import { effectManager } from '../features/EffectManager';
 
 export class EntityManager {
     constructor(scene, gameState) {
         this.scene = scene;
         this.gameState = gameState;
+
+        // Entities (Owned by Manager now)
+        this.snakes = [];
+        this.otherSnakes = new Map(); // Map<playerId, Snake>
+
+        // Food Groups
+        this.regularFoodGroup = this.scene.add.group({
+            classType: Food,
+            runChildUpdate: true
+        });
+        this.specialFoodGroup = this.scene.add.group({
+            runChildUpdate: true
+        });
 
         // foodId -> timestamp (ms)
         this._pendingFoodRemoval = new Map();
@@ -15,27 +33,143 @@ export class EntityManager {
         this._pendingFoodVisualGraceMs = 2000;
     }
 
-    // --- Players ---
+    // --- Entity Lifecycle ---
+
+    createPlayer(playerInfo) {
+        const player = new PlayerSnake(this.scene, playerInfo.x, playerInfo.y, playerInfo.color);
+        player.isRemote = true;
+        player.playerId = playerInfo.playerId;
+        if (playerInfo.name) player.setName(playerInfo.name);
+
+        if (playerInfo.score > 0) {
+            player.addSections(playerInfo.score);
+            player.score = playerInfo.score;
+        }
+
+        this.snakes.push(player);
+
+        // Initial Effects
+        if (playerInfo.activeEffects) {
+            Object.keys(playerInfo.activeEffects).forEach(itemId => {
+                effectManager.applyEffect(player, itemId, true, 0);
+            });
+        }
+
+        return player;
+    }
+
+    addOtherPlayers(playerInfo) {
+        const otherPlayer = new Snake(this.scene, playerInfo.x, playerInfo.y, playerInfo.color);
+        otherPlayer.isRemote = true;
+        otherPlayer.playerId = playerInfo.playerId;
+        if (playerInfo.name) otherPlayer.setName(playerInfo.name);
+
+        if (playerInfo.score > 0) {
+            otherPlayer.addSections(playerInfo.score);
+            otherPlayer.score = playerInfo.score;
+        }
+
+        if (playerInfo.activeEffects) {
+            Object.keys(playerInfo.activeEffects).forEach(itemId => {
+                effectManager.applyEffect(otherPlayer, itemId, true);
+            });
+        }
+
+        this.otherSnakes.set(playerInfo.playerId, otherPlayer);
+        this.snakes.push(otherPlayer);
+        return otherPlayer;
+    }
+
+    spawnFood(x, y, color, id, type = 'regular', value = 1, data = null) {
+        if (type === 'coin') {
+            const coin = new Coin(this.scene, x, y, id, value);
+            this.specialFoodGroup.add(coin);
+            return;
+        }
+
+        if (type === 'text') {
+            const quizFood = new QuizFood(this.scene, x, y, data);
+            quizFood.id = id;
+            this.specialFoodGroup.add(quizFood);
+            return;
+        }
+
+        let food = this.regularFoodGroup.get(x, y);
+        if (food) {
+            food.onSpawn(x, y, color, type, value, data, id);
+        } else {
+            food = new Food(this.scene, x, y, color);
+            food.id = id;
+            food.onSpawn(x, y, color, type, value, data, id);
+            this.regularFoodGroup.add(food);
+        }
+
+        food.setScale(1.0);
+        food.setRotation(0);
+    }
+
+    update(time, delta) {
+        this.snakes.forEach(snake => {
+            if (snake.alive) {
+                snake.update(time, delta);
+            }
+        });
+    }
+
+    killSnake(snake) {
+        if (!snake || !snake.alive) return;
+        snake.alive = false;
+        snake.destroy();
+        this.snakes = this.snakes.filter(s => s !== snake);
+
+        if (snake.playerId && this.otherSnakes.has(snake.playerId)) {
+            this.otherSnakes.delete(snake.playerId);
+        }
+    }
+
+    findFoodById(id) {
+        // Use group children
+        const regular = this.regularFoodGroup.getChildren();
+        const special = this.specialFoodGroup.getChildren();
+        // Optimize: check regular first as it's most common
+        let found = regular.find(f => f && f.id == id);
+        if (!found) found = special.find(f => f && f.id == id);
+        return found;
+    }
+
+    getFoodChildren() {
+        return [...this.regularFoodGroup.getChildren(), ...this.specialFoodGroup.getChildren()];
+    }
+
+    cleanup() {
+        if (this.snakes) {
+            this.snakes.forEach(s => s.destroy());
+            this.snakes = [];
+        }
+        this.otherSnakes.clear();
+        if (this.regularFoodGroup) this.regularFoodGroup.destroy(true);
+        if (this.specialFoodGroup) this.specialFoodGroup.destroy(true);
+    }
+
+    // --- Players Reconciliation ---
 
     resetPlayersFromState() {
-        const scene = this.scene;
-
         // Destroy existing entities
-        if (scene.snakes) {
-            scene.snakes.forEach((s) => s && s.destroy && s.destroy());
+        if (this.snakes) {
+            this.snakes.forEach((s) => s && s.destroy && s.destroy());
         }
-        scene.snakes = [];
+        this.snakes = [];
 
-        if (scene.otherSnakes) {
-            scene.otherSnakes.forEach((s) => s && s.destroy && s.destroy());
-            scene.otherSnakes.clear();
+        if (this.otherSnakes) {
+            this.otherSnakes.forEach((s) => s && s.destroy && s.destroy());
+            this.otherSnakes.clear();
         } else {
-            scene.otherSnakes = new Map();
+            this.otherSnakes = new Map();
         }
 
-        if (scene.player) {
-            scene.player.destroy();
-            scene.player = null;
+        if (this.scene.player) {
+            this.scene.player.destroy();
+            this.scene.player = null;
         }
 
         const localId = this.gameState?.localPlayerId;
@@ -43,17 +177,19 @@ export class EntityManager {
 
         players.forEach((p) => {
             if (p.playerId === localId) {
-                scene.createPlayer(p);
+                // We still set scene.player for Camera/Game convenience logic
+                this.scene.player = this.createPlayer(p);
+                this.scene.cameraManager.startFollow(this.scene.player.head);
             } else {
-                scene.addOtherPlayers(p);
+                this.addOtherPlayers(p);
             }
         });
     }
 
     applyPlayerSnapshotsFromState() {
-        const scene = this.scene;
         if (!this.gameState) return;
 
+        const scene = this.scene;
         const localId = this.gameState.localPlayerId;
         const players = this.gameState.players;
 
@@ -61,14 +197,16 @@ export class EntityManager {
         if (scene.player && scene.player.playerId && !players.has(scene.player.playerId)) {
             scene.player.destroy();
             scene.player = null;
+            // Also remove from this.snakes
+            this.snakes = this.snakes.filter(s => s.playerId !== localId);
         }
 
-        if (scene.otherSnakes) {
-            for (const [id, snake] of scene.otherSnakes.entries()) {
+        if (this.otherSnakes) {
+            for (const [id, snake] of this.otherSnakes.entries()) {
                 if (!players.has(id)) {
                     snake.destroy();
-                    scene.otherSnakes.delete(id);
-                    scene.snakes = scene.snakes.filter((s) => s !== snake);
+                    this.otherSnakes.delete(id);
+                    this.snakes = this.snakes.filter((s) => s !== snake);
                 }
             }
         }
@@ -77,15 +215,16 @@ export class EntityManager {
         for (const [id, snapshot] of players.entries()) {
             if (id === localId) {
                 if (!scene.player) {
-                    scene.createPlayer(snapshot);
+                    scene.player = this.createPlayer(snapshot);
+                    scene.cameraManager.startFollow(scene.player.head);
                 } else {
                     this.updateSnakeState(scene.player, snapshot);
                 }
             } else {
-                if (!scene.otherSnakes.has(id)) {
-                    scene.addOtherPlayers(snapshot);
+                if (!this.otherSnakes.has(id)) {
+                    this.addOtherPlayers(snapshot);
                 } else {
-                    this.updateSnakeState(scene.otherSnakes.get(id), snapshot);
+                    this.updateSnakeState(this.otherSnakes.get(id), snapshot);
                 }
             }
         }
@@ -158,7 +297,7 @@ export class EntityManager {
         }
 
         // Destroy entities not in state
-        const existing = scene.getFoodChildren ? scene.getFoodChildren() : [];
+        const existing = this.getFoodChildren();
         existing.forEach((f) => {
             if (!f || !f.id) return;
             if (desiredIds.has(f.id)) return;
@@ -201,9 +340,9 @@ export class EntityManager {
                 continue;
             }
 
-            const existingFood = scene.findFoodById ? scene.findFoodById(id) : null;
+            const existingFood = this.findFoodById(id);
             if (!existingFood) {
-                scene.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data);
+                this.spawnFood(f.x, f.y, f.color, f.id, f.type, f.value, f.data);
             } else {
                 // IMPORTANT:
                 // - Don't fight magnet animation (foodEaten visual) by snapping back to server position.
@@ -230,10 +369,9 @@ export class EntityManager {
     }
 
     onFoodEatenVisual(data) {
-        const scene = this.scene;
         if (!data) return;
 
-        const food = scene.findFoodById ? scene.findFoodById(data.foodId) : null;
+        const food = this.findFoodById(data.foodId);
         // Tombstone even if entity isn't found yet; prevents respawn on next reconcile.
         if (data.foodId) {
             this._pendingFoodRemoval.set(data.foodId, Date.now());
@@ -246,10 +384,10 @@ export class EntityManager {
         food.__pendingRemovalAt = Date.now();
 
         let eater = null;
-        if (scene.player && scene.player.playerId === data.playerId) {
-            eater = scene.player;
-        } else if (scene.otherSnakes && scene.otherSnakes.has(data.playerId)) {
-            eater = scene.otherSnakes.get(data.playerId);
+        if (this.scene.player && this.scene.player.playerId === data.playerId) {
+            eater = this.scene.player;
+        } else if (this.otherSnakes && this.otherSnakes.has(data.playerId)) {
+            eater = this.otherSnakes.get(data.playerId);
         }
 
         if (eater && eater.head && eater.head.active) {

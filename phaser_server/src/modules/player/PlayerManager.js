@@ -125,10 +125,12 @@ class PlayerManager {
     handlePlayerInput(id, inputData) {
         try {
             if (this.players[id]) {
-                // Store target rotation from client input
-                this.players[id].targetRotation = inputData.angle;
+                // Validate Input
+                if (typeof inputData.angle === 'number' && !isNaN(inputData.angle)) {
+                    this.players[id].targetRotation = inputData.angle;
+                }
                 // Update boosting state (Input Request)
-                this.players[id].wantsToBoost = inputData.isBoosting;
+                this.players[id].wantsToBoost = !!inputData.isBoosting;
             }
         } catch (error) {
             Logger.error('PlayerManager', 'Error handling playerInput:', error);
@@ -203,7 +205,8 @@ class PlayerManager {
                     this.players[id].inventory = data.inventory;
                 }
                 if (data.coins) {
-                    this.players[id].coins = parseInt(data.coins);
+                    const parsed = parseInt(data.coins);
+                    this.players[id].coins = isNaN(parsed) ? 0 : Math.max(0, parsed);
                 }
             }
 

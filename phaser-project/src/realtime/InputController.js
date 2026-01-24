@@ -30,37 +30,10 @@ export class InputController {
             return { angle, isBoosting };
         }
 
-        // DESKTOP
-        let gestureActive = false;
-
-        if (
-            scene.controlMode === 'GESTURE' &&
-            scene.gestureController &&
-            scene.gestureController.running
-        ) {
-            const gestureParams = scene.gestureController.getParams();
-
-            if (gestureParams.angle !== null) {
-                angle = gestureParams.angle;
-                isBoosting = gestureParams.isBoosting;
-                gestureActive = true;
-            } else {
-                // Lost hand tracking: fall back to last known angle
-                if (scene.gestureController.angle !== null) {
-                    angle = scene.gestureController.angle;
-                    isBoosting = false;
-                    gestureActive = true;
-                }
-            }
-        }
-
-        if (!gestureActive) {
-            if (scene.controlMode === 'MOUSE') {
-                angle = player.getLookAngle();
-                isBoosting = player.spaceKey.isDown || scene.input.activePointer.isDown;
-            } else if (scene.controlMode === 'GESTURE') {
-                if (typeof angle === 'undefined') angle = player.rotation;
-            }
+        if (!scene.isMobile) {
+            // DESKTOP: Always Mouse
+            angle = player.getLookAngle();
+            isBoosting = player.spaceKey.isDown || scene.input.activePointer.isDown;
         }
 
         return { angle, isBoosting };

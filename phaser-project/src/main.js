@@ -6,6 +6,7 @@ import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
 import { CustomizeScene } from './scenes/CustomizeScene';
 import { ShopScene } from './scenes/ShopScene';
+import { ShootingScene } from './scenes/ShootingScene';
 import { AuthManager } from './features/auth/AuthManager';
 
 // Detect Mobile Device
@@ -56,6 +57,7 @@ const config = {
         Game,
         UIScene,
         ShopScene,
+        ShootingScene,
         GameOver
     ]
 };
