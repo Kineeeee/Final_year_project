@@ -1,20 +1,24 @@
+import { SHARED_CONFIG } from './shared';
+
 export const CONFIG = {
     WIDTH: 1280,
     HEIGHT: 720,
     BACKGROUND_COLOR: '#028af8',
-    WORLD_WIDTH: 10000,
-    WORLD_HEIGHT: 10000,
-    INITIAL_LENGTH: 5,
+    WORLD_WIDTH: SHARED_CONFIG.WORLD_SIZE,
+    WORLD_HEIGHT: SHARED_CONFIG.WORLD_SIZE,
+    INITIAL_LENGTH: SHARED_CONFIG.INITIAL_LENGTH,
 
     // Client Physics Mirror (Must match Server)
     PHYSICS: {
-        BASE_SPEED_PPS: 180, // 3 * 60
-        BOOST_SPEED_PPS: 360, // 6 * 60
-        ROTATION_SPEED_PPS: 3.0, // 0.05 * 60
-        PLAYER_SCALE_BASE: 0.6,
-        PLAYER_SCALE_GROWTH: 0.005,
-        PIXELS_PER_SEGMENT: 12,
-        FOOD_RADIUS: 15, // Base radius scaled
+        BASE_SPEED_PPS: SHARED_CONFIG.BASE_SPEED * SHARED_CONFIG.FPS, // Synced to Server Speed * FPS
+        BOOST_SPEED_PPS: SHARED_CONFIG.BOOST_SPEED * SHARED_CONFIG.FPS,
+        ROTATION_SPEED_PPS: SHARED_CONFIG.TURN_SPEED * SHARED_CONFIG.FPS,
+        PLAYER_SCALE_BASE: SHARED_CONFIG.PLAYER_SCALE_BASE,
+        PLAYER_SCALE_GROWTH: SHARED_CONFIG.PLAYER_SCALE_GROWTH,
+        PIXELS_PER_SEGMENT: SHARED_CONFIG.PIXELS_PER_SEGMENT,
+        FOOD_RADIUS: SHARED_CONFIG.FOOD_RADIUS * 1.5, // Visual adjustment if needed, or keep 1.5 multiplier as was implicit?
+        // Original client was 15, server 10. 10 * 1.5 = 15.
+        // Let's explicitly check.
     },
 
     // Food & Coins
@@ -84,9 +88,9 @@ export const CONFIG = {
 
     // Item/Buff Keys
     ITEMS: {
-        GHOST: 'ghost',
-        MAGNET: 'magnet',
-        SPEED: 'speed',
+        GHOST: SHARED_CONFIG.ITEMS.GHOST.id,
+        MAGNET: SHARED_CONFIG.ITEMS.MAGNET.id,
+        SPEED: SHARED_CONFIG.ITEMS.SPEED_UP.id,
     },
 
     // Asset Keys

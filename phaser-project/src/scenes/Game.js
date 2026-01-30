@@ -1,11 +1,11 @@
 import { Scene } from 'phaser';
-import { CameraManager } from '../features/CameraManager';
-import { effectManager } from '../features/EffectManager';
+import { CameraManager } from '../core/camera/CameraManager';
+import { effectManager } from '../core/effects/EffectManager';
 import { EntityManager } from '../world/EntityManager';
 import { Logger } from '../utils/Logger';
 
 import { CONFIG } from '../config/constants';
-import { GameSession } from '../session/GameSession';
+import { GameSession } from '../core/state/GameSession';
 
 export class Game extends Scene {
     constructor() {
@@ -45,6 +45,11 @@ export class Game extends Scene {
         this.scene.bringToTop(CONFIG.SCENES.UI);
 
         this.coinsCollected = 0;
+
+        // UI Event Listeners
+        this.events.on('ui:floatingText', ({ x, y, message, color }) => {
+            this.showFloatingText(x, y, message, color);
+        });
 
         // Start session-owned state/network/input
         this.session = new GameSession(this, {

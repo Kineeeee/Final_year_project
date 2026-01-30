@@ -1,6 +1,6 @@
 import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
-import { Snake } from '../objects/snake/Snake';
+import { Snake } from '../modules/snake/Snake';
 import { UIButton } from '../ui/UIButton';
 import { COLORS, TEXT_STYLES } from '../ui/UIConstants';
 

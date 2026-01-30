@@ -20,7 +20,8 @@ const Logger = require('../../utils/Logger');
 
 class PlayerManager {
     constructor(io, container) {
-        this.io = io;
+        // this.io = io; // Decoupled: Use EventBus via container
+
         this.container = container;
         this.players = {};
 
@@ -109,7 +110,7 @@ class PlayerManager {
 
         // Notify the dead player specifically (so they see Game Over)
         if (!player.isBot) {
-            this.io.to(playerId).emit('playerDied', playerId);
+            this.container.get('eventBus').emit('notifyPlayerDeath', { socketId: playerId, data: playerId });
 
             // Economy: Save coins one last time just in case
             if (player.username && !player.username.startsWith('Guest_')) {
@@ -126,7 +127,7 @@ class PlayerManager {
                                 'PlayerManager',
                                 `High Score Check/Update for ${user.username}: ${user.highScore}`
                             );
-                            this.io.to(playerId).emit('updateHighScore', user.highScore);
+                            this.container.get('eventBus').emit('updateHighScore', { socketId: playerId, highScore: user.highScore });
                         }
                     })
                     .catch((err) => Logger.error('PlayerManager', 'Save High Score Error:', err));
@@ -134,7 +135,7 @@ class PlayerManager {
         }
 
         // Notify everyone else that this player is gone (so they remove the snake)
-        this.io.emit('playerDisconnected', playerId);
+        this.container.get('eventBus').emit('playerDisconnected', playerId);
     }
 
     handlePlayerInput(id, inputData) {
@@ -194,21 +195,25 @@ class PlayerManager {
                             }
 
                             // Emit updates
-                            this.io.to(id).emit('updateCoins', this.players[id].coins);
-                            this.io.to(id).emit('updateInventory', this.players[id].inventory);
+                            const bus = this.container.get('eventBus');
+                            bus.emit('updateCoins', { socketId: id, coins: this.players[id].coins });
+                            bus.emit('updateInventory', { socketId: id, inventory: this.players[id].inventory });
 
-                            this.io.to(id).emit('playerState', {
-                                coins: this.players[id].coins,
-                                inventory: this.players[id].inventory,
-                                id: id,
-                                color: this.players[id].color,
-                                name: this.players[id].name,
-                                highScore: user.highScore,
+                            bus.emit('playerState', {
+                                socketId: id,
+                                data: {
+                                    coins: this.players[id].coins,
+                                    inventory: this.players[id].inventory,
+                                    id: id,
+                                    color: this.players[id].color,
+                                    name: this.players[id].name,
+                                    highScore: user.highScore,
+                                }
                             });
 
                             // Send Shop Items from DB (delegated via ShopManager potentially, but here directly or via ShopManager)
                             if (this.shopManager) {
-                                this.io.to(id).emit('shopItems', this.shopManager.getShopItems());
+                                bus.emit('shopItems', { socketId: id, items: this.shopManager.getShopItems() });
                             }
                         } else {
                             Logger.warn(
@@ -230,7 +235,7 @@ class PlayerManager {
             }
 
             // Broadcast the updated properties to everyone so they see the new color
-            this.io.emit('playerProperties', {
+            this.container.get('eventBus').emit('playerProperties', {
                 id: id,
                 color: this.players[id].color,
                 name: this.players[id].name,
@@ -278,7 +283,7 @@ class PlayerManager {
         Object.keys(player.activeEffects).forEach((effectId) => {
             if (player.activeEffects[effectId] < now) {
                 delete player.activeEffects[effectId];
-                this.io.emit('itemDeactivated', { playerId: id, itemId: effectId });
+                this.container.get('eventBus').emit('itemDeactivated', { playerId: id, itemId: effectId });
             }
         });
     }
@@ -515,7 +520,7 @@ class PlayerManager {
 
                         // Common Post-Process
                         if (result.eaten) {
-                            this.io.emit('foodEaten', {
+                            this.container.get('eventBus').emit('foodEaten', {
                                 foodId: f.id,
                                 playerId: id,
                                 score: player.score,
@@ -571,7 +576,7 @@ class PlayerManager {
             }
         });
         // Notify all clients to reset local score display
-        this.io.emit('resetScores'); // Helper event (Client needs to handle this)
+        this.container.get('eventBus').emit('resetScores'); // Helper event (Client needs to handle this)
     }
 
     killAllPlayers() {
@@ -579,7 +584,7 @@ class PlayerManager {
             const player = this.players[id];
             player.alive = false;
             // Emit death event
-            this.io.emit('playerDied', { playerId: id });
+            this.container.get('eventBus').emit('playerDied', { playerId: id });
 
             // Clean up player from map (optional, or wait for them to reconnect?)
             // Usually we keep the socket connection but reset their state to 'dead'
@@ -623,7 +628,7 @@ class PlayerManager {
         }
 
         if (foodBatch.length > 0) {
-            this.io.emit('batchFood', foodBatch);
+            this.container.get('eventBus').emit('batchFood', foodBatch);
         }
     }
 }

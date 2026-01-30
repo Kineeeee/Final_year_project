@@ -5,8 +5,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const parser = require('socket.io-msgpack-parser');
 const cors = require('cors');
-const connectDB = require('./src/config/db');
-const authRoutes = require('./src/modules/auth/AuthRoutes.js');
+const connectDB = require('./src/infra/database/MongoConnection');
+const authRoutes = require('./src/modules/auth/http/AuthRoutes.js');
 const Logger = require('./src/utils/Logger');
 
 const { PORT } = require('./src/config/constants');
@@ -26,16 +26,22 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 // --- giới hạn cho login và đăng ký ---
 const authLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 giờ
-    max: 10, // giới hạn mỗi IP mỗi cửa sổ thời gian
-    message: 'too many login/signup attempts from this IP, please try again after an hour',
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many login prevention, please try again after an hour',
 });
 
 // 1.Connect to Database
 connectDB();
 
+const cookieParser = require('cookie-parser');
+
 // 2.Middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://127.0.0.1:5173'], // Allow Vite defaults
+    credentials: true
+}));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.static(__dirname + '/public'));
 
@@ -51,7 +57,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
     parser,
     cors: {
-        origin: '*',
+        origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
         methods: ['GET', 'POST'],
     },
 });

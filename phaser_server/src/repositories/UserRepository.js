@@ -1,4 +1,4 @@
-const User = require('../models/User');
+const User = require('../modules/auth/User');
 const Logger = require('../utils/Logger');
 
 class UserRepository {

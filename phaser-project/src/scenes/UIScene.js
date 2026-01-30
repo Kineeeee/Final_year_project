@@ -1,5 +1,5 @@
 import { Scene } from 'phaser';
-import { UIManager } from '../ui/UIManager';
+import { UIManager } from '../modules/ui/UIManager';
 
 export class UIScene extends Scene {
     constructor() {

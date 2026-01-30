@@ -1,6 +1,6 @@
 import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
-import { playerState } from '../services/PlayerState';
+import { playerState } from '../core/services/PlayerState';
 import { UIButton } from '../ui/UIButton';
 import { COLORS, TEXT_STYLES } from '../ui/UIConstants';
 

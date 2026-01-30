@@ -46,10 +46,14 @@ class GameServer {
     }
 
     setupSystems() {
-        const NetworkSystem = require('./systems/NetworkSystem');
+        const NetworkSystem = require('./core/systems/NetworkSystem');
+        const BroadcastSystem = require('./core/systems/BroadcastSystem');
 
         this.networkSystem = new NetworkSystem(this.io, this.container, this.config);
+        this.broadcastSystem = new BroadcastSystem(this.io, this.container, this.config);
+
         this.container.register('networkSystem', this.networkSystem);
+        this.container.register('broadcastSystem', this.broadcastSystem);
 
         this.networkSystem.initialize();
     }
@@ -118,15 +122,15 @@ class GameServer {
         // Main Update Loop (Physics @ 60 FPS)
         setInterval(() => this.update(), 1000 / FPS);
 
-        // Broadcast Loop (Network) - Delegated to NetworkSystem
+        // Broadcast Loop (Network) - Delegated to BroadcastSystem
         // 50% Reduction in traffic without affecting physics precision
-        setInterval(() => this.networkSystem.broadcastGameUpdate(), 1000 / BROADCAST_FPS);
+        setInterval(() => this.broadcastSystem.broadcastGameUpdate(), 1000 / BROADCAST_FPS);
 
         // Food Refill Loop
         setInterval(() => this.foodManager.refillFood(), FOOD_REFILL_INTERVAL);
 
         // Leaderboard Loop (global)
-        setInterval(() => this.networkSystem.broadcastLeaderboard(), 1000 / LEADERBOARD_FPS);
+        setInterval(() => this.broadcastSystem.broadcastLeaderboard(), 1000 / LEADERBOARD_FPS);
     }
 
     update() {

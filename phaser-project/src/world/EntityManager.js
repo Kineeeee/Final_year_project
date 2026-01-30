@@ -1,10 +1,10 @@
 import { Logger } from '../utils/Logger';
-import { Food } from '../objects/Food';
-import { PlayerSnake } from '../objects/snake/PlayerSnake';
-import { Snake } from '../objects/snake/Snake';
-import { Coin } from '../objects/Coin';
-import { QuizFood } from '../objects/QuizFood';
-import { effectManager } from '../features/EffectManager';
+import { Food } from '../modules/food/Food';
+import { PlayerSnake } from '../modules/snake/PlayerSnake';
+import { Snake } from '../modules/snake/Snake';
+import { Coin } from '../modules/food/Coin';
+import { QuizFood } from '../modules/food/QuizFood';
+import { effectManager } from '../core/effects/EffectManager';
 
 export class EntityManager {
     constructor(scene, gameState) {
@@ -24,6 +24,12 @@ export class EntityManager {
             runChildUpdate: true
         });
 
+        // Snake Segment Pool
+        this.segmentPool = this.scene.add.group({
+            classType: Phaser.GameObjects.Image,
+            maxSize: -1
+        });
+
         // foodId -> timestamp (ms)
         this._pendingFoodRemoval = new Map();
         this._pendingFoodRemovalTtlMs = 10000;
@@ -36,7 +42,7 @@ export class EntityManager {
     // --- Entity Lifecycle ---
 
     createPlayer(playerInfo) {
-        const player = new PlayerSnake(this.scene, playerInfo.x, playerInfo.y, playerInfo.color);
+        const player = new PlayerSnake(this.scene, playerInfo.x, playerInfo.y, playerInfo.color, this.segmentPool);
         player.isRemote = false; // Local player controls itself (client-prediction)
         player.playerId = playerInfo.playerId;
         if (playerInfo.name) player.setName(playerInfo.name);
@@ -59,7 +65,7 @@ export class EntityManager {
     }
 
     addOtherPlayers(playerInfo) {
-        const otherPlayer = new Snake(this.scene, playerInfo.x, playerInfo.y, playerInfo.color);
+        const otherPlayer = new Snake(this.scene, playerInfo.x, playerInfo.y, playerInfo.color, 'snake-circle', this.segmentPool);
         otherPlayer.isRemote = true;
         otherPlayer.playerId = playerInfo.playerId;
         if (playerInfo.name) otherPlayer.setName(playerInfo.name);
@@ -149,6 +155,7 @@ export class EntityManager {
         this.otherSnakes.clear();
         if (this.regularFoodGroup) this.regularFoodGroup.destroy(true);
         if (this.specialFoodGroup) this.specialFoodGroup.destroy(true);
+        if (this.segmentPool) this.segmentPool.destroy(true);
     }
 
     // --- Players Reconciliation ---

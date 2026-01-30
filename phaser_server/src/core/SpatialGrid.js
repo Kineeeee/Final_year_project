@@ -14,12 +14,12 @@ class SpatialGrid {
         // Map<cellKey(string), Set<entity>>
         // Use Map/Set for O(1) add/delete
         this.cells = new Map();
-        
+
         // Track which keys an entity belongs to for faster updates
         // WeakMap isn't suitable if we want to iterate easily, but Map<entityId, string[]> works
         // However, sticking to storing keys on entity instance is faster if allowed (e.g. entity._gridKeys)
         // If we want minimal intrusion, we use a separate map.
-        this.entityKeys = new Map(); 
+        this.entityKeys = new Map();
     }
 
     /**
@@ -49,7 +49,7 @@ class SpatialGrid {
         // For now, simpler point-based registration (Head)
         // Or if entity has radius, register in all overlapping cells
         const keys = this.getOverlappingKeys(entity);
-        
+
         this.entityKeys.set(entity.id, keys);
 
         for (const key of keys) {
@@ -96,7 +96,7 @@ class SpatialGrid {
     getOverlappingKeys(entity) {
         const x = entity.x;
         const y = entity.y;
-        
+
         // Default to point check
         let minCol = this.getCellIndex(x);
         let minRow = this.getCellIndex(y);
@@ -130,7 +130,7 @@ class SpatialGrid {
      */
     query(x, y, radius) {
         const results = new Set();
-        
+
         const minCol = this.getCellIndex(x - radius);
         const maxCol = this.getCellIndex(x + radius);
         const minRow = this.getCellIndex(y - radius);
@@ -155,7 +155,7 @@ class SpatialGrid {
      * To avoid Set overhead, we can return iterator or flatten.
      * BUT Set is safer to avoid double-checking the same entity.
      */
-    
+
     getStats() {
         return {
             cells: this.cells.size,
