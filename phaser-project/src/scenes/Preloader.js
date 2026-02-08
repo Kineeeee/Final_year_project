@@ -38,6 +38,12 @@ export class Preloader extends Scene {
         // for snake
         this.load.image('snake-circle', 'circle.png');
         this.load.image('background', 'tile.png');
+        this.load.image('menu-bg', 'menu_bg.png'); // Now pixel stadium
+        this.load.image('icon-survival', 'snake_icon_transparent.png');
+        this.load.image('icon-math', 'math_icon_transparent.png');
+        this.load.image('icon-english', 'english_icon_transparent.png');
+        this.load.image('icon-shooting', 'shooting_icon.png');
+
         this.load.image('food', 'hex.png');
         this.load.image('snake-eye', 'eye-white.png');
         this.load.image('snake-pupil', 'eye-black.png');
