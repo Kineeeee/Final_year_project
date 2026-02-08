@@ -32,6 +32,11 @@ class RedisClient {
         return this.client.zAdd(key, { score, value: member });
     }
 
+    async zIncrBy(key, increment, member) {
+        if (!this.isConnected) return;
+        return this.client.zIncrBy(key, increment, member);
+    }
+
     async zAddBatch(key, members) {
         if (!this.isConnected) return;
         // members = [{ score: 10, value: 'name' }, ...]
@@ -41,6 +46,42 @@ class RedisClient {
     async zRevRangeWithScores(key, start, stop) {
         if (!this.isConnected) return [];
         return this.client.zRangeWithScores(key, start, stop, { REV: true });
+    }
+
+    // Hash Operations for Metadata
+    async hSet(key, field, value) {
+        if (!this.isConnected) return;
+        return this.client.hSet(key, field, value);
+    }
+
+    async hMSet(key, obj) {
+        if (!this.isConnected) return;
+        return this.client.hSet(key, obj);
+    }
+
+    async hGet(key, field) {
+        if (!this.isConnected) return null;
+        return this.client.hGet(key, field);
+    }
+
+    async hGetAll(key) {
+        if (!this.isConnected) return {};
+        return this.client.hGetAll(key);
+    }
+
+    async hDel(key, field) {
+        if (!this.isConnected) return;
+        return this.client.hDel(key, field);
+    }
+
+    async mGet(keys) {
+        if (!this.isConnected) return [];
+        return this.client.mGet(keys);
+    }
+
+    async hmGet(key, fields) {
+        if (!this.isConnected) return [];
+        return this.client.hmGet(key, fields);
     }
 }
 

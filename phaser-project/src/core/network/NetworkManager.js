@@ -76,7 +76,8 @@ export class NetworkManager {
             Logger.info('NetworkManager', 'Connected to Server');
             const initData = {
                 color: playerDetails.color,
-                name: playerDetails.name
+                name: playerDetails.name,
+                token: localStorage.getItem('token') // SECURITY: Send Token
             };
 
             const savedInventory = localStorage.getItem('inventory');

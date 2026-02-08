@@ -12,13 +12,16 @@ const UserSchema = new mongoose.Schema({
     inventory: {
         type: [
             {
-                itemId: { type: String, required: true },
+                itemId: {
+                    type: String,
+                    required: true
+                },
                 quantity: { type: Number, default: 0 },
             },
         ],
         default: [],
     },
     refreshToken: { type: String, default: null }, // Store the latest refresh token
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model('User', UserSchema);

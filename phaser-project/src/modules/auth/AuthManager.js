@@ -1,4 +1,5 @@
 import { AuthService } from '../../core/services/AuthService';
+import { playerState } from '../../core/services/PlayerState';
 import { Logger } from '../../utils/Logger';
 
 export class AuthManager {
@@ -86,13 +87,9 @@ export class AuthManager {
     }
 
     saveSession(data) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('username', data.username);
-        localStorage.setItem('coins', data.coins);
-        localStorage.setItem('highScore', data.highScore);
-        if (data.color) {
-            localStorage.setItem('preferredColor', data.color);
-        }
+        // Delegate to PlayerState for Source of Truth
+        // We import the singleton instance. 
+        playerState.updateFromAuthData(data);
     }
 
     hideOverlay() {
@@ -104,13 +101,19 @@ export class AuthManager {
         const savedUsername = localStorage.getItem('username');
 
         if (savedToken) {
-            this.hideOverlay();
-            this.gameStartCallback();
-        } else if (savedUsername && savedUsername.startsWith('Guest_')) {
+            // Validate token existence (basic check), maybe verify expiry locally?
+            // For now, assume if token exists, we try to use it. 
+            // If invalid, Socket/NetworkManager will fail or handle it? 
+            // Ideally we should verify with server, but for speed we trust local token presence 
+            // and let the Background Refresh Token logic handle validity if needed?
+            // Wait, logic below tries to refresh if NO token.
             this.hideOverlay();
             this.gameStartCallback();
         } else {
-            // Try to refresh token (HttpOnly Cookie)
+            // GUEST or EXPIRED:
+            // Do NOT auto-login Guest. Always show overlay to allow "Login" or "Continue as Guest".
+
+            // Try to refresh token (HttpOnly Cookie) in background just in case
             try {
                 const data = await this.authService.refreshToken();
                 if (data && data.token) {
@@ -120,7 +123,7 @@ export class AuthManager {
                 }
             } catch (e) {
                 // Not logged in, stay on overlay
-                console.log('Auto-login failed:', e.message);
+                console.log('Auto-login failed / No session:', e.message);
             }
         }
     }

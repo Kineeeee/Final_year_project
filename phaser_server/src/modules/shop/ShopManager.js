@@ -1,5 +1,5 @@
 const Item = require('../../models/Item');
-const User = require('../auth/User');
+const User = require('../../models/User');
 const Logger = require('../../utils/Logger');
 const { ITEMS } = require('../../config/constants');
 

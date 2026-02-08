@@ -4,6 +4,8 @@ export class CommandQueue {
     constructor() {
         this._latestInput = null;
         this._useItemQueue = [];
+        this.lastInputTime = 0;
+        this.throttleMs = 33; // ~30Hz
     }
 
     enqueue(command) {
@@ -24,9 +26,14 @@ export class CommandQueue {
         if (!networkManager) return;
 
         if (this._latestInput) {
-            const { angle, isBoosting } = this._latestInput.payload;
-            networkManager.sendPlayerInput(angle, isBoosting);
-            this._latestInput = null;
+            const now = Date.now();
+            // Throttle to ~30Hz (33ms)
+            if (now - this.lastInputTime >= this.throttleMs) {
+                const { angle, isBoosting } = this._latestInput.payload;
+                networkManager.sendPlayerInput(angle, isBoosting);
+                this._latestInput = null;
+                this.lastInputTime = now;
+            }
         }
 
         if (this._useItemQueue.length) {

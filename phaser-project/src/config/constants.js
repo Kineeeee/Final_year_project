@@ -115,6 +115,10 @@ export const CONFIG = {
         },
     },
 
+    GRAPHICS: {
+        LOW_QUALITY: false, // Set to true to disable shadows and particles for low-end devices
+    },
+
     SCENES: {
         GAME: 'Game',
         UI: 'UIScene',

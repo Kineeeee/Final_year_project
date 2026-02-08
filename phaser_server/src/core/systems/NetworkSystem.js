@@ -1,5 +1,6 @@
 const Logger = require('../../utils/Logger');
 const RedisClient = require('../../infra/database/RedisConnection');
+const AuthService = require('../../modules/auth/AuthService');
 const { SOCKET_EVENT } = require('../../events/EventTypes');
 
 class NetworkSystem {
@@ -42,6 +43,9 @@ class NetworkSystem {
         bus.on('itemDeactivated', (data) => this.io.emit('itemDeactivated', data));
         bus.on('foodEaten', (data) => this.io.emit('foodEaten', data));
         bus.on('notifyPlayerDeath', ({ socketId, data }) => this.io.to(socketId).emit('playerDied', data));
+
+        // NEW: Bot Events
+        bus.on('botJoined', (botData) => this.io.emit(SOCKET_EVENT.NEW_PLAYER, botData));
     }
 
     handleConnection(socket) {
@@ -118,7 +122,46 @@ class NetworkSystem {
         });
 
         socket.on(SOCKET_EVENT.INIT_PLAYER, (data) => {
-            this.playerManager.handleInitPlayer(socket.id, data);
+            // SECURITY: Verify Token if provided
+            let finalData = { ...data };
+
+            if (data.token) {
+                const decoded = AuthService.verifyToken(data.token);
+
+                if (decoded) {
+                    Logger.info('NetworkSystem', `Authenticated User: ${decoded.username}`);
+                    // TRUSTED: Use username from token
+                    finalData.name = decoded.username;
+                    finalData.username = decoded.username; // Explicitly set verified username
+
+                    // Mark socket as authenticated (optional)
+                    socket.data.user = decoded;
+                } else {
+                    Logger.warn('NetworkSystem', `Invalid Token from ${socket.id}. Falling back to Guest.`);
+                    // Invalid Token: Treat as Guest, but sanitize name to prevent spoofing
+                    // If they tried to send a registered name without token, we should block or prefix it.
+                    // For now, simpler approach: If invalid token, just treat name as display name but NOT username (DB key)
+                    delete finalData.username;
+                    finalData.name = `Guest_${Math.floor(Math.random() * 1000)}`;
+                }
+            } else {
+                // No Token: Guest Mode
+                // Sanitize: If name looks like a real user, maybe prefix it?
+                // Or just ensure PlayerManager treats it as Guest if no 'username' prop is set.
+                // PlayerManager uses data.name to set player.username if we aren't careful.
+
+                // We MUST ensure PlayerManager knows this is a Guest.
+                // Current PlayerManager logic: 
+                // if (data.name) this.players[id].username = data.name; -> THIS IS THE FLAW.
+
+                // FIX: We FORCE a Guest name if no token.
+                if (!finalData.name || !finalData.name.startsWith('Guest_')) {
+                    finalData.name = `Guest_${Math.floor(Math.random() * 1000)}`
+                }
+                delete finalData.username;
+            }
+
+            this.playerManager.handleInitPlayer(socket.id, finalData);
         });
 
         // Shop

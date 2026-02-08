@@ -344,6 +344,12 @@ export class Snake {
     }
 
     updateVisuals(time) {
+        // Low Quality Optimization
+        if (CONFIG.GRAPHICS.LOW_QUALITY) {
+            if (this.shadow) this.shadow.setVisible(false);
+            return;
+        }
+
         // Update Shadow
         if (this.shadow) {
             this.shadow.update();
@@ -474,6 +480,8 @@ export class Snake {
     }
 
     setSpeedEffect(active) {
+        if (CONFIG.GRAPHICS.LOW_QUALITY) return;
+
         this.isSpeedActive = active;
         if (active) {
             if (!this.speedEmitter) {

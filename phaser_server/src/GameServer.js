@@ -89,6 +89,7 @@ class GameServer {
         this.container.register('spawnManager', this.spawnManager);
         this.container.register('eventBus', this.eventBus);
         this.container.register('io', this.io); // Register IO service
+        this.container.register('gameServer', this); // Register GameServer instance
 
         // 4. Configure Managers
         this.foodManager.setConfig(this.config);

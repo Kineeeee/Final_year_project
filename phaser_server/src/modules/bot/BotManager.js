@@ -50,17 +50,9 @@ class BotManager {
             boostTimer: 0,
         };
 
-        // Add to PlayerManager
-        // Note: Direct access for now, but cleaner would be an addPlayer method in PlayerManager
-        const players = this.playerManager.getAllPlayers();
-        players[id] = botData;
+        // DECOUPLED: Use PlayerManager API
+        this.playerManager.addBot(botData);
 
-        // SPATIAL GRID: Add Bot
-        if (this.playerManager.spatialGrid) {
-            this.playerManager.spatialGrid.add(botData);
-        }
-
-        this.io.emit('newPlayer', players[id]);
     }
 
     update() {

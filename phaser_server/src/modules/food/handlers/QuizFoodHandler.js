@@ -28,9 +28,9 @@ class QuizFoodHandler {
         const result = this.quizManager.checkAnswer(food);
         if (result) {
             if (result.correct) {
-                player.score += result.reward; // Big Bonus
+                await this.container.get('playerManager').updatePlayerScore(player, result.reward); // Big Bonus
             } else {
-                player.score = Math.max(0, player.score - result.penalty); // Penalty
+                await this.container.get('playerManager').updatePlayerScore(player, -result.penalty); // Penalty
             }
 
             // Emit Result for Visual Feedback

@@ -1,6 +1,7 @@
 import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
 import { playerState } from '../core/services/PlayerState';
+import { AuthService } from '../core/services/AuthService';
 import { UIButton } from '../ui/UIButton';
 import { COLORS, TEXT_STYLES } from '../ui/UIConstants';
 
@@ -158,10 +159,19 @@ export class MainMenu extends Scene {
             this,
             width - 80, 50, // Top right corner now
             authLabel,
-            () => {
+            async () => {
                 if (isGuest) {
                     location.reload();
                 } else {
+                    const username = localStorage.getItem('username');
+                    if (username) {
+                        try {
+                            const authService = new AuthService();
+                            await authService.logout(username);
+                        } catch (e) {
+                            console.error('Logout failed:', e);
+                        }
+                    }
                     localStorage.clear();
                     location.reload();
                 }

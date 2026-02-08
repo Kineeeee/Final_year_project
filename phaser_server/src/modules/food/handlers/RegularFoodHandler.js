@@ -4,11 +4,10 @@ class RegularFoodHandler {
     constructor(container) {
         this.container = container;
     }
-
     async consume(player, food) {
         // Regular Food Logic
         // Effect: Increase Score
-        player.score += 1;
+        await this.container.get('playerManager').updatePlayerScore(player, 1);
 
         // Return result indicating what needs to happen next
         return {

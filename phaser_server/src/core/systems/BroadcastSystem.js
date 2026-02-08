@@ -31,18 +31,21 @@ class BroadcastSystem {
 
     async broadcastLeaderboard() {
         const lbKey = 'leaderboard:' + (this.config.topic || this.config.mode);
+        const metaKey = 'leaderboard:meta:' + (this.config.topic || this.config.mode);
 
-        // 1. Sync current players to Redis (Batch)
+        // 1. Sync current players to Redis (Metadata Only)
+        // CRITICAL FIX: Removed ZADD loop to prevent race conditions with Game Logic (ZINCRBY).
+        // The Game Logic (PlayerManager) is the Single Source of Truth for scores.
+        // We only ensure metadata (names) is up to date here, though ideally this should also be event-driven.
         try {
             const players = this.playerManager.getAllPlayers();
-            const members = [];
-            for (const id in players) {
-                const p = players[id];
-                members.push({ score: p.score, value: p.name || `Player-${id}` });
-            }
-            if (members.length > 0) {
-                await RedisClient.zAddBatch(lbKey, members);
-            }
+            // We can still sync metadata if needed, but for high performance we should move this to 'initPlayer' or 'changeName' events.
+            // However, to be safe and ensure names appear, we keep HSET for now or remove it if PlayerManager handles it.
+            // PlayerManager ALREADY handles HSET on init and name change. So we can remove this loop entirely?
+            // "Analyze RedisConnection.js" showed PlayerManager does HSET.
+            // Let's comment this out to reduce loop overhead and rely on PlayerManager's event-based updates.
+
+            // If we really need to sync something, do it here, but definitely NO ZADD.
         } catch (err) {
             Logger.warn('BroadcastSystem', 'Redis Sync Error', err.message);
         }
@@ -51,10 +54,16 @@ class BroadcastSystem {
         try {
             const topWithScores = await RedisClient.zRevRangeWithScores(lbKey, 0, LEADERBOARD_TOP_N - 1);
 
-            // Map Redis format [{value, score}, ...] to internal format
+            if (topWithScores.length === 0) return;
+
+            // 3. Fetch metadata for Top N
+            const redisIds = topWithScores.map(entry => entry.value);
+            const names = await RedisClient.hmGet(metaKey, redisIds);
+
+            // Map Redis format to internal format
             const top = topWithScores.map((entry, index) => ({
-                id: `rank_${index}`,
-                name: entry.value,
+                id: entry.value,
+                name: names[index] || entry.value,
                 score: entry.score
             }));
 

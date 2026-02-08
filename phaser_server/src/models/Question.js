@@ -24,11 +24,7 @@ const questionSchema = new mongoose.Schema({
         type: [String],
         validate: [arrayLimit, '{PATH} must have at least 1 wrong answer'],
     },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-});
+}, { timestamps: true });
 
 function arrayLimit(val) {
     return val.length > 0;

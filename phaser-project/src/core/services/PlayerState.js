@@ -108,6 +108,50 @@ class PlayerState {
     getItemCount(itemId) {
         return this.inventory[itemId] || 0;
     }
+    /**
+     * Bulk update state from Auth response
+     * @param {Object} data 
+     */
+    updateFromAuthData(data) {
+        if (!data) return;
+
+        if (data.username) this.setUsername(data.username);
+        if (data.coins !== undefined) this.setCoins(data.coins);
+        if (data.highScore !== undefined) this.setHighScore(data.highScore);
+
+        // Handle Inventory
+        if (data.inventory) {
+            // Convert Array to Object if necessary (Server might send Array of objects {itemId, quantity})
+            // Or Server sends Object. Let's handle both or assume Object if normalized.
+            // AuthController currently sends: inventory: user.inventory (which is Array of {itemId, quantity})
+            // PlayerState expects Object { itemId: quantity }
+
+            let invObj = {};
+            if (Array.isArray(data.inventory)) {
+                data.inventory.forEach(item => {
+                    // Item might be { itemId: "id", quantity: 5 }
+                    // OR if populated { itemId: { _id: "...", name: "..." }, quantity: 5 }
+                    // But we fixed User model to use String for itemId.
+                    const id = typeof item.itemId === 'object' ? item.itemId._id || item.itemId.id : item.itemId;
+                    invObj[id] = item.quantity;
+                });
+            } else {
+                invObj = data.inventory;
+            }
+            this.setInventory(invObj);
+        }
+
+        if (data.color) {
+            localStorage.setItem('preferredColor', data.color);
+        }
+
+        // Save Token
+        if (data.token) {
+            localStorage.setItem('token', data.token);
+        }
+
+        Logger.info('PlayerState', 'State synchronized from Auth Data');
+    }
 }
 
 export const playerState = new PlayerState();

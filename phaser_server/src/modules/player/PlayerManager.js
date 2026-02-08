@@ -1,3 +1,4 @@
+const RedisClient = require('../../infra/database/RedisConnection');
 const {
     WORLD_SIZE,
     BASE_SPEED,
@@ -29,16 +30,12 @@ class PlayerManager {
         // or resolve them in a 'init' method if preferred.
         // For now, we'll access them via Container.get() when needed
 
-        // Initialize Food Handlers
-        const RegularFoodHandler = require('../food/handlers/RegularFoodHandler');
-        const CoinFoodHandler = require('../food/handlers/CoinFoodHandler');
-        const QuizFoodHandler = require('../food/handlers/QuizFoodHandler');
+        // Initialize Systems
+        const MovementSystem = require('../../core/systems/MovementSystem');
+        const CollisionSystem = require('../../core/systems/CollisionSystem');
 
-        this.foodHandlers = {
-            regular: new RegularFoodHandler(container),
-            coin: new CoinFoodHandler(container),
-            text: new QuizFoodHandler(container), // 'text' is the type used for Quiz answers
-        };
+        this.movementSystem = new MovementSystem(container);
+        this.collisionSystem = new CollisionSystem(container);
     }
 
     get foodManager() {
@@ -56,6 +53,24 @@ class PlayerManager {
 
     get spatialGrid() {
         return this.container.get('spatialGrid');
+    }
+
+    async updatePlayerScore(player, delta) {
+        player.score += delta;
+        if (player.score < 0) player.score = 0;
+
+        // Atomic update to Redis ZSET
+        const lbKey = 'leaderboard:' + (this.container.get('gameServer').config.topic || this.container.get('gameServer').config.mode);
+        const redisId = player.isBot ? `b:${player.id}` : `p:${player.id}`;
+
+        try {
+            // Optimistic: Fire and forget or quick await
+            RedisClient.zIncrBy(lbKey, delta, redisId).catch(err => {
+                Logger.warn('PlayerManager', `Redis Score Update Error for ${redisId}`, err.message);
+            });
+        } catch (err) {
+            // Sync error check
+        }
     }
 
     addPlayer(socket, spawnPos) {
@@ -80,12 +95,74 @@ class PlayerManager {
             boostTimer: 0, // Deterministic shrink counter
         };
 
+        // Register in Redis
+        const gameConfig = this.container.get('gameServer').config;
+        const metaKey = 'leaderboard:meta:' + (gameConfig.topic || gameConfig.mode);
+        const redisId = `p:${socket.id}`;
+        RedisClient.hSet(metaKey, redisId, this.players[socket.id].name).catch(err =>
+            Logger.error('PlayerManager', `Meta Register Error for ${redisId}`, err)
+        );
+
         // SPATIAL GRID: Add
         if (this.spatialGrid) {
             this.spatialGrid.add(this.players[socket.id]);
         }
 
         return this.players[socket.id];
+    }
+
+    addBot(botData) {
+        const id = botData.id;
+        this.players[id] = botData;
+
+        // Register in Redis (Bot)
+        const gameConfig = this.container.get('gameServer').config;
+        const lbKey = 'leaderboard:' + (gameConfig.topic || gameConfig.mode);
+        const metaKey = 'leaderboard:meta:' + (gameConfig.topic || gameConfig.mode);
+        const redisId = `b:${id}`;
+
+        RedisClient.hSet(metaKey, redisId, botData.name).catch(err =>
+            Logger.error('PlayerManager', `Bot Meta Register Error for ${redisId}`, err)
+        );
+        // Initial Score for Bot
+        RedisClient.zAdd(lbKey, botData.score, redisId).catch(err =>
+            Logger.error('PlayerManager', `Bot ZSET Register Error for ${redisId}`, err)
+        );
+
+        // SPATIAL GRID: Add
+        if (this.spatialGrid) {
+            this.spatialGrid.add(this.players[id]);
+        }
+
+        // Broadcast New Player (Bot)
+        // Access IO via networkSystem or just emit via container if possible?
+        // PlayerManager doesn't have direct IO usually if decoupled, but constructor has io?
+        // Constructor comment says: // this.io = io; // Decoupled: Use EventBus
+        // But the original BotManager used `this.io.emit('newPlayer')`.
+        // Let's see how `addPlayer` does it. `NetworkSystem` calls `addPlayer` then `socket.broadcast.emit(...)`.
+        // So `PlayerManager` itself does NOT emit `newPlayer` in `addPlayer`.
+        // We should emit `newPlayer` here if no one else does.
+        // But `PlayerManager` has no `io`.
+        // We can use `EventBus` to emit 'botSpawned'? No, `NetworkSystem` listens to EventBus?
+        // `NetworkSystem` has `bus.on('playerDied', ...)` but not `newPlayer`.
+        // Let's check `NetworkSystem` setup.
+        // It has `socket.broadcast.emit(SOCKET_EVENT.NEW_PLAYER, player);` in `initializePlayer`.
+
+        // So for Bots, we need a way to broadcast.
+        // We can emit 'playerJoined' on EventBus and have NetworkSystem handle it?
+        // `NetworkSystem` usually handles socket events.
+        // Let's check `NetworkSystem.setupEventBusListeners`.
+        // It does NOT have `playerJoined`.
+
+        // WE need to add `playerJoined` to NetworkSystem or similar.
+        // OR rely on `BroadcastSystem` to pick it up in next tick?
+        // `BroadcastSystem` sends Deltas. `NEW_PLAYER` is for specific "Hello new player" or "Here is a new guy".
+        // Actually `NEW_PLAYER` is helpful for clients to add sprite immediately.
+
+        // I will emit an event on EventBus and assume I will update NetworkSystem to listen to it.
+        this.container.get('eventBus').emit('botJoined', botData);
+
+        return this.players[id];
     }
 
     removePlayer(playerId) {
@@ -164,8 +241,24 @@ class PlayerManager {
             }
             if (data.name) {
                 this.players[id].name = data.name;
-                // Fix Economy: Assign username from name so coins can be saved
+            }
+
+            // SECURITY: Use verified username if passed from NetworkSystem
+            if (data.username) {
+                this.players[id].username = data.username;
+            } else if (data.name) {
+                // Fallback/Legacy (likely Guest)
                 this.players[id].username = data.name;
+            }
+
+            // Update Name in Redis
+            if (this.players[id].username) {
+                const gameConfig = this.container.get('gameServer').config;
+                const metaKey = 'leaderboard:meta:' + (gameConfig.topic || gameConfig.mode);
+                const redisId = this.players[id].isBot ? `b:${id}` : `p:${id}`;
+                RedisClient.hSet(metaKey, redisId, this.players[id].name).catch(err =>
+                    Logger.error('PlayerManager', `Meta Update Error for ${redisId}`, err)
+                );
             }
             // Inventory Logic: Priority to DB for logged-in users
             const isGuest =
@@ -243,31 +336,7 @@ class PlayerManager {
         }
     }
 
-    updateRotation(player) {
-        if (player.targetRotation === undefined) return;
 
-        let diff = player.targetRotation - player.rotation;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-
-        const turnSpeed = TURN_SPEED;
-
-        if (Math.abs(diff) < turnSpeed) {
-            player.rotation = player.targetRotation;
-        } else {
-            player.rotation += Math.sign(diff) * turnSpeed;
-        }
-    }
-
-    getPlayerScale(score) {
-        let scale = PLAYER_SCALE_BASE + (INITIAL_LENGTH + score) * PLAYER_SCALE_GROWTH;
-        if (scale > MAX_PLAYER_SCALE) scale = MAX_PLAYER_SCALE;
-        return scale;
-    }
-
-    getPlayerRadius(score) {
-        return 15 * this.getPlayerScale(score);
-    }
 
     handleEffects(player, id) {
         const now = Date.now();
@@ -288,256 +357,7 @@ class PlayerManager {
         });
     }
 
-    updateMovement(player) {
-        // Calculate Speed
-        let currentSpeed = BASE_SPEED;
 
-        // 1. Item Speed Buff
-        if (player.activeEffects['speed']) {
-            let buffValue = 4;
-            if (this.shopManager) {
-                const item = this.shopManager.getShopItems().find((i) => i.id === 'speed');
-                if (item) buffValue = item.buffValue;
-            }
-            currentSpeed += buffValue;
-        }
-        // 2. Manual Boost
-        else if (player.isBoosting) {
-            currentSpeed = BOOST_SPEED;
-
-            // DETERMINISTIC: Shrink every 90 frames
-            player.boostTimer++;
-            if (player.boostTimer > BOOST_COST_INTERVAL) {
-                player.boostTimer = 0; // Reset timer
-                player.score = Math.max(0, player.score - 1);
-
-                const dropPos =
-                    player.path.length > 0
-                        ? player.path[player.path.length - 1]
-                        : { x: player.x, y: player.y };
-
-                // Spawn food at drop position
-                this.foodManager.spawnFood(dropPos.x, dropPos.y, player.color);
-            }
-        }
-
-        // Simple movement logic based on rotation
-        player.x += Math.cos(player.rotation) * currentSpeed;
-        player.y += Math.sin(player.rotation) * currentSpeed;
-
-        // SPATIAL GRID: Update Position
-        if (this.spatialGrid) {
-            this.spatialGrid.update(player);
-        }
-
-        // Update Path for Body Collision
-        player.totalDistance += currentSpeed;
-        player.path.unshift({
-            x: player.x,
-            y: player.y,
-            d: player.totalDistance,
-        });
-
-        const neededHistoryDist = (player.score + INITIAL_LENGTH + 5) * PIXELS_PER_SEGMENT;
-
-        // Prune old points
-        while (
-            player.path.length > 0 &&
-            player.totalDistance - player.path[player.path.length - 1].d > neededHistoryDist
-        ) {
-            player.path.pop();
-        }
-    }
-
-    checkCollisions(player, id) {
-        const segmentLength = 1;
-
-        // 1. Check Collision with World Bounds
-        if (player.x < 0 || player.x > WORLD_SIZE || player.y < 0 || player.y > WORLD_SIZE) {
-            this.removePlayer(id);
-            return;
-        }
-
-        // 2. Check Collision with Other Snakes
-        if (!player.activeEffects['ghost']) {
-            // Optimized: Query Grid for nearby Players
-            let potentialColliders = [];
-            const myRadius = this.getPlayerRadius(player.score);
-
-            // Heuristic Radius: View radius or large enough to catch long snakes?
-            // Since we check BODY segments, and body segments are "behind" the head,
-            // we really need to check snakes whose BODIES might be near my HEAD.
-            // But the grid indexes HEADS.
-            // Problem: A snake's head might be far away, but its tail is right here.
-
-            // Strategy: 
-            // 1. If we index only HEADs: we risk missing collisions with tails of long snakes centered far away.
-            // 2. Index SEGMENTS: Perfect accuracy, high overhead.
-            // 3. Fallback: Loop all players (naive approach) is the only "perfect" way without segment indexing.
-            // 4. Bounding Box: Index player by AABB of their entire path.
-
-            // Given the constraint "Apply Spatial Grid", we must try #4 or #2.
-            // Since `SpatialGrid.js` keys map mainly to a point/radius.
-
-            // Compromise for MVP Refactor:
-            // Since we didn't implement Segment Indexing (complexity!), 
-            // we will stick to iterate ALL players for BODY check to be safe (Collision Safety > Performance for now for Body),
-            // OR we assume snakes are not infinitely long and check a larger radius (e.g. 2000px).
-
-            // WAIT! The Report says "Collision Detection: FAIL (Nested Loop)". 
-            // We MUST fix this.
-
-            // For now, let's assume we iterate all players, BUT we skip those clearly too far away?
-            // Distance check is O(N) but cheap.
-            // Let's use the Grid to find "Nearby Heads" and assume if Head is far, Body *might* be far? 
-            // No, that's unsafe.
-
-            // Correct approach with what we have:
-            // We can continue to loop all players for BODY checks (safety) until we implement Segment Indexing.
-            // BUT we can perform a quick bounding-box rejection?
-
-            // Actually, `checkCollisions` is called for `player` (me) vs `others`.
-            // We can iterate `this.players`.
-
-            // Let's optimize Head-to-Head collision usage Grid (High probability).
-            // For Body collision, we still iterate `Object.keys(this.players)` because we haven't indexed segments.
-            // Implementing Segment Indexing now would require major change to `updateMovement` to update ALL segment cells. 
-            // That might acceptably be a future "Deep Optimization".
-
-            // However, we CAN optimize Head-Head collisions easily.
-            // And we CAN optimized Food collisions (done above).
-
-            // Optimized: Use Spatial Grid to find potential colliders
-            let candidates = [];
-
-            if (this.spatialGrid) {
-                const potential = this.spatialGrid.query(player.x, player.y, 1000);
-                candidates = Array.from(potential);
-            } else {
-                candidates = Object.values(this.players);
-            }
-
-            candidates.forEach((other) => {
-                if (!other || !other.playerId) return; // Skip non-players
-                const otherId = other.playerId;
-
-                if (id === otherId) return;
-
-                const otherRadius = this.getPlayerRadius(other.score);
-
-                // 2a. Head-on-Head Collision
-                const distHead = Math.hypot(player.x - other.x, player.y - other.y);
-                if (distHead < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
-                    this.removePlayer(id);
-                    this.removePlayer(otherId);
-                    return; // Stop processing this player
-                }
-
-                // Check against other's body segments
-                const validCollisionDistance = (other.score + INITIAL_LENGTH) * PIXELS_PER_SEGMENT;
-
-                if (other.path) {
-                    // Optimized: Only check segments if head is somewhat near?
-                    // But body can be long.
-                    // For now, keep the segment loop as is, but we are now iterating fewer candidates.
-
-                    for (let i = segmentLength; i < other.path.length; i++) {
-                        const point = other.path[i];
-                        const distFromHead = other.totalDistance - point.d;
-                        if (distFromHead > validCollisionDistance) break;
-
-                        // OPTIMIZATION: Quick distance check
-                        const dx = player.x - point.x;
-                        const dy = player.y - point.y;
-
-                        if (Math.abs(dx) > 100 || Math.abs(dy) > 100) continue; // Skip far segments
-
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-
-                        if (dist < (myRadius + otherRadius) * HITBOX_SENSITIVITY) {
-                            this.removePlayer(id);
-                            return;
-                        }
-                    }
-                }
-            });
-        }
-
-        // 3. Check Food Collisions
-        this.checkFoodCollisions(player, id);
-    }
-
-    checkFoodCollisions(player, id) {
-        // Optimized: Only check food in my spatial cells (or radius)
-        let potentialFood = [];
-        const myRadius = this.getPlayerRadius(player.score);
-
-        // Magnet effect radius
-        let magnetRadius = BASE_MAGNET_RADIUS;
-        if (player.activeEffects['magnet']) {
-            let buffValue = 200;
-            if (this.shopManager) {
-                const item = this.shopManager.getShopItems().find((i) => i.id === 'magnet');
-                if (item) buffValue = item.buffValue;
-            }
-            magnetRadius = buffValue;
-        }
-
-        const queryRadius = myRadius + magnetRadius; // Safe upper bound
-
-        if (this.spatialGrid) {
-            const nearby = this.spatialGrid.query(player.x, player.y, queryRadius);
-            // Filter explicitly for food (no playerId)
-            for (const entity of nearby) {
-                if (entity.type) { // It's food
-                    potentialFood.push(entity);
-                }
-            }
-        } else {
-            // Fallback if no grid
-            potentialFood = Object.values(this.foodManager.getAllFood());
-        }
-
-        potentialFood.forEach(async (f) => {
-            try {
-                if (!f) return;
-
-                const dx = player.x - f.x;
-                const dy = player.y - f.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                // Use the precise radius logic again for actual check
-                if (distance < myRadius + magnetRadius) {
-                    // Eat food
-                    // Use Strategy Pattern via Handlers
-                    const handler = this.foodHandlers[f.type] || this.foodHandlers['regular'];
-
-                    if (handler) {
-                        // Consuming food is now delegated
-                        this.foodManager.removeFood(f.id);
-
-                        const result = await handler.consume(player, f);
-
-                        // Common Post-Process
-                        if (result.eaten) {
-                            this.container.get('eventBus').emit('foodEaten', {
-                                foodId: f.id,
-                                playerId: id,
-                                score: player.score,
-                                type: f.type,
-                            });
-
-                            if (result.shouldRespawn) {
-                                this.foodManager.spawnFood();
-                            }
-                        }
-                    }
-                }
-            } catch (err) {
-                Logger.error('PlayerManager', `Collision Error for food ${f.id}:`, err);
-            }
-        });
-    }
 
     update() {
         // NOTE: Bot spawning and AI Update is now handled by BotManager externally
@@ -548,16 +368,16 @@ class PlayerManager {
             if (!player) return;
 
             // Apply rotation smoothing for everyone (Bots AND Players)
-            this.updateRotation(player);
+            this.movementSystem.updateRotation(player);
 
             // 1. Effects & State
             this.handleEffects(player, id);
 
             // 2. Physics & Movement
-            this.updateMovement(player);
+            this.movementSystem.updateMovement(player, this);
 
             // 3. Collisions
-            this.checkCollisions(player, id);
+            this.collisionSystem.checkCollisions(player, id);
         });
     }
 

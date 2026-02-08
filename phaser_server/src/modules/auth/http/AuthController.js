@@ -1,6 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const User = require('../User');
+const User = require('../../../models/User');
 const Logger = require('../../../utils/Logger');
 
 exports.register = async (req, res) => {
@@ -34,32 +34,35 @@ exports.register = async (req, res) => {
 };
 
 exports.login = async (req, res) => {
-    Logger.info('Auth', 'Login Request:', req.body);
+    console.log('DEBUG: Login Request received', req.body);
     try {
         const { username, password } = req.body;
 
         // Tìm user
+        console.log('DEBUG: Finding user', username);
         const user = await User.findOne({ username });
         if (!user) {
+            console.log('DEBUG: User not found');
             Logger.warn('Auth', `Login failed: Username ${username} not found`);
             return res.status(400).json({ message: 'Invalid username or password' });
         }
 
         // Kiểm tra mật khẩu
+        console.log('DEBUG: Comparing password');
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+            console.log('DEBUG: Password mismatch');
             Logger.warn('Auth', `Login failed: Incorrect password for username ${username}`);
             return res.status(400).json({ message: 'Invalid username or password' });
         }
 
-        // Create Access Token (Short-lived: 15m)
-        const accessToken = jwt.sign(
-            { userId: user._id, username: user.username },
-            process.env.JWT_SECRET,
-            { expiresIn: '15m' }
-        );
+        // Create Access Token
+        console.log('DEBUG: Generating token');
+        const AuthService = require('../AuthService');
+        const accessToken = AuthService.generateToken({ userId: user._id, username: user.username });
 
-        // Create Refresh Token (Long-lived: 7d)
+        // Create Refresh Token
+        console.log('DEBUG: Signing refresh token');
         const refreshToken = jwt.sign(
             { userId: user._id, username: user.username },
             process.env.REFRESH_SECRET,
@@ -67,22 +70,23 @@ exports.login = async (req, res) => {
         );
 
         // Save Refresh Token to DB
+        console.log('DEBUG: Saving refresh token to DB');
         user.refreshToken = refreshToken;
         await user.save();
 
         // Send Refresh Token as HttpOnly Cookie
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production', // true in prod
+            secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+            maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
+        console.log('DEBUG: Login successful');
         Logger.info('Auth', `User ${username} logged in successfully`);
         res.json({
             message: 'Login successful',
             token: accessToken,
-            // refreshToken is removed from body
             username: user.username,
             coins: user.coins,
             currentSkin: user.currentSkin,
@@ -91,8 +95,9 @@ exports.login = async (req, res) => {
             inventory: user.inventory,
         });
     } catch (error) {
+        console.error('DEBUG: Login Error Stack:', error);
         Logger.error('Auth', 'Login error:', error);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error', error: error.message }); // Send error to client temporarily for debug
     }
 };
 
@@ -134,11 +139,8 @@ exports.refreshToken = async (req, res) => {
             return res.status(403).json({ message: 'Invalid Refresh Token' });
         }
 
-        const newAccessToken = jwt.sign(
-            { userId: user._id, username: user.username },
-            process.env.JWT_SECRET,
-            { expiresIn: '15m' }
-        );
+        const AuthService = require('../AuthService');
+        const newAccessToken = AuthService.generateToken({ userId: user._id, username: user.username });
 
         res.json({
             token: newAccessToken,
