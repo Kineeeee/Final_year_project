@@ -28,7 +28,17 @@ export class GameOver extends Scene {
         this.cameras.main.fadeIn(500, 0, 0, 0);
         this.cameras.main.shake(250, 0.01);
 
-        this.add.rectangle(0, 0, width, height, COLORS.OVERLAY, 0.4).setOrigin(0);
+        // --- 1. BACKGROUND ---
+        if (this.textures.exists('gameover-bg')) {
+            this.bg = this.add.image(centerX, centerY, 'gameover-bg').setOrigin(0.5);
+            // Scale background to cover screen
+            const scaleX = width / this.bg.width;
+            const scaleY = height / this.bg.height;
+            const scale = Math.max(scaleX, scaleY);
+            this.bg.setScale(scale).setScrollFactor(0);
+        } else {
+            this.add.rectangle(0, 0, width, height, COLORS.OVERLAY, 0.4).setOrigin(0);
+        }
 
         const uiRoot = this.add.container(0, 0);
 
