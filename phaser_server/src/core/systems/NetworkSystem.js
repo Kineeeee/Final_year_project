@@ -2,6 +2,7 @@ const Logger = require('../../utils/Logger');
 const RedisClient = require('../../infra/database/RedisConnection');
 const AuthService = require('../../modules/auth/AuthService');
 const { SOCKET_EVENT } = require('../../events/EventTypes');
+const UserQuiz = require('../../models/UserQuiz');
 
 class NetworkSystem {
     constructor(io, container, config) {
@@ -96,6 +97,9 @@ class NetworkSystem {
         // Disconnect
         socket.on(SOCKET_EVENT.DISCONNECT, () => {
             Logger.info('NetworkSystem', `User disconnected: ${socket.id}`);
+            if (this.quizManager && socket.data?.user?.userId) {
+                this.quizManager.clearUserQuizIfOwner(socket.data.user.userId);
+            }
             this.playerManager.removePlayer(socket.id);
         });
 
@@ -121,9 +125,11 @@ class NetworkSystem {
             this.playerManager.handlePlayerInput(socket.id, inputData);
         });
 
-        socket.on(SOCKET_EVENT.INIT_PLAYER, (data) => {
+        socket.on(SOCKET_EVENT.INIT_PLAYER, async (data) => {
             // SECURITY: Verify Token if provided
             let finalData = { ...data };
+            const requestedQuizSource = (data.quizSource || 'SYSTEM').toUpperCase();
+            socket.data.quizSource = 'SYSTEM';
 
             if (data.token) {
                 const decoded = AuthService.verifyToken(data.token);
@@ -136,6 +142,38 @@ class NetworkSystem {
 
                     // Mark socket as authenticated (optional)
                     socket.data.user = decoded;
+                    socket.data.quizSource = 'SYSTEM';
+
+                    // If user requests personal quiz, validate before honoring
+                    if (requestedQuizSource === 'USER' && this.config.topic) {
+                        try {
+                            const quizDoc = await UserQuiz.findOne({
+                                userId: decoded.userId,
+                                category: this.config.topic,
+                            });
+                            if (quizDoc && quizDoc.isValid) {
+                                socket.data.quizSource = 'USER';
+                                if (this.quizManager && typeof this.quizManager.setQuizSource === 'function') {
+                                    this.quizManager.setQuizSource({
+                                        source: 'user',
+                                        userQuiz: quizDoc,
+                                        ownerUserId: decoded.userId,
+                                    });
+                                }
+                            } else {
+                                socket.emit('quizSourceChanged', {
+                                    source: 'SYSTEM',
+                                    reason: 'User quiz missing hoặc không hợp lệ',
+                                });
+                            }
+                        } catch (err) {
+                            Logger.error('NetworkSystem', 'Error loading user quiz', err);
+                            socket.emit('quizSourceChanged', {
+                                source: 'SYSTEM',
+                                reason: 'Không thể tải đề cá nhân',
+                            });
+                        }
+                    }
                 } else {
                     Logger.warn('NetworkSystem', `Invalid Token from ${socket.id}. Falling back to Guest.`);
                     // Invalid Token: Treat as Guest, but sanitize name to prevent spoofing
@@ -143,6 +181,12 @@ class NetworkSystem {
                     // For now, simpler approach: If invalid token, just treat name as display name but NOT username (DB key)
                     delete finalData.username;
                     finalData.name = `Guest_${Math.floor(Math.random() * 1000)}`;
+                    if (requestedQuizSource === 'USER') {
+                        socket.emit('quizSourceChanged', {
+                            source: 'SYSTEM',
+                            reason: 'Cần đăng nhập để dùng đề của bạn',
+                        });
+                    }
                 }
             } else {
                 // No Token: Guest Mode
@@ -159,6 +203,12 @@ class NetworkSystem {
                     finalData.name = `Guest_${Math.floor(Math.random() * 1000)}`
                 }
                 delete finalData.username;
+                if (requestedQuizSource === 'USER') {
+                    socket.emit('quizSourceChanged', {
+                        source: 'SYSTEM',
+                        reason: 'Cần đăng nhập để dùng đề của bạn',
+                    });
+                }
             }
 
             this.playerManager.handleInitPlayer(socket.id, finalData);

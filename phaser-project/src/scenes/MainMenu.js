@@ -2,6 +2,12 @@ import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
 import { playerState } from '../core/services/PlayerState';
 import { AuthService } from '../core/services/AuthService';
+import { QuizSetupOverlay } from '../ui/quiz/QuizSetupOverlay';
+import { globalQuizPrefs } from '../core/services/GlobalQuizPrefs';
+import { CategorySelectOverlay } from '../ui/quiz/CategorySelectOverlay';
+import { userQuizApi } from '../core/services/UserQuizApi';
+import { overlayBlocker } from '../core/services/OverlayBlocker';
+import { authStore } from '../core/state/authStore';
 
 export class MainMenu extends Scene {
     constructor() {
@@ -127,13 +133,43 @@ export class MainMenu extends Scene {
         statsContainer.add([iconUser, txtUser, iconCoin, txtCoin, iconCup, txtScore]);
         uiRoot.add(statsContainer);
 
+        // --- 4. GLOBAL QUIZ SOURCE + UPLOAD ---
+        const sourceY = statsY + 80;
+        const sourceLabel = this.add.text(centerX - 240, sourceY, 'Quiz Source:', {
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: '14px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 4,
+        }).setOrigin(0, 0.5);
 
-        // --- 4. GAME MODES ---
+        const makeChip = (text, value, color) => {
+            const chip = this.add.text(0, 0, text, {
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: '12px',
+                color: '#ffffff',
+                backgroundColor: color,
+                padding: { x: 14, y: 8 },
+                stroke: '#000000',
+                strokeThickness: 3
+            }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+            chip.on('pointerdown', () => this.setGlobalQuizSource(value));
+            return chip;
+        };
+
+        this.chipSystem = makeChip('SYSTEM', 'SYSTEM', '#27ae60');
+        this.chipUser = makeChip('USER', 'USER', '#8e44ad');
+        this.chipSystem.setPosition(centerX, sourceY);
+        this.chipUser.setPosition(centerX + 170, sourceY);
+        uiRoot.add([sourceLabel, this.chipSystem, this.chipUser]);
+        this.refreshSourceChips();
+        this.preloadUserQuizStatus();
+
+        // --- 5. GAME MODES ---
         const modes = [
-            { label: 'SURVIVAL', mode: 'normal', icon: 'icon-survival', color: 0x44c448, shadow: 0x1d6a21 },
-            { label: 'MATH QUIZ', mode: 'math', icon: 'icon-math', color: 0xff9800, shadow: 0xb36b00 },
-            { label: 'ENGLISH', mode: 'english', icon: 'icon-english', color: 0x9c27b0, shadow: 0x6a1b9a },
-            { label: 'SHOOTING', mode: 'shooting', icon: 'icon-shooting', color: 0xf44336, shadow: 0xc62828 }
+            { label: 'QUIZ', mode: 'quiz', icon: 'icon-math', color: 0xff9800, shadow: 0xb36b00 },
+            { label: 'SHOOTING', mode: 'shooting', icon: 'icon-shooting', color: 0xf44336, shadow: 0xc62828 },
+            { label: 'SURVIVAL', mode: 'normal', icon: 'icon-survival', color: 0x44c448, shadow: 0x1d6a21 }
         ];
 
         const cardWidth = 190;
@@ -206,20 +242,36 @@ export class MainMenu extends Scene {
             uiRoot.add(card);
         });
 
-        // --- 5. BOTTOM BUTTONS ---
+        // --- 6. BOTTOM BUTTONS ---
         const bottomY = height - 60;
-        this.createStylishButton(uiRoot, centerX - 120, bottomY, '🛒 SHOP', 0x3d6cb9, () => {
+        this.createStylishButton(uiRoot, centerX - 220, bottomY, '🛒 SHOP', 0x3d6cb9, () => {
             this.scene.launch('ShopScene');
             this.scene.pause();
         });
-        this.createStylishButton(uiRoot, centerX + 120, bottomY, '🎨 SKINS', 0x8e44ad, () => {
+        this.createStylishButton(uiRoot, centerX, bottomY, '🎨 SKINS', 0x8e44ad, () => {
             this.scene.start('CustomizeScene');
+        });
+        this.createStylishButton(uiRoot, centerX + 220, bottomY, 'UPLOAD QUIZ', 0x2980b9, () => {
+            this.openUploadOverlay();
         });
 
         // --- 6. TOP RIGHT BUTTONS ---
         this.createPixelButton(uiRoot, width - 60, 40, 'EXIT', 0xe74c3c, () => {
-             localStorage.clear();
-             location.reload();
+            const username = localStorage.getItem('username');
+            (async () => {
+                await authStore.logout();
+                try {
+                    sessionStorage.clear();
+                    document.cookie.split(';').forEach(c => {
+                        document.cookie = c
+                            .replace(/^ +/, '')
+                            .replace(/=.*/, '=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;');
+                    });
+                } catch (err) {
+                    console.warn('Cookie/storage clear failed', err);
+                }
+                location.reload();
+            })();
         });
         this.createPixelButton(uiRoot, width - 140, 40, 'HELP', 0x2ecc71, () => {
              Logger.info('MainMenu', 'Help clicked');
@@ -294,10 +346,136 @@ export class MainMenu extends Scene {
     }
 
     startGame(mode) {
+        const isBlocked = overlayBlocker.isBlocked();
+        if (isBlocked) {
+            Logger.warn('MainMenu', 'Start blocked because overlay is active');
+            return;
+        }
+        if (mode === 'quiz' || mode === 'shooting') {
+            this.openCategorySelect(mode);
+            return;
+        }
+
         Logger.info('MainMenu', `Starting: ${mode}`);
         this.cameras.main.fadeOut(300);
         this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
             this.scene.start('Game', { mode: mode });
         });
+    }
+
+    async setGlobalQuizSource(src) {
+        if (src === 'USER') {
+            // Require at least one valid quiz in any category; deeper check when selecting category
+            try {
+                const [mathStatus, engStatus] = this.userQuizStatus
+                    ? [this.userQuizStatus.math, this.userQuizStatus.english]
+                    : await Promise.all([
+                          userQuizApi.getStatus('math').catch(() => null),
+                          userQuizApi.getStatus('english').catch(() => null),
+                      ]);
+                const hasValid = (mathStatus && mathStatus.isValid) || (engStatus && engStatus.isValid);
+                if (!hasValid) {
+                    alert('Bạn chưa có đề hợp lệ cho Math hoặc English. Tiếp tục dùng Đề hệ thống.');
+                    this.refreshSourceChips();
+                    return;
+                }
+                this.userQuizStatus = { math: mathStatus, english: engStatus };
+            } catch (e) {
+                alert('Không kiểm tra được đề của bạn. Tiếp tục dùng Đề hệ thống.');
+                this.refreshSourceChips();
+                return;
+            }
+            globalQuizPrefs.setQuizSource('USER');
+        } else {
+            globalQuizPrefs.setQuizSource('SYSTEM');
+        }
+        this.refreshSourceChips();
+    }
+
+    refreshSourceChips() {
+        const src = globalQuizPrefs.getQuizSource();
+        if (this.chipSystem) this.chipSystem.setAlpha(src === 'SYSTEM' ? 1 : 0.5);
+        if (this.chipUser) {
+            this.chipUser.setAlpha(src === 'USER' ? 1 : 0.5);
+            if (this.userQuizStatus) {
+                const allValid = this.userQuizStatus.math?.isValid || this.userQuizStatus.english?.isValid;
+                this.chipUser.setTint(allValid ? 0xffffff : 0xffaa00);
+            }
+        }
+    }
+
+    async preloadUserQuizStatus() {
+        if (!localStorage.getItem('token')) return;
+        try {
+            const [mathStatus, engStatus] = await Promise.all([
+                userQuizApi.getStatus('math').catch(() => null),
+                userQuizApi.getStatus('english').catch(() => null),
+            ]);
+            this.userQuizStatus = { math: mathStatus, english: engStatus };
+            this.refreshSourceChips();
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    openUploadOverlay() {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Vui lòng đăng nhập để upload đề của bạn.');
+            return;
+        }
+        const overlay = new QuizSetupOverlay({
+            defaultCategory: 'math',
+            onClose: () => {
+                this.input.enabled = true;
+            },
+            disablePlay: true,
+        });
+        this.input.enabled = false;
+        overlay.open();
+    }
+
+    openCategorySelect(mode) {
+        const overlay = new CategorySelectOverlay({
+            onSelect: (category) => {
+                this.input.enabled = true;
+                const source = globalQuizPrefs.getQuizSource();
+                // Validate user quiz for category if USER selected
+                const proceed = async () => {
+                    let finalSource = source;
+                    if (source === 'USER') {
+                        try {
+                            const status = await userQuizApi.getStatus(category);
+                            if (!status?.isValid) {
+                                finalSource = 'SYSTEM';
+                                alert('Bạn chưa có đề cho category này. Tạm dùng đề hệ thống.');
+                            }
+                        } catch (e) {
+                            finalSource = 'SYSTEM';
+                            alert('Không kiểm tra được đề của bạn. Tạm dùng đề hệ thống.');
+                        }
+                    }
+                    if (mode === 'quiz') {
+                        Logger.info('MainMenu', `Starting Quiz ${category} source=${finalSource}`);
+                        this.cameras.main.fadeOut(300);
+                        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+                            this.scene.start('Game', { mode: category, quizSource: finalSource });
+                        });
+                    } else if (mode === 'shooting') {
+                        Logger.info('MainMenu', `Starting Shooting ${category} source=${finalSource}`);
+                        this.cameras.main.fadeOut(300);
+                        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+                            this.scene.start('ShootingScene', { category, quizSource: finalSource });
+                        });
+                    }
+                };
+                proceed();
+            },
+            onCancel: () => {
+                this.input.enabled = true;
+            },
+        });
+        this.input.enabled = false;
+        overlay.open();
     }
 }

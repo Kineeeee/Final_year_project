@@ -37,6 +37,15 @@ export class GameHUD {
             strokeThickness: 4
         });
 
+        // Quiz Source Label
+        this.quizSourceLabel = this.scene.add.text(0, 0, 'System Quiz', {
+            ...TEXT_STYLES.BODY,
+            fontSize: '16px',
+            color: '#7dd3fc',
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+
         // Quiz Question (Center)
         this.questionText = this.scene.add
             .text(0, 0, '', {
@@ -114,6 +123,7 @@ export class GameHUD {
 
         // Coins: Top-Left
         this.coinText.setPosition(safeArea.left, safeArea.top);
+        this.quizSourceLabel.setPosition(safeArea.left, safeArea.top + 32);
 
         // Quiz Question: Center Top (Below possible Item Slots area)
         // Ensure it doesn't overlap items.
@@ -179,6 +189,11 @@ export class GameHUD {
         }
     }
 
+    setQuizSourceLabel(source) {
+        if (!this.quizSourceLabel) return;
+        this.quizSourceLabel.setText(source === 'USER' ? 'Đề của bạn' : 'Đề hệ thống');
+    }
+
     updateRank(rank, total) {
         if (this.rankText) {
             const totalStr = total ? `/${total}` : '';
@@ -187,6 +202,8 @@ export class GameHUD {
     }
 
     showQuestion(data) {
+        // Guard: only show in quiz modes (handled at UIScene level) but keep defensive check
+        if (!data || !data.text) return;
         this.questionText.setText(`Q: ${data.text}`);
         this.questionText.setVisible(true);
 

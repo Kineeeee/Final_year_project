@@ -1,8 +1,8 @@
 import { Scene } from 'phaser';
-import { HandShootingController } from './HandControl';
-import { Target } from './Target';
-import { quizService } from '../../core/services/QuizService';
-import { Logger } from '../../utils/Logger';
+import { HandShootingController } from '../input/HandShootingController';
+import { Target } from '../objects/shooting/Target';
+import { quizService } from '../services/QuizService';
+import { Logger } from '../utils/Logger';
 
 export class ShootingScene extends Scene {
     constructor() {
@@ -29,13 +29,6 @@ export class ShootingScene extends Scene {
 
         this.lastShotTime = 0;
         this.shootCooldown = 400;
-        this.category = 'math';
-        this.quizSource = 'SYSTEM';
-    }
-
-    init(data) {
-        this.category = data?.category || 'math';
-        this.quizSource = (data?.quizSource || 'SYSTEM').toUpperCase();
     }
 
     create() {
@@ -110,19 +103,7 @@ export class ShootingScene extends Scene {
         this.createParticles();
 
         // Fetch Questions
-        const questions = await quizService.fetchQuestions(this.category, this.quizSource);
-        if (!questions || questions.length === 0) {
-            this.isPlaying = false;
-            if (this.spawnTimer) this.spawnTimer.remove();
-            this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, 'Chưa có câu hỏi cho chế độ này', {
-                fontFamily: '"Monospace"',
-                fontSize: '24px',
-                color: '#ff5555'
-            }).setOrigin(0.5);
-            const backBtn = this.createCyberButton(this.scale.width / 2, this.scale.height / 2 + 30, 'BACK TO MENU', () => this.returnToMenu());
-            this.add.existing(backBtn);
-            return;
-        }
+        await quizService.fetchQuestions('math'); // Hardcoded topic for now, or select in UI?
 
         // Start Loops
         this.spawnTimer = this.time.addEvent({
@@ -376,7 +357,6 @@ export class ShootingScene extends Scene {
         if (this.spawnTimer) this.spawnTimer.remove();
         this.targets.forEach(t => t.destroy());
         this.targets = [];
-        if (this.explosionManager) this.explosionManager.destroy();
         if (this.textures.exists('webcam')) this.textures.remove('webcam');
     }
 }

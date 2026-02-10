@@ -9,6 +9,9 @@ class QuizManager {
         this.topic = topic; // 'math' or 'english'
 
         this.currentQuestion = null;
+        this.quizSource = 'system'; // 'system' | 'user'
+        this.activeUserQuiz = null; // {questions, _id, category}
+        this.activeUserId = null;
         this.roundDuration = 5 * 60 * 1000; // 5 minutes
         this.roundEndTime = 0;
         this.isActive = false;
@@ -49,10 +52,85 @@ class QuizManager {
         await this.nextQuestion();
     }
 
-    async nextQuestion() {
+    /**
+     * Switch quiz source at runtime.
+     * @param {Object} opts
+     * @param {'system'|'user'} opts.source
+     * @param {Object|null} opts.userQuiz
+     * @param {string|null} opts.ownerUserId
+     */
+    setQuizSource({ source = 'system', userQuiz = null, ownerUserId = null } = {}) {
+        if (source === 'user' && userQuiz && Array.isArray(userQuiz.questions) && userQuiz.questions.length > 0) {
+            this.quizSource = 'user';
+            this.activeUserQuiz = userQuiz;
+            this.activeUserId = ownerUserId || null;
+            // Sync topic just in case
+            this.topic = userQuiz.category || this.topic;
+            Logger.info('QuizManager', `Switched to USER quiz for ${this.topic}. Owner=${this.activeUserId || 'unknown'}`);
+        } else {
+            this.quizSource = 'system';
+            this.activeUserQuiz = null;
+            this.activeUserId = null;
+            Logger.info('QuizManager', `Switched to SYSTEM quiz for ${this.topic}`);
+        }
+
+        // Restart question immediately to reflect source change
+        this.nextQuestion(true);
+        this.io.emit('quizSourceChanged', {
+            source: this.quizSource === 'user' ? 'USER' : 'SYSTEM',
+            ownerUserId: this.activeUserId || null
+        });
+    }
+
+    clearUserQuizIfOwner(userId) {
+        if (this.activeUserId && this.activeUserId.toString() === userId.toString()) {
+            this.setQuizSource({ source: 'system' });
+        }
+    }
+
+    async getNextQuestionData() {
+        if (this.quizSource === 'user' && (!this.activeUserQuiz || !Array.isArray(this.activeUserQuiz.questions) || this.activeUserQuiz.questions.length === 0)) {
+            Logger.warn('QuizManager', 'Active user quiz missing or empty. Reverting to system.');
+            this.quizSource = 'system';
+            this.activeUserQuiz = null;
+            this.activeUserId = null;
+        }
+
+        if (this.quizSource === 'user' && this.activeUserQuiz && Array.isArray(this.activeUserQuiz.questions)) {
+            const list = this.activeUserQuiz.questions;
+            if (list.length > 0) {
+                const idx = Math.floor(Math.random() * list.length);
+                const q = list[idx];
+                // Transform to QuizManager internal shape
+                const correct = q.answers.find((a) => a.isCorrect);
+                const wrong = q.answers.filter((a) => !a.isCorrect).map((a) => a.text);
+
+                return {
+                    _id: `user-${this.activeUserQuiz._id || 'quiz'}-${idx}-${Date.now()}`,
+                    questionText: q.question,
+                    difficulty: 1,
+                    correctAnswer: correct ? correct.text : '',
+                    wrongAnswers: wrong,
+                    source: 'user',
+                };
+            }
+        }
+
+        // Default: system questions
+        const questions = await Question.aggregate([
+            { $match: { topic: this.topic } },
+            { $sample: { size: 1 } },
+        ]);
+        if (questions.length > 0) {
+            return { ...questions[0], source: 'system' };
+        }
+        return null;
+    }
+
+    async nextQuestion(force = false) {
         if (!this.isActive) return;
 
-        if (this.isTransitioning) return;
+        if (this.isTransitioning && !force) return;
         this.isTransitioning = true;
 
         if (this.questionTimer) {
@@ -63,20 +141,16 @@ class QuizManager {
         try {
             this.clearQuizFood();
 
-            const questions = await Question.aggregate([
-                { $match: { topic: this.topic } },
-                { $sample: { size: 1 } },
-            ]);
+            this.currentQuestion = await this.getNextQuestionData();
 
-            if (questions.length > 0) {
-                this.currentQuestion = questions[0];
-            } else {
+            if (!this.currentQuestion) {
                 this.currentQuestion = {
                     _id: 'fallback-' + Date.now(),
                     questionText: `(fallback) 2 + 2?`,
                     difficulty: 1,
                     correctAnswer: '4',
                     wrongAnswers: ['3', '5', '22'],
+                    source: 'system',
                 };
             }
             // Ensure ID exists
@@ -126,6 +200,10 @@ class QuizManager {
 
     spawnAnswerFoods() {
         if (!this.currentQuestion) return;
+        if (!this.currentQuestion.correctAnswer || !this.currentQuestion.wrongAnswers || this.currentQuestion.wrongAnswers.length === 0) {
+            Logger.warn('QuizManager', 'Invalid question payload, skipping spawn');
+            return;
+        }
         const spawnedPositions = [];
         const spawnedFoodBatch = [];
         const CORRECT_COUNT = 50;

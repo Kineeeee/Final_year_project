@@ -98,6 +98,12 @@ export class UIManager {
         this.components.items.onItemActivated(data);
     }
 
+    updateQuizSource(source) {
+        if (this.components.hud && this.components.hud.setQuizSourceLabel) {
+            this.components.hud.setQuizSourceLabel(source);
+        }
+    }
+
     // Quiz Methods
     updateQuestion(data) {
         this.components.hud.showQuestion(data);

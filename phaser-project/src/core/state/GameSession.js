@@ -8,9 +8,10 @@ import { createPlayerInputCommand, createUseItemCommand } from '../../services/n
 import { effectManager } from '../../core/effects/EffectManager';
 
 export class GameSession {
-    constructor(scene, { mode, playerDetails } = {}) {
+    constructor(scene, { mode, quizSource, playerDetails } = {}) {
         this.scene = scene;
         this.mode = mode || CONFIG.GAME_MODES.NORMAL;
+        this.quizSource = (quizSource || 'SYSTEM').toUpperCase();
         this.playerDetails = playerDetails || { color: undefined, name: undefined };
 
         this.gameState = null;
@@ -51,9 +52,13 @@ export class GameSession {
 
         this.networkManager = new NetworkManager(this.scene, this.gameState);
         this.scene.networkManager = this.networkManager;
-        this.networkManager.connect(this.mode, {
-            color: this.playerDetails.color,
-            name: this.playerDetails.name
+        this.networkManager.connect({
+            gameMode: this.mode,
+            playerDetails: {
+                color: this.playerDetails.color,
+                name: this.playerDetails.name,
+            },
+            quizSource: this.quizSource,
         });
 
         // State-driven reconciliation

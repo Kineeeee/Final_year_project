@@ -157,10 +157,22 @@ exports.refreshToken = async (req, res) => {
 };
 
 exports.logout = async (req, res) => {
-    const { username } = req.body;
     try {
-        await User.findOneAndUpdate({ username }, { refreshToken: null });
-        res.clearCookie('refreshToken'); // Clear Cookie
+        const refreshToken = req.cookies.refreshToken;
+        if (refreshToken) {
+            // best-effort revoke by token match
+            await User.updateOne({ refreshToken }, { refreshToken: null });
+        }
+        const { username } = req.body || {};
+        if (username) {
+            await User.updateOne({ username }, { refreshToken: null });
+        }
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            path: '/',
+        });
         res.json({ message: 'Logged out successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });

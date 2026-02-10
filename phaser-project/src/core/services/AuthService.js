@@ -35,10 +35,16 @@ export class AuthService {
 
             Logger.info('AuthService', `API Response Status: ${response.status}`);
 
-            const data = await response.json();
+            let data = null;
+            try {
+                data = await response.json();
+            } catch (e) {
+                // fallback
+            }
 
             if (!response.ok) {
-                throw new Error(data.message || 'Something went wrong');
+                const detail = data?.message || `HTTP ${response.status}`;
+                throw new Error(detail);
             }
 
             return data;

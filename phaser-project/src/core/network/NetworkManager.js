@@ -28,12 +28,15 @@ export class NetworkManager {
         }
     }
 
-    connect(gameMode, playerDetails) {
+    connect({ gameMode, playerDetails = {}, quizSource = 'SYSTEM' } = {}) {
+        this.quizSource = (quizSource || 'SYSTEM').toUpperCase();
+        this.gameMode = gameMode;
+
         let serverUrl = CONFIG.SERVER_URL;
         if (gameMode === CONFIG.GAME_MODES.MATH) serverUrl += '/math';
         if (gameMode === CONFIG.GAME_MODES.ENGLISH) serverUrl += '/english';
 
-        Logger.info('NetworkManager', `Connecting to Server: ${serverUrl}`);
+        Logger.info('NetworkManager', `Connecting to Server: ${serverUrl} source=${this.quizSource}`);
         this.socket = socketService.connect(serverUrl, {
             forceNew: true,
             parser
@@ -77,7 +80,8 @@ export class NetworkManager {
             const initData = {
                 color: playerDetails.color,
                 name: playerDetails.name,
-                token: localStorage.getItem('token') // SECURITY: Send Token
+                token: localStorage.getItem('token'), // SECURITY: Send Token
+                quizSource: this.quizSource,
             };
 
             const savedInventory = localStorage.getItem('inventory');
@@ -162,6 +166,7 @@ export class NetworkManager {
         this.socket.on('roundEnd', (data) => this.scene.events.emit('roundEnd', data));
         this.socket.on('clearQuizFood', (foodIds) => this.handleClearQuizFood(foodIds));
         this.socket.on('answerResult', (data) => this.handleAnswerResult(data));
+        this.socket.on('quizSourceChanged', (payload) => this.scene.events.emit('quizSourceChanged', payload));
 
         // Leaderboard (global, server-authoritative)
         this.socket.on('leaderboard', (payload) => this.handleLeaderboard(payload));

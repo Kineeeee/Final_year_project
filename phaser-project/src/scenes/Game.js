@@ -18,6 +18,7 @@ export class Game extends Scene {
         this.myColor = data.color;
         this.myName = data.name;
         this.gameMode = data.mode || CONFIG.GAME_MODES.NORMAL;
+        this.quizSource = (data.quizSource || 'SYSTEM').toUpperCase();
     }
 
     create() {
@@ -41,7 +42,7 @@ export class Game extends Scene {
         this.entityManager = new EntityManager(this);
 
         // UI is handled by UIScene
-        this.scene.launch(CONFIG.SCENES.UI, { mode: this.gameMode });
+        this.scene.launch(CONFIG.SCENES.UI, { mode: this.gameMode, quizSource: this.quizSource });
         this.scene.bringToTop(CONFIG.SCENES.UI);
 
         this.coinsCollected = 0;
@@ -54,6 +55,7 @@ export class Game extends Scene {
         // Start session-owned state/network/input
         this.session = new GameSession(this, {
             mode: this.gameMode,
+            quizSource: this.quizSource,
             playerDetails: { color: this.myColor, name: this.myName }
         });
         this.session.start();

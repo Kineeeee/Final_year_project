@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { UIManager } from '../modules/ui/UIManager';
+import { overlayBlocker } from '../core/services/OverlayBlocker';
 
 export class UIScene extends Scene {
     constructor() {
@@ -17,6 +18,14 @@ export class UIScene extends Scene {
 
     create(data) {
         this.gameMode = data.mode || 'normal';
+        this.quizSource = (data.quizSource || 'SYSTEM').toUpperCase();
+        this._unsubOverlay = overlayBlocker.subscribe(() => {
+            this._overlayBlocked = overlayBlocker.isBlocked();
+            // disable all input when blocked
+            if (this.input && this.input.enabled !== undefined) {
+                this.input.enabled = !this._overlayBlocked;
+            }
+        });
 
         // If UIScene is restarted/reused, ensure previous UI is fully torn down
         if (this.uiManager) {
@@ -32,6 +41,14 @@ export class UIScene extends Scene {
 
         // Initialize UI Manager
         this.uiManager = new UIManager(this, this.gameMode);
+        this.uiManager.updateQuizSource(this.quizSource);
+
+        // In normal mode, hide quiz widgets proactively
+        if (this.gameMode === 'normal' && this.uiManager && this.uiManager.components?.hud) {
+            this.uiManager.components.hud.questionText?.setVisible(false);
+            this.uiManager.components.hud.timerText?.setVisible(false);
+            this.uiManager.components.hud.roundTimerText?.setVisible(false);
+        }
 
         // Connect to Game Events
         const gameScene = this.scene.get('Game');
@@ -47,13 +64,29 @@ export class UIScene extends Scene {
                 if (this.uiManager) this.uiManager.updatePing(payload);
             },
             coinsChanged: (payload) => this.uiManager && this.uiManager.updateCoins(payload),
-            updateQuestion: (payload) => this.uiManager && this.uiManager.updateQuestion(payload),
-            roundStart: (payload) => this.uiManager && this.uiManager.startRoundTimer(payload),
-            roundEnd: (payload) => this.uiManager && this.uiManager.showWinner(payload),
+            updateQuestion: (payload) => {
+                if (this.gameMode === 'math' || this.gameMode === 'english') {
+                    this.uiManager && this.uiManager.updateQuestion(payload);
+                }
+            },
+            roundStart: (payload) => {
+                if (this.gameMode === 'math' || this.gameMode === 'english') {
+                    this.uiManager && this.uiManager.startRoundTimer(payload);
+                }
+            },
+            roundEnd: (payload) => {
+                if (this.gameMode === 'math' || this.gameMode === 'english') {
+                    this.uiManager && this.uiManager.showWinner(payload);
+                }
+            },
             updateInventory: (payload) => this.uiManager && this.uiManager.updateInventory(payload),
             itemActivated: (payload) => this.uiManager && this.uiManager.onItemActivated(payload),
             updateRank: (payload) => this.uiManager && this.uiManager.updateRank(payload.rank, payload.total),
             updateScore: (score) => this.uiManager && this.uiManager.updateScore(score),
+            quizSourceChanged: (payload) => {
+                const src = (payload?.source || 'SYSTEM').toUpperCase();
+                this.uiManager && this.uiManager.updateQuizSource(src);
+            },
         };
 
         Object.entries(this._gameEventBindings).forEach(([event, handler]) => {
@@ -100,13 +133,26 @@ export class UIScene extends Scene {
         }
     }
 
+    // Hide quiz widgets when not in quiz mode
+    preRender() {
+        if (this.gameMode === 'normal' && this.uiManager && this.uiManager.components?.hud) {
+            this.uiManager.components.hud.questionText?.setVisible(false);
+            this.uiManager.components.hud.timerText?.setVisible(false);
+            this.uiManager.components.hud.roundTimerText?.setVisible(false);
+        }
+    }
+
     _onShutdown() {
+        if (this._unsubOverlay) this._unsubOverlay();
         if (this.uiManager) {
             this.uiManager.destroy();
             this.uiManager = null;
         }
         this._unbindGameEvents();
         this._unbindKeyboard();
+        if (this.input && this.input.enabled !== undefined) {
+            this.input.enabled = true;
+        }
     }
 
     _unbindGameEvents() {
@@ -128,7 +174,9 @@ export class UIScene extends Scene {
     }
 
     tryUseItem(gameScene, itemId) {
+        if (overlayBlocker.isBlocked()) return;
         // Validation: Don't use if not allowed in this mode
+        if (this._overlayBlocked) return;
         if (this.gameMode !== 'normal') {
             // Quiz modes (math, english, quiz) only allow speed and ghost
             if (itemId === 'magnet') return;

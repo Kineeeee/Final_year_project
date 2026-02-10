@@ -5,12 +5,19 @@ export class QuizService {
     constructor() {
         this.questions = [];
         this.currentTopic = 'math'; // Default
+        this.source = 'SYSTEM';
     }
 
-    async fetchQuestions(topic = 'math') {
+    async fetchQuestions(topic = 'math', source = 'SYSTEM') {
         try {
             this.currentTopic = topic;
-            const url = `${CONFIG.SERVER_URL}/api/questions?topic=${topic}`;
+            this.source = source;
+            let url;
+            if (source === 'USER') {
+                url = `${CONFIG.SERVER_URL}/api/user-quiz/play?category=${topic}`;
+            } else {
+                url = `${CONFIG.SERVER_URL}/api/questions?topic=${topic}`;
+            }
             Logger.info('QuizService', `Fetching questions from ${url}`);
 
             const response = await fetch(url);

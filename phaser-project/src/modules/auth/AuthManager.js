@@ -1,6 +1,5 @@
-import { AuthService } from '../../core/services/AuthService';
-import { playerState } from '../../core/services/PlayerState';
 import { Logger } from '../../utils/Logger';
+import { authStore } from '../../core/state/authStore';
 
 export class AuthManager {
     constructor(gameStartCallback) {
@@ -48,14 +47,14 @@ export class AuthManager {
         }
 
         try {
-            const data = await this.authService.login(username, password);
+            const data = await authStore.login(username, password);
             if (data) {
-                this.saveSession(data);
                 this.hideOverlay();
                 this.gameStartCallback();
             }
         } catch (error) {
-            this.showMessage(error.message);
+            console.error('[Auth] login failed', error);
+            this.showMessage(error.message || 'Login failed. Check username/password and server.');
         }
     }
 
@@ -84,12 +83,6 @@ export class AuthManager {
 
         this.hideOverlay();
         this.gameStartCallback();
-    }
-
-    saveSession(data) {
-        // Delegate to PlayerState for Source of Truth
-        // We import the singleton instance. 
-        playerState.updateFromAuthData(data);
     }
 
     hideOverlay() {
@@ -129,21 +122,16 @@ export class AuthManager {
     }
 
     async logout() {
-        const username = localStorage.getItem('username');
-        if (username && !username.startsWith('Guest_')) {
-            try {
-                await this.authService.logout(username);
-            } catch (e) {
-                console.error('Logout failed:', e);
-            }
+        await authStore.logout();
+        // Fully reset game/session without hard reload
+        if (window.game && typeof window.game.destroy === 'function') {
+            window.game.destroy(true);
+            window.game = null;
         }
-        localStorage.removeItem('token');
-        localStorage.removeItem('username');
-        localStorage.removeItem('coins');
-        localStorage.removeItem('highScore');
-        localStorage.removeItem('inventory');
-
-        // Show overlay or reload
-        location.reload();
+        // Show login overlay again
+        if (this.loginOverlay) this.loginOverlay.style.display = 'flex';
+        if (this.usernameInput) this.usernameInput.value = '';
+        if (this.passwordInput) this.passwordInput.value = '';
+        this.showMessage('Logged out', false);
     }
 }
