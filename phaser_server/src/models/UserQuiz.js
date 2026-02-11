@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Logger = require('../utils/Logger');
 
 const answerSchema = new mongoose.Schema(
     {
@@ -43,4 +44,17 @@ const userQuizSchema = new mongoose.Schema(
 
 userQuizSchema.index({ userId: 1, category: 1 }, { unique: true });
 
-module.exports = mongoose.model('UserQuiz', userQuizSchema);
+const UserQuiz = mongoose.model('UserQuiz', userQuizSchema);
+
+// Hotfix: drop legacy unique index on userId only (caused E11000 duplicates)
+// Safe to run on startup; ignore if index not found.
+UserQuiz.collection
+    .dropIndex('userId_1')
+    .then(() => Logger.info('UserQuiz', 'Dropped legacy index userId_1'))
+    .catch((err) => {
+        if (err?.codeName !== 'IndexNotFound') {
+            Logger.warn('UserQuiz', `Failed to drop legacy index userId_1: ${err.message}`);
+        }
+    });
+
+module.exports = UserQuiz;

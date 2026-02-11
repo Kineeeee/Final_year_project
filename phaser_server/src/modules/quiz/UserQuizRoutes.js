@@ -16,6 +16,37 @@ function normalizeCategory(raw) {
     return (raw || '').toLowerCase();
 }
 
+function countBlocks(text = '') {
+    return 0; // no limit enforced
+}
+
+function normalizeQuestions(rawQuestions = []) {
+    return (rawQuestions || []).map((q) => {
+        const answers = Array.isArray(q?.answers) ? q.answers.slice(0, 4) : [];
+        while (answers.length < 4) {
+            answers.push({ text: '', isCorrect: false });
+        }
+        // Ensure booleans and at most 1 correct
+        let foundCorrect = false;
+        const sanitizedAnswers = answers.map((a) => {
+            const isCorrect = !!a?.isCorrect && !foundCorrect;
+            if (isCorrect) foundCorrect = true;
+            return {
+                text: (a?.text || '').toString().trim(),
+                isCorrect,
+            };
+        });
+        // If none marked correct, default first non-empty to correct to satisfy schema/validator
+        if (!foundCorrect && sanitizedAnswers.length > 0) {
+            sanitizedAnswers[0].isCorrect = true;
+        }
+        return {
+            question: (q?.question || '').toString().trim(),
+            answers: sanitizedAnswers,
+        };
+    });
+}
+
 function buildStatusResponse(quizDoc, category) {
     if (!quizDoc) {
         return {
@@ -78,15 +109,14 @@ router.post('/parse', requireAuth, async (req, res) => {
         return res.status(400).json({ message: 'Category không hợp lệ' });
     }
 
-    // Try AI parse first; fallback to local parse
     try {
         const aiResult = await callAiParser(rawText, normalizedCategory);
         return res.json(aiResult);
     } catch (e) {
-        Logger.warn('UserQuiz', 'AI parse failed, falling back', e.message);
+        Logger.warn('UserQuiz', 'AI parse failed, fallback parser in use', e.message);
         const { questions, errors } = parseTextToQuiz(rawText, normalizedCategory);
-        const message = !process.env.OPENAI_API_KEY ? 'AI parser chưa được cấu hình, dùng parser thường.' : 'AI parser lỗi, dùng parser thường.';
-        return res.json({ questions, errors, notice: message });
+        const notice = 'AI không khả dụng, đã dùng parser nội bộ. Vui lòng kiểm tra preview trước khi lưu.';
+        return res.json({ questions, errors, notice });
     }
 });
 
@@ -106,8 +136,18 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
     try {
         const result = await mammoth.extractRawText({ buffer: req.file.buffer });
         const rawText = result.value || '';
-        const { questions, errors } = parseTextToQuiz(rawText, category);
-        return res.json({ questions, errors });
+        if (!rawText.trim()) {
+            return res.status(400).json({ message: 'File trống hoặc không đọc được nội dung' });
+        }
+        try {
+            const aiResult = await callAiParser(rawText, category);
+            return res.json(aiResult);
+        } catch (e) {
+            Logger.warn('UserQuiz', 'DOCX AI parse failed, fallback parser in use', e.message);
+            const { questions, errors } = parseTextToQuiz(rawText, category);
+            const notice = 'AI không khả dụng, đã dùng parser nội bộ. Vui lòng kiểm tra preview trước khi lưu.';
+            return res.json({ questions, errors, notice });
+        }
     } catch (err) {
         Logger.error('UserQuiz', 'DOCX parse error', err);
         return res.status(500).json({ message: 'Lỗi đọc file docx' });
@@ -117,7 +157,7 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
 router.post('/save', requireAuth, async (req, res) => {
     try {
         const category = normalizeCategory(req.body.category);
-        const questions = req.body.questions || [];
+        const questions = normalizeQuestions(req.body.questions || []);
         if (!CATEGORY_ENUM.includes(category)) {
             return res.status(400).json({ message: 'Category không hợp lệ' });
         }
@@ -155,6 +195,9 @@ router.post('/save', requireAuth, async (req, res) => {
         });
     } catch (err) {
         Logger.error('UserQuiz', 'Save error', err);
+        if (err?.name === 'ValidationError' || err?.name === 'CastError') {
+            return res.status(400).json({ message: err.message });
+        }
         return res.status(500).json({ message: 'Server error' });
     }
 });

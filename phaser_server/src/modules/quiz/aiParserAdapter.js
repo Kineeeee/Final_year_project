@@ -1,8 +1,10 @@
 const Logger = require('../../utils/Logger');
 const { QUIZ_PARSE_PROMPT } = require('./QuizParser');
 
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+// Naming made provider-agnostic; still accept legacy OPENAI_* envs
+const LLM_MODEL = process.env.LLM_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const LLM_BASE_URL = (process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
 
 function buildPrompt(rawText, category) {
     const categoryToken = (category || '').toUpperCase();
@@ -12,24 +14,56 @@ function buildPrompt(rawText, category) {
 async function callAiParser(rawText, category) {
     Logger.info('AIParser', `AI parse requested for category=${category}, length=${(rawText || '').length}`);
 
-    if (!process.env.OPENAI_API_KEY) {
-        throw new Error('OPENAI_API_KEY not set');
+    if (!LLM_API_KEY) {
+        throw new Error('LLM_API_KEY/OPENAI_API_KEY not set');
     }
     if (typeof fetch !== 'function') {
         throw new Error('fetch is not available in this runtime');
     }
 
     const prompt = buildPrompt(rawText, category);
-    const response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+    const response = await fetch(`${LLM_BASE_URL}/chat/completions`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            Authorization: `Bearer ${LLM_API_KEY}`,
         },
         body: JSON.stringify({
-            model: OPENAI_MODEL,
+            model: LLM_MODEL,
             messages: [{ role: 'user', content: prompt }],
             temperature: 0,
+            response_format: {
+                type: 'json_schema',
+                json_schema: {
+                    name: 'quiz_questions',
+                    schema: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                question: { type: 'string' },
+                                answers: {
+                                    type: 'array',
+                                    minItems: 2,
+                                    maxItems: 8,
+                                    items: {
+                                        type: 'object',
+                                        properties: {
+                                            text: { type: 'string' },
+                                            isCorrect: { type: 'boolean' },
+                                        },
+                                        required: ['text', 'isCorrect'],
+                                        additionalProperties: false,
+                                    },
+                                },
+                            },
+                            required: ['question', 'answers'],
+                            additionalProperties: false,
+                        },
+                        minItems: 1,
+                    },
+                },
+            },
         }),
     });
 
@@ -48,7 +82,17 @@ async function callAiParser(rawText, category) {
     try {
         parsed = JSON.parse(content);
     } catch (err) {
-        throw new Error('AI response is not valid JSON');
+        // Try to extract JSON substring to be resilient to stray text
+        const match = content.match(/[\[{].*[\]}]/s);
+        if (match) {
+            try {
+                parsed = JSON.parse(match[0]);
+            } catch (e2) {
+                throw new Error('AI response is not valid JSON');
+            }
+        } else {
+            throw new Error('AI response is not valid JSON');
+        }
     }
 
     if (Array.isArray(parsed)) {

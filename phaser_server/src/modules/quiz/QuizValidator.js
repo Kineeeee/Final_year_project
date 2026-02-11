@@ -1,12 +1,12 @@
 const CATEGORY_ENUM = ['math', 'english'];
 
-function validateQuestionShape(question) {
+function validateQuestionShape(question, { allowNoCorrect = false } = {}) {
     if (!question || typeof question.question !== 'string' || !question.question.trim()) {
         return 'Câu hỏi không được để trống';
     }
 
-    if (!Array.isArray(question.answers) || question.answers.length !== 4) {
-        return 'Mỗi câu hỏi phải có đúng 4 đáp án';
+    if (!Array.isArray(question.answers) || question.answers.length < 2) {
+        return 'Mỗi câu hỏi cần ít nhất 2 đáp án';
     }
 
     let correctCount = 0;
@@ -17,8 +17,11 @@ function validateQuestionShape(question) {
         if (ans.isCorrect === true) correctCount += 1;
     }
 
-    if (correctCount !== 1) {
+    if (!allowNoCorrect && correctCount !== 1) {
         return 'Phải có đúng 1 đáp án đúng';
+    }
+    if (allowNoCorrect && correctCount > 1) {
+        return 'Chỉ được tối đa 1 đáp án đúng';
     }
 
     return null;
@@ -44,7 +47,7 @@ function isCategoryContentMismatch(questionText, category) {
  * @param {String} params.category
  * @returns {{isValid:boolean, errors:Array}}
  */
-function validateQuiz({ questions, category }) {
+function validateQuiz({ questions, category }, { allowNoCorrect = false } = {}) {
     const errors = [];
     const normalizedCategory = (category || '').toLowerCase();
 
@@ -57,7 +60,7 @@ function validateQuiz({ questions, category }) {
     }
 
     questions.forEach((q, index) => {
-        const shapeError = validateQuestionShape(q);
+        const shapeError = validateQuestionShape(q, { allowNoCorrect });
         if (shapeError) {
             errors.push({ questionIndex: index, reason: shapeError });
             return;

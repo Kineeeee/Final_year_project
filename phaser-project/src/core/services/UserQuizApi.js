@@ -52,6 +52,9 @@ export const userQuizApi = {
         form.append('file', file);
         return request('/upload', { method: 'POST', body: form, isForm: true });
     },
+    getQuiz(category) {
+        return request(`/play?category=${category}`);
+    },
     saveQuiz(category, questions) {
         return request('/save', { method: 'POST', body: { category, questions } });
     },

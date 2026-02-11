@@ -1,6 +1,7 @@
 import { userQuizApi } from '../../core/services/UserQuizApi';
 import { overlayBlocker } from '../../core/services/OverlayBlocker';
 import { Logger } from '../../utils/Logger';
+import { globalQuizPrefs } from '../../core/services/GlobalQuizPrefs';
 
 const CATEGORY_LABELS = {
     math: 'Math',
@@ -13,7 +14,7 @@ export class QuizSetupOverlay {
         this.onStart = onStart;
         this.onClose = onClose;
         this.disablePlay = disablePlay;
-        this.selectedQuizSource = 'SYSTEM';
+        this.selectedQuizSource = globalQuizPrefs.getQuizSource() || 'SYSTEM';
         this.status = null;
         this.previewQuestions = [];
         this.previewErrors = [];
@@ -24,6 +25,8 @@ export class QuizSetupOverlay {
         this.toggleInput = null;
         this.errorBox = null;
         this.previewBox = null;
+        this.progressBox = null;
+        this.warningBox = null;
         this.playButton = null;
         this.saveButton = null;
         this.docInput = null;
@@ -50,6 +53,8 @@ export class QuizSetupOverlay {
         this.toggleInput = this.root.querySelector('#use-my-quiz');
         this.errorBox = this.root.querySelector('[data-role=errors]');
         this.previewBox = this.root.querySelector('[data-role=preview]');
+        this.progressBox = this.root.querySelector('[data-role=parse-status]');
+        this.warningBox = this.root.querySelector('[data-role=warn]');
         this.playButton = this.root.querySelector('[data-action=start]');
         this.saveButton = this.root.querySelector('[data-action=save]');
         this.docInput = this.root.querySelector('#quiz-docx');
@@ -114,10 +119,12 @@ export class QuizSetupOverlay {
         try {
             this.status = await userQuizApi.getStatus(this.category);
             this.updateStatusBadge();
-            // Default: system; auto enable toggle if valid and previously selected?
-            this.toggleInput.checked = false;
+            // Default selection comes from stored preference
+            this.toggleInput.checked = this.selectedQuizSource === 'USER' && !!this.status.isValid;
             this.toggleInput.disabled = !this.status.isValid;
             this.updateSourceLabel();
+            await this.loadExistingQuizIfAny();
+            await this.applySourceSelection(); // sync server + prefs
             this.updatePlayButtonState();
         } catch (err) {
             Logger.error('QuizOverlay', 'Status error', err);
@@ -129,6 +136,21 @@ export class QuizSetupOverlay {
             // Cho phép chơi với đề hệ thống ngay cả khi không fetch được trạng thái
             this.updatePlayButtonState();
             this.showErrors([{ questionIndex: -1, reason: err.message || 'Không tải được trạng thái (có thể thiếu đăng nhập)' }]);
+        }
+    }
+
+    async loadExistingQuizIfAny() {
+        if (!this.status || !this.status.hasQuiz) return;
+        try {
+            const questions = await userQuizApi.getQuiz(this.category);
+            if (Array.isArray(questions) && questions.length) {
+                this.previewQuestions = questions;
+                this.previewErrors = this.status.errors || [];
+                this.renderPreview();
+                this.showErrors([{ questionIndex: -1, reason: 'Đang hiển thị đề đã lưu. Lưu mới sẽ thay thế đề cũ.' }], 'success');
+            }
+        } catch (err) {
+            Logger.warn('QuizOverlay', 'Load existing quiz failed', err);
         }
     }
 
@@ -173,6 +195,7 @@ export class QuizSetupOverlay {
             this.selectedQuizSource = 'SYSTEM';
         }
         this.updateSourceLabel();
+        this.applySourceSelection();
         this.updatePlayButtonState();
     }
 
@@ -182,8 +205,11 @@ export class QuizSetupOverlay {
             this.showErrors([{ questionIndex: -1, reason: 'Nội dung trống' }]);
             return;
         }
+        this.setLoading(true);
+        this.setProgress(['1) Gửi AI chuẩn hoá (LM Studio)...'], 'muted');
         try {
             const res = await userQuizApi.parseText(this.category, text);
+            this.setProgress(['2) AI trả về, đang kiểm tra cấu trúc...'], 'muted');
             this.previewQuestions = res.questions || [];
             this.previewErrors = res.errors || [];
             if (res.notice) {
@@ -192,31 +218,50 @@ export class QuizSetupOverlay {
             this.renderPreview();
             if (this.previewErrors.length === 0 && this.previewQuestions.length > 0) {
                 this.showErrors([{ questionIndex: -1, reason: 'Parse thành công. Bạn hãy lưu đề.' }], 'success');
+                this.setProgress([
+                    '1) Gửi AI chuẩn hoá: ✔',
+                    '2) Kiểm tra cấu trúc: ✔',
+                    '3) Hiển thị preview: ✔'
+                ], 'success');
             } else {
                 this.showErrors(this.previewErrors);
+                this.setProgress(['Quá trình dừng do lỗi kiểm tra cấu trúc.'], 'danger');
             }
         } catch (err) {
             this.showErrors([{ questionIndex: -1, reason: err.message }]);
+            this.setProgress(['Lỗi AI/Server: ' + (err.message || 'Không xác định')], 'danger');
         }
+        this.setLoading(false);
     }
 
     async handleDocx(file) {
         if (!file) return;
+        this.setLoading(true);
+        this.setProgress(['1) Đọc file DOCX...', '2) Gửi AI chuẩn hoá (LM Studio)...'], 'muted');
         try {
             const res = await userQuizApi.uploadDocx(this.category, file);
+            this.setProgress(['3) AI trả về, đang kiểm tra cấu trúc...'], 'muted');
             this.previewQuestions = res.questions || [];
             this.previewErrors = res.errors || [];
             this.renderPreview();
             if (this.previewErrors.length === 0 && this.previewQuestions.length > 0) {
                 this.showErrors([{ questionIndex: -1, reason: 'Đã đọc file. Bấm Lưu đề.' }], 'success');
+                this.setProgress([
+                    '1) Đọc file DOCX: ✔',
+                    '2) Gửi AI chuẩn hoá: ✔',
+                    '3) Kiểm tra cấu trúc & hiển thị preview: ✔'
+                ], 'success');
             } else {
                 this.showErrors(this.previewErrors);
+                this.setProgress(['Quá trình dừng do lỗi kiểm tra cấu trúc.'], 'danger');
             }
         } catch (err) {
             this.showErrors([{ questionIndex: -1, reason: err.message }]);
+            this.setProgress(['Lỗi AI/Server: ' + (err.message || 'Không xác định')], 'danger');
         } finally {
             this.docInput.value = '';
             this.updatePlayButtonState();
+            this.setLoading(false);
         }
     }
 
@@ -234,7 +279,11 @@ export class QuizSetupOverlay {
                 this.toggleInput.checked = true;
                 this.selectedQuizSource = 'USER';
                 await userQuizApi.setQuizSource(this.category, 'USER');
-                this.showErrors([{ questionIndex: -1, reason: 'Đã lưu & bật đề của bạn' }], 'success');
+                globalQuizPrefs.setQuizSource('USER'); // ensure MainMenu uses your quiz on next start
+                this.showErrors(
+                    [{ questionIndex: -1, reason: 'Đã lưu & bật đề của bạn (đề cũ đã được thay thế)' }],
+                    'success'
+                );
             } else {
                 this.toggleInput.checked = false;
                 this.selectedQuizSource = 'SYSTEM';
@@ -304,6 +353,9 @@ export class QuizSetupOverlay {
             const answersWrap = document.createElement('div');
             answersWrap.className = 'answers-grid';
             q.answers.forEach((ans, aIdx) => {
+                const sanitizedText = this.cleanAnswerText(ans.text || '');
+                this.previewQuestions[idx].answers[aIdx].text = sanitizedText;
+
                 const row = document.createElement('label');
                 row.className = 'answer-row';
                 const radio = document.createElement('input');
@@ -322,7 +374,7 @@ export class QuizSetupOverlay {
 
                 const input = document.createElement('input');
                 input.type = 'text';
-                input.value = ans.text || '';
+                input.value = sanitizedText;
                 input.placeholder = `Đáp án ${aIdx + 1}`;
                 input.addEventListener('input', () => {
                     this.previewQuestions[idx].answers[aIdx].text = input.value;
@@ -359,6 +411,46 @@ export class QuizSetupOverlay {
             .join('');
     }
 
+    setProgress(lines = [], tone = 'muted') {
+        if (!this.progressBox) return;
+        if (!lines || lines.length === 0) {
+            this.progressBox.innerHTML = '';
+            return;
+        }
+        const cls = tone === 'success' ? 'success' : tone === 'danger' ? 'danger' : 'muted';
+        this.progressBox.className = `status-box ${cls}`;
+        this.progressBox.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
+    }
+
+    setLoading(isLoading) {
+        this.loading = isLoading;
+        const parseBtn = this.root?.querySelector('[data-action=parse]');
+        if (parseBtn) parseBtn.disabled = isLoading;
+        if (this.saveButton) this.saveButton.disabled = isLoading;
+        if (this.playButton) this.playButton.disabled = isLoading;
+        if (this.docInput) this.docInput.disabled = isLoading;
+
+        if (this.warningBox) {
+            this.warningBox.innerHTML = `
+                <div class="warning-box">
+                    AI có thể trả lời sai. Vui lòng kiểm tra lại câu hỏi/đáp án trước khi bấm Lưu.
+                    ${isLoading ? '<div class="loading-pill"><span class="loading-dot"></span> Đang xử lý...</div>' : ''}
+                </div>
+            `;
+        }
+    }
+
+    setProgress(lines = [], tone = 'muted') {
+        if (!this.progressBox) return;
+        if (!lines || lines.length === 0) {
+            this.progressBox.innerHTML = '';
+            return;
+        }
+        const cls = tone === 'success' ? 'success' : tone === 'danger' ? 'danger' : 'muted';
+        this.progressBox.className = `status-box ${cls}`;
+        this.progressBox.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
+    }
+
     updateSourceLabel() {
         if (this.sourceLabel) {
             this.sourceLabel.textContent = this.selectedQuizSource;
@@ -370,6 +462,30 @@ export class QuizSetupOverlay {
             this.selectedQuizSource === 'SYSTEM' ||
             (this.selectedQuizSource === 'USER' && this.status && this.status.isValid);
         this.playButton.disabled = !allow;
+    }
+
+    async applySourceSelection() {
+        const source = this.selectedQuizSource;
+        // Persist preference locally
+        globalQuizPrefs.setQuizSource(source);
+
+        // Notify server only when toggle is usable
+        if (source === 'USER') {
+            if (this.status?.isValid) {
+                try {
+                    await userQuizApi.setQuizSource(this.category, 'USER');
+                } catch (e) {
+                    Logger.warn('QuizOverlay', 'Failed to set USER source', e);
+                    this.showErrors([{ questionIndex: -1, reason: e.message || 'Không chuyển được sang đề của bạn' }]);
+                }
+            }
+        } else {
+            try {
+                await userQuizApi.setQuizSource(this.category, 'SYSTEM');
+            } catch (e) {
+                Logger.warn('QuizOverlay', 'Failed to set SYSTEM source', e);
+            }
+        }
     }
 
     normalizeText(raw) {
@@ -386,6 +502,15 @@ export class QuizSetupOverlay {
         return lines.join('\n').trim();
     }
 
+    cleanAnswerText(text = '') {
+        return (text || '').replace(/\s*\[(đúng|sai)\]\s*/gi, '')
+            .replace(/\s*\((đúng|sai|correct)\)\s*/gi, '')
+            .replace(/\s*\[correct\]\s*/gi, '')
+            .replace(/\s*\[x\]\s*/gi, '')
+            .replace(/[*✔]/g, '')
+            .trim();
+    }
+
     renderSkeleton() {
         return `
         <div class="quiz-overlay__backdrop"></div>
@@ -398,38 +523,54 @@ export class QuizSetupOverlay {
                 </div>
                 <button class="ghost-btn" data-action="close">✕</button>
             </div>
-            <div class="quiz-overlay__section">
-                <div class="chip-row">
-                    <button class="chip" data-action="category" data-value="math">Math</button>
-                    <button class="chip" data-action="category" data-value="english">English</button>
-                </div>
-                <div class="toggle-row">
-                    <label class="toggle">
-                        <input type="checkbox" id="use-my-quiz" />
-                        <span class="toggle__slider"></span>
-                        <span>Đề của bạn – <span data-role="category-label">Math</span></span>
-                    </label>
-                </div>
-            </div>
-            <div class="quiz-overlay__section grid">
-                <div>
-                    <div class="field">
-                        <label>Nội dung đề (paste)</label>
-                        <textarea id="quiz-raw-text" rows="8" placeholder="Q: 8 + 5 = ?&#10;A) 12&#10;B) *13&#10;C) 10&#10;D) 15&#10;&#10;Q: Synonym of happy?&#10;1) *joyful&#10;2) sad&#10;3) tired&#10;4) angry"></textarea>
+            <div class="quiz-overlay__body">
+                <div class="quiz-overlay__section">
+                    <div class="chip-row">
+                        <button class="chip" data-action="category" data-value="math">Math</button>
+                        <button class="chip" data-action="category" data-value="english">English</button>
                     </div>
-                    <div class="actions-inline">
-                        <button class="primary" data-action="parse">Parse & Preview</button>
-                        <label class="secondary file-label">
-                            Tải DOCX
-                            <input type="file" id="quiz-docx" accept=".docx" hidden />
+                    <div class="toggle-row">
+                        <label class="toggle">
+                            <input type="checkbox" id="use-my-quiz" />
+                            <span class="toggle__slider"></span>
+                            <span>Đề của bạn – <span data-role="category-label">Math</span></span>
                         </label>
-                        <button class="ghost" data-action="save">Lưu đề</button>
                     </div>
-                    <div data-role="errors" class="error-box"></div>
                 </div>
-                <div>
-                    <div class="section-title">Preview</div>
-                    <div data-role="preview" class="preview-box"></div>
+                <div class="quiz-overlay__section grid">
+                    <div>
+                        <div class="field">
+                            <label>Nội dung đề (paste)</label>
+                            <textarea id="quiz-raw-text" rows="8" placeholder="Q: 8 + 5 = ?&#10;A) 12&#10;B) *13&#10;C) 10&#10;D) 15&#10;&#10;Q: Synonym of happy?&#10;1) *joyful&#10;2) sad&#10;3) tired&#10;4) angry"></textarea>
+                        </div>
+                        <div class="actions-inline">
+                            <button class="primary" data-action="parse">Parse & Preview</button>
+                            <label class="secondary file-label">
+                                Tải DOCX
+                                <input type="file" id="quiz-docx" accept=".docx" hidden />
+                            </label>
+                            <button class="ghost" data-action="save">Lưu đề</button>
+                        </div>
+                        <div class="upload-hint">
+                            <strong>Hướng dẫn nhanh:</strong>
+                            <ul>
+                                <li>Chọn category phù hợp.</li>
+                                <li>Bật <em>Đề của bạn</em> nếu muốn dùng đề cá nhân đã lưu.</li>
+                                <li>Định dạng câu hỏi: câu hỏi ? | đáp án 1 [ĐÚNG]| đáp án 2 | đáp án 3. đây là định dạng câu hỏi trắc nghiệm </li>
+                                <li>Bạn có thể nhờ AI chuẩn bị đề dựa theo định dạng trên.</li>
+                                <li>Hoặc chỉ cần dán nội dung hoặc chọn file DOCX có đánh dấu [ĐÚNG] nếu có.</li>
+                                <li>Nhấn <em>Parse & Preview</em> để hệ thống chuẩn hoá.</li>
+                                <li>Kiểm tra & chọn đáp án đúng trong preview trước khi <em>Lưu đề</em>.</li>
+                            </ul>
+                        </div>
+                        <div data-role="warn"></div>
+                        <div data-role="parse-status" class="status-box muted-text"></div>
+                        <div data-role="errors" class="error-box"></div>
+                    </div>
+                    <div>
+                        <div class="section-title">Preview</div>
+                        <div data-role="preview" class="preview-box"></div>
+                    </div>
                 </div>
             </div>
             <div class="quiz-overlay__footer">

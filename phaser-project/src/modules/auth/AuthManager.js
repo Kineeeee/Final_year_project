@@ -1,5 +1,7 @@
 import { Logger } from '../../utils/Logger';
 import { authStore } from '../../core/state/authStore';
+import { AuthService } from '../../core/services/AuthService';
+import { playerState } from '../../core/services/PlayerState';
 
 export class AuthManager {
     constructor(gameStartCallback) {
@@ -87,6 +89,18 @@ export class AuthManager {
 
     hideOverlay() {
         if (this.loginOverlay) this.loginOverlay.style.display = 'none';
+    }
+
+    saveSession(data) {
+        if (!data) return;
+
+        try {
+            // Reuse central state hydrator to keep tokens/coins/inventory in sync
+            playerState.updateFromAuthData(data);
+            authStore.notify();
+        } catch (error) {
+            console.warn('Failed to persist refreshed session', error);
+        }
     }
 
     async checkAutoLogin() {

@@ -5,20 +5,38 @@ Input category: {{CATEGORY}} (one of: MATH, ENGLISH).
 Input text: """{{RAW_TEXT}}"""
 
 Rules:
-- Each question: exactly 1 question string and 4 answers.
-- Exactly 1 answer has isCorrect=true; 3 are false.
+- Extract each question with at least 2 answers (more is fine).
+- Detect explicit correctness markers ([ĐÚNG], (correct), [x], *, ✔). If present, set isCorrect=true for that answer.
+- If multiple answers are marked, keep the first marked answer as isCorrect=true, set others to false.
+- If no answer is marked, set all isCorrect=false (user will choose later).
+- Remove markers like [ĐÚNG], [SAI], (correct), *, ✔ from the answer text.
 - No empty text; all questions must belong to category {{CATEGORY}}.
-Output:
-- If all valid: JSON array of questions using:
-  [{"question":"...","answers":[{"text":"...","isCorrect":true},{"text":"...","isCorrect":false},{"text":"...","isCorrect":false},{"text":"...","isCorrect":false}]}]
-- If any issue: return JSON object {"errors":[{"questionIndex":n,"reason":"..."}]} and no questions.
-Do not include explanations outside JSON.`;
+
+Output (JSON only):
+[
+  {
+    "question": "...",
+    "answers": [
+      {"text": "...", "isCorrect": false},
+      {"text": "...", "isCorrect": false},
+      {"text": "...", "isCorrect": false}
+    ]
+  }
+]
+
+If any issue: return {"errors":[{"questionIndex":n,"reason":"..."}]} and no questions.
+Do not include any extra text outside JSON.`;
 
 const MARKERS = ['[x]', '(x)', '(correct)', '[correct]', '✔', '*'];
 
 function normalizeText(raw) {
     if (!raw) return '';
-    return raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    // Normalize line endings and ensure '---' always acts as a separator
+    return raw
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/-{3,}/g, '\n---\n')
+        .trim();
 }
 
 function splitBlocks(text) {
@@ -36,7 +54,9 @@ function splitBlocks(text) {
 
     lines.forEach((line) => {
         const trimmed = line.trim();
-        if (!trimmed) {
+        // Treat blank lines or separator lines (---) as block breaks
+        const isSeparatorLine = /^-{3,}$/.test(trimmed);
+        if (!trimmed || isSeparatorLine) {
             flush();
             return;
         }
@@ -82,9 +102,23 @@ function parseAnswers(lines) {
 }
 
 function parseBlock(block) {
-    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (lines.length < 5) {
-        return { error: 'Thiếu đáp án, cần 1 câu hỏi và 4 đáp án' };
+    let lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+
+    // Support inline format: "Question | A.... | B.... | C.... | D...."
+    if (lines.length < 3 && lines.some((l) => l.includes('|'))) {
+        const tokens = lines
+            .join(' ')
+            .split('|')
+            .map((t) => t.trim())
+            .filter(Boolean);
+        if (tokens.length >= 3) {
+            const questionLine = tokens.shift();
+            lines = [questionLine, ...tokens];
+        }
+    }
+
+    if (lines.length < 3) {
+        return { error: 'Thiếu đáp án, cần 1 câu hỏi và ít nhất 2 đáp án' };
     }
 
     const questionLine = lines[0].replace(/^\d+[\).\-\:]\s*/, '');
@@ -122,7 +156,7 @@ function parseTextToQuiz(rawText, category) {
     });
 
     // Run validation to surface structural errors (like answer counts / multiple correct)
-    const validation = validateQuiz({ questions, category: normalizedCategory });
+    const validation = validateQuiz({ questions, category: normalizedCategory }, { allowNoCorrect: true });
     if (!validation.isValid) {
         parseErrors.push(...validation.errors);
     }
