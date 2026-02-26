@@ -38,9 +38,19 @@ connectDB();
 const cookieParser = require('cookie-parser');
 
 // 2.Middleware
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173').split(',');
+const rawOrigins = process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173';
+const allowedOrigins = rawOrigins.split(',').map((o) => o.trim()).filter(Boolean);
+
+// Allow wildcard in dev by setting CORS_ORIGINS="*"
+const corsOrigin = (origin, callback) => {
+    if (!origin) return callback(null, true); // mobile app / curl
+    if (allowedOrigins.includes('*')) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+};
+
 app.use(cors({
-    origin: allowedOrigins,
+    origin: corsOrigin,
     credentials: true
 }));
 app.use(cookieParser());
@@ -60,7 +70,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
     parser,
     cors: {
-        origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+        origin: allowedOrigins.includes('*') ? '*' : allowedOrigins,
         methods: ['GET', 'POST'],
     },
 });
