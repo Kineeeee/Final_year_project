@@ -4,7 +4,8 @@ import { CONFIG } from '../../config/constants';
 export class Minimap {
     constructor(scene) {
         this.scene = scene;
-        this.size = 150; // Map display size (px)
+        this.baseSize = 150; // Map display size (px)
+        this.size = this.baseSize;
         this.scale = this.size / CONFIG.WORLD_WIDTH; // Scaling factor
 
         this.createElements();
@@ -44,9 +45,20 @@ export class Minimap {
         // Let's put it Bottom-Right but shifted up, or Bottom-Center?
         // Safe bet: Bottom-Right, offset by margin.
 
-        const margin = 20;
+        const margin = safeArea.controlPadding || 16;
+        const uiScale = safeArea.uiScale || 1;
+
+        // Resize minimap according to UI scale, clamped to reasonable size.
+        this.size = Math.max(90, Math.min(this.baseSize * uiScale * 1.05, 170));
+        this.scale = this.size / CONFIG.WORLD_WIDTH;
+
+        // Update background size
+        this.bg.setSize(this.size, this.size);
+        this.bg.setDisplaySize(this.size, this.size);
+
         const x = safeArea.right - this.size - margin;
-        const y = safeArea.bottom - this.size - margin;
+        // Drop under Ping/FPS text (~40px height) and leave a small gap.
+        const y = safeArea.top + 60 * uiScale + margin;
 
         this.container.setPosition(x, y);
     }

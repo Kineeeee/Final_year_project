@@ -33,17 +33,13 @@ export class Leaderboard {
     }
 
     resize(safeArea) {
-        // Position Top-Left, but ensure it doesn't overlap Coins too much
-        // Coins are usually very top-left. Let's put Leaderboard slightly below Coins?
-        // OR: Coins at very top, Leaderboard below.
-
-        // In GameHUD.js we put Coins at: safeArea.left, safeArea.top
-        // So let's push Leaderboard down a bit.
+        const scale = safeArea.uiScale || 1;
 
         const x = safeArea.left;
-        const y = safeArea.top + 50; // Gap for Coins
+        const y = safeArea.top + 40 * scale; // Gap for Coins
 
         this.container.setPosition(x, y);
+        this.container.setScale(scale);
 
         // Resize Background based on text content? 
         // For now fixed width is okay, height dynamic?

@@ -24,6 +24,8 @@ export class MainMenu extends Scene {
         const { width, height } = this.scale;
         const centerX = width / 2;
         const centerY = height / 2;
+        const isMobile = width < 1080;
+        const padding = isMobile ? 18 : 32;
 
         // --- 1. BACKGROUND ---
         if (this.textures.exists('menu-bg')) {
@@ -47,9 +49,9 @@ export class MainMenu extends Scene {
 
         // --- 2. HEADER ---
         // Hạ thấp Header xuống một chút (0.15) để Logo không bị cắt ở mép trên màn hình
-        const headerY = height * 0.28; 
-        const bannerW = 600;
-        const bannerH = 80;
+        const headerY = height * (isMobile ? 0.24 : 0.28); 
+        const bannerW = Math.min(620, width - padding * 2);
+        const bannerH = isMobile ? 68 : 80;
 
         // A. VẼ BANNER (NỀN) TRƯỚC
         const banner = this.add.graphics();
@@ -68,13 +70,16 @@ export class MainMenu extends Scene {
         // 2. Đặt vị trí cao hơn hẳn (headerY - 70) để nó đậu trên nóc Banner, không đè vào chữ
         let logo;
         if (this.textures.exists('logo')) {
-            logo = this.add.image(centerX, headerY - 140, 'logo').setScale(0.065);
+            const logoScale = isMobile ? 0.052 : 0.07;
+            // Position logo to sit near the lower edge of the ribbon, not floating above it.
+            const logoY = headerY - (bannerH * 0.55) - 80;
+            logo = this.add.image(centerX, logoY, 'logo').setScale(logoScale);
         }
 
         // C. TITLE TEXT (VẼ SAU CÙNG ĐỂ NỔI LÊN TRÊN)
         const titleText = this.add.text(centerX, headerY, 'SNAKE ARENA', { // +10 để dịch chữ xuống dưới 1 chút, tránh Logo
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: '38px', // Giảm size chữ 1 xíu cho đỡ chật
+            fontSize: isMobile ? '30px' : '38px',
             color: '#ffffff',
             stroke: '#000000',
             strokeThickness: 6,
@@ -89,11 +94,11 @@ export class MainMenu extends Scene {
 
         // --- 3. STATS BAR ---
         // Tăng khoảng cách từ Header xuống Stats (từ 70 lên 85) để thoáng hơn
-        const statsY = headerY + 85; 
+        const statsY = headerY + (isMobile ? 65 : 85); 
         const statsContainer = this.add.container(centerX, statsY);
         
         const statsBg = this.add.graphics();
-        const statsW = 620;
+        const statsW = Math.min(620, width - padding * 2);
         const statsH = 46;
         const r = 10;
         
@@ -113,7 +118,7 @@ export class MainMenu extends Scene {
 
         const statsStyle = { 
             fontFamily: '"Press Start 2P", monospace', 
-            fontSize: '14px', // Giảm xuống 14px để an toàn cho tên dài
+            fontSize: isMobile ? '12px' : '14px', // Giảm xuống 14px để an toàn cho tên dài
             color: '#FFD700', 
             stroke: '#000000',
             strokeThickness: 4,
@@ -134,10 +139,10 @@ export class MainMenu extends Scene {
         uiRoot.add(statsContainer);
 
         // --- 4. GLOBAL QUIZ SOURCE + UPLOAD ---
-        const sourceY = statsY + 80;
+        const sourceY = statsY + (isMobile ? 60 : 80);
         const sourceLabel = this.add.text(centerX - 240, sourceY, 'Quiz Source:', {
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: '14px',
+            fontSize: isMobile ? '12px' : '14px',
             color: '#ffffff',
             stroke: '#000000',
             strokeThickness: 4,
@@ -159,8 +164,8 @@ export class MainMenu extends Scene {
 
         this.chipSystem = makeChip('SYSTEM', 'SYSTEM', '#27ae60');
         this.chipUser = makeChip('USER', 'USER', '#8e44ad');
-        this.chipSystem.setPosition(centerX, sourceY);
-        this.chipUser.setPosition(centerX + 170, sourceY);
+        this.chipSystem.setPosition(centerX - (isMobile ? 60 : 0), sourceY);
+        this.chipUser.setPosition(centerX + (isMobile ? 60 : 170), sourceY);
         uiRoot.add([sourceLabel, this.chipSystem, this.chipUser]);
         this.refreshSourceChips();
         this.preloadUserQuizStatus();
@@ -172,18 +177,25 @@ export class MainMenu extends Scene {
             { label: 'SURVIVAL', mode: 'normal', icon: 'icon-survival', color: 0x44c448, shadow: 0x1d6a21 }
         ];
 
-        const cardWidth = 190;
-        const cardHeight = 250;
-        const cardGap = 25;
-        const totalRowWidth = (cardWidth * modes.length) + (cardGap * (modes.length - 1));
+        const maxCols = isMobile ? 2 : 3;
+        const cols = Math.min(maxCols, modes.length);
+        const availW = width - padding * 2;
+        const cardGap = isMobile ? 14 : 20;
+        const cardWidth = Math.min(200, (availW - cardGap * (cols - 1)) / cols);
+        const cardHeight = cardWidth * 1.25;
+        const totalRowWidth = (cardWidth * cols) + (cardGap * (cols - 1));
         const startX = centerX - (totalRowWidth / 2) + (cardWidth / 2);
         
         // Tăng khoảng cách Start Y của Card để không đụng Stats Bar
-        const cardY = centerY + 50; 
+        // Push mode cards further down to clear the stats bar
+        const cardY = centerY + (isMobile ? 130 : 100); 
 
         modes.forEach((m, i) => {
-            const x = startX + (i * (cardWidth + cardGap));
-            const card = this.add.container(x, cardY);
+            const row = Math.floor(i / cols);
+            const col = i % cols;
+            const x = startX + (col * (cardWidth + cardGap));
+            const y = cardY + row * (cardHeight + (isMobile ? 14 : 20));
+            const card = this.add.container(x, y);
             const g = this.add.graphics();
             const w = cardWidth;
             const h = cardHeight;
@@ -218,7 +230,7 @@ export class MainMenu extends Scene {
 
             const label = this.add.text(0, h/2 - 45, m.label, {
                 fontFamily: '"Press Start 2P", monospace',
-                fontSize: '18px',
+                fontSize: isMobile ? '14px' : '18px',
                 color: '#ffffff',
                 stroke: '#000000',
                 strokeThickness: 6,
@@ -243,7 +255,7 @@ export class MainMenu extends Scene {
         });
 
         // --- 6. BOTTOM BUTTONS ---
-        const bottomY = height - 60;
+        const bottomY = height - (isMobile ? 30 : 60); // move buttons down (leave room for status bar)
         this.createStylishButton(uiRoot, centerX - 220, bottomY, '🛒 SHOP', 0x3d6cb9, () => {
             this.scene.launch('ShopScene');
             this.scene.pause();

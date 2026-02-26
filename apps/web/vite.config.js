@@ -8,11 +8,14 @@ const withEnv = (mode) => {
 
 export default defineConfig(({ mode }) => {
     const env = withEnv(mode);
+    const define = {};
+    if (env.VITE_SERVER_URL) {
+        define.__SERVER_URL__ = JSON.stringify(env.VITE_SERVER_URL);
+    }
+
     return {
         base: './',
-        define: {
-            __SERVER_URL__: JSON.stringify(env.VITE_SERVER_URL || 'http://localhost:3000'),
-        },
+        define,
         build: {
             assetsDir: 'assets',
             rollupOptions: {

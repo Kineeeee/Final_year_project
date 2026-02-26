@@ -48,26 +48,29 @@ export class MobileControls {
     }
 
     resize(safeArea) {
-        // Larger controls for HD resolution
-        // Radius: Mobile = 130, Tablet? 
-        const joyRadius = 130;
-        const btnRadius = 90;
-        const padding = 20;
+        // Scale controls based on available safe area so they don't cover UI.
+        const joyRadius = Math.max(70, safeArea.controlRadius || 120);
+        const btnRadius = Math.max(60, Math.round(joyRadius * 0.7));
+        const padding = safeArea.controlPadding || 20;
 
         if (this.joystick) {
-            // Position: Bottom Left (Inside Safe Area)
-            // x = left + radius + padding
-            // y = bottom - radius - padding
             const jX = safeArea.left + joyRadius + padding;
             const jY = safeArea.bottom - joyRadius - padding;
 
             this.joystick.setPosition(jX, jY);
-            // Update radius visual if needed, but usually fixed works fine.
-            // Note: Plugin setPosition might update visuals automatically.
+            if (typeof this.joystick.radius !== 'undefined') {
+                this.joystick.radius = joyRadius;
+            }
+            // Keep visuals in sync with the logical radius.
+            if (this.joystick.base?.setRadius) {
+                this.joystick.base.setRadius(joyRadius);
+            }
+            if (this.joystick.thumb?.setRadius) {
+                this.joystick.thumb.setRadius(Math.max(36, joyRadius * 0.45));
+            }
         }
 
         if (this.boostBtn) {
-            // Position: Bottom Right
             const bX = safeArea.right - btnRadius - padding;
             const bY = safeArea.bottom - btnRadius - padding;
 

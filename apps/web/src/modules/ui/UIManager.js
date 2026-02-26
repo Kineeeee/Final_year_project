@@ -3,6 +3,7 @@ import { Leaderboard } from '../leaderboard/Leaderboard';
 import { MobileControls } from '../controls/MobileControls';
 import { ItemSlots } from '../inventory/ItemSlots';
 import { Minimap } from '../minimap/Minimap';
+import { CONFIG } from '../../config/constants';
 
 export class UIManager {
     constructor(scene, mode = 'normal') {
@@ -48,19 +49,34 @@ export class UIManager {
         const height = gameSize.height;
         const isMobile = !this.scene.sys.game.device.os.desktop;
 
-        // Calculate Safe Area (Simple implementation, can be expanded)
-        // For mobile, assume 60px padding for top notch/bottom bar
+        // Tighter gutters on mobile so HUD hugs the edge and leaves room for controls.
+        const margin = isMobile ? 14 : 20;
+
+        // Control radius hint lets other components (HUD, minimap) stay clear of buttons.
+        const controlRadius = isMobile
+            ? Math.max(56, Math.min(Math.min(width, height) * 0.16, 110))
+            : 0;
+
+        // Global UI scale relative to 1280x720 design size.
+        const baseW = CONFIG?.WIDTH || 1280;
+        const baseH = CONFIG?.HEIGHT || 720;
+        const uiScaleRaw = Math.min(width / baseW, height / baseH);
+        const uiScale = Math.max(0.55, Math.min(uiScaleRaw * (isMobile ? 0.9 : 1), 1));
+
         const safeArea = {
-            x: isMobile ? 60 : 20,
-            y: isMobile ? 60 : 20,
-            width: width - (isMobile ? 120 : 40),
-            height: height - (isMobile ? 120 : 40),
-            top: isMobile ? 60 : 20,
-            bottom: height - (isMobile ? 60 : 20),
-            left: isMobile ? 60 : 20,
-            right: width - (isMobile ? 60 : 20),
+            x: margin,
+            y: margin,
+            width: width - margin * 2,
+            height: height - margin * 2,
+            top: margin,
+            bottom: height - margin,
+            left: margin,
+            right: width - margin,
             centerX: width / 2,
             centerY: height / 2,
+            controlRadius,
+            controlPadding: margin,
+            uiScale,
         };
 
         // Update all components with new layout

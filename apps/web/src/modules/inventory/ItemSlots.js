@@ -105,13 +105,15 @@ export class ItemSlots {
     }
 
     resize(safeArea) {
-        const gap = 100;
+        const scale = safeArea.uiScale || 1;
+        const gap = 100 * scale;
         const slotIds = Object.keys(this.slots);
         const startX = -((slotIds.length - 1) * gap) / 2;
 
         this.container.setDepth(90);
         // Position Top Center, slightly below the "top" margin to clear the HUD text
-        this.container.setPosition(safeArea.centerX, safeArea.top + 100);
+        this.container.setPosition(safeArea.centerX, safeArea.top + 90 * scale);
+        this.container.setScale(scale);
 
         slotIds.forEach((id, index) => {
             const slot = this.slots[id];

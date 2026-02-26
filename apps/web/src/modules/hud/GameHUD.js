@@ -112,29 +112,37 @@ export class GameHUD {
     }
 
     resize(safeArea) {
+        const s = safeArea.uiScale || 1;
+
         // Ping: Top-Right
         this.pingText.setPosition(safeArea.right, safeArea.top);
+        this.pingText.setScale(s);
 
         // FPS: Below Ping
-        this.fpsText.setPosition(safeArea.right, safeArea.top + 20);
+        this.fpsText.setPosition(safeArea.right, safeArea.top + 20 * s);
+        this.fpsText.setScale(s);
 
         // Round Timer: Below FPS (Give some gap)
-        this.roundTimerText.setPosition(safeArea.right, safeArea.top + 50);
+        this.roundTimerText.setPosition(safeArea.right, safeArea.top + 50 * s);
+        this.roundTimerText.setScale(s);
 
         // Coins: Top-Left
         this.coinText.setPosition(safeArea.left, safeArea.top);
-        this.quizSourceLabel.setPosition(safeArea.left, safeArea.top + 32);
+        this.coinText.setScale(s);
+        this.quizSourceLabel.setPosition(safeArea.left, safeArea.top + 32 * s);
+        this.quizSourceLabel.setScale(s);
 
         // Quiz Question: Center Top (Below possible Item Slots area)
         // Ensure it doesn't overlap items.
         // ItemSlots are typically at safeArea.top + 80.
         // Let's push question down to safeArea.top + 180 or center of screen depending on importance.
-        this.questionText.setPosition(safeArea.centerX, safeArea.top + 180);
+        this.questionText.setPosition(safeArea.centerX, safeArea.top + 180 * s);
         this.questionText.setWordWrapWidth(safeArea.width * 0.8);
+        this.questionText.setScale(s);
 
         // Question Timer
-        // Question Timer
-        this.timerText.setPosition(safeArea.centerX, safeArea.top + 260);
+        this.timerText.setPosition(safeArea.centerX, safeArea.top + 260 * s);
+        this.timerText.setScale(s);
 
         // Rank & Score: Bottom-Left
         // If mobile, move up to avoid joystick? 
@@ -143,11 +151,16 @@ export class GameHUD {
         // Let's align them slightly higher if needed? 
         // For now, adhere to "bottom left".
 
-        const bottomY = safeArea.bottom;
+        const controlClearance = safeArea.controlRadius
+            ? safeArea.controlRadius + (safeArea.controlPadding || 0) + 10
+            : 0;
+        const bottomY = safeArea.bottom - controlClearance;
         const leftX = safeArea.left;
 
         this.scoreText.setPosition(leftX, bottomY);
-        this.rankText.setPosition(leftX, bottomY - 25);
+        this.rankText.setPosition(leftX, bottomY - 25 * s);
+        this.scoreText.setScale(s);
+        this.rankText.setScale(s);
     }
 
     updatePing(ping) {

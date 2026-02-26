@@ -22,6 +22,9 @@ export class GameOver extends Scene {
         const { width, height } = this.scale;
         const centerX = width / 2;
         const centerY = height / 2;
+        const baseW = 1280;
+        const baseH = 720;
+        const uiScale = Math.max(0.55, Math.min(Math.min(width / baseW, height / baseH) * 0.9, 1));
 
         // Background
         this.cameras.main.setBackgroundColor(0x120000);
@@ -41,11 +44,14 @@ export class GameOver extends Scene {
         }
 
         const uiRoot = this.add.container(0, 0);
+        // Scale down UI on mobile and re-center
+        uiRoot.setScale(uiScale);
+        uiRoot.setPosition((width - width * uiScale) / 2, (height - height * uiScale) / 2);
 
         // Logo
         const logo = this.add
             .image(centerX, centerY - 250, 'logo')
-            .setScale(0.09)
+            .setScale(0.09 * uiScale)
             .setAlpha(0.6);
 
         this.tweens.add({
@@ -65,7 +71,7 @@ export class GameOver extends Scene {
             color: '#ff4444',
             stroke: '#000000',
             strokeThickness: 8
-        }).setOrigin(0.5).setScale(1.4).setAlpha(0);
+        }).setOrigin(0.5).setScale(1.1 * uiScale).setAlpha(0);
 
         this.tweens.add({
             targets: title,

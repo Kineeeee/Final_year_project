@@ -38,7 +38,7 @@ const SERVER_URL =
     normalize(rawExtraUrl) ||
     normalize(envUrl) ||
     lanUrl ||
-    'http://localhost:5173';
+    'http://10.25.193.148:5173';
 
 export const CONFIG = {
     SERVER_URL,

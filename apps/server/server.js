@@ -38,7 +38,8 @@ connectDB();
 const cookieParser = require('cookie-parser');
 
 // 2.Middleware
-const rawOrigins = process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173';
+const rawOrigins =
+    process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://10.25.193.148:5173';
 const allowedOrigins = rawOrigins.split(',').map((o) => o.trim()).filter(Boolean);
 
 // Allow wildcard in dev by setting CORS_ORIGINS="*"

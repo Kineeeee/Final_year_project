@@ -1,7 +1,26 @@
 import { SHARED_CONFIG } from './shared';
 
-// Server URL injected at build time via Vite define. Fallback to localhost.
-const SERVER_URL = typeof __SERVER_URL__ !== 'undefined' ? __SERVER_URL__ : 'http://localhost:3000';
+// Server URL injected at build time via Vite define.
+// Fallback strategy:
+// 1) Use env-injected __SERVER_URL__ (set via VITE_SERVER_URL).
+// 2) Derive from current page origin but swap port to 3000 (works for LAN/localhost).
+// 3) Last resort: fixed LAN IP.
+const deriveFromLocation = () => {
+    if (typeof window === 'undefined' || !window.location) return null;
+    try {
+        const url = new URL(window.location.origin);
+        // If client is on 5173, target server 3000 on same host.
+        url.port = '3000';
+        return url.origin;
+    } catch {
+        return null;
+    }
+};
+
+const SERVER_URL =
+    (typeof __SERVER_URL__ !== 'undefined' ? __SERVER_URL__ : null) ||
+    deriveFromLocation() ||
+    'http://10.25.193.148:3000';
 
 export const CONFIG = {
     WIDTH: 1280,

@@ -3,6 +3,8 @@ import {
     ActivityIndicator,
     Animated,
     Linking,
+    PermissionsAndroid,
+    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -45,6 +47,29 @@ export default function GameScreen() {
                 ScreenOrientation.unlockAsync().catch(() => {});
             }
         };
+    }, []);
+
+    useEffect(() => {
+        // Chủ động xin quyền camera trên Android để popup hệ thống xuất hiện trước khi vào WebView (shooting mode).
+        const requestCamera = async () => {
+            if (Platform.OS !== 'android') return;
+            try {
+                const granted = await PermissionsAndroid.request(
+                    PermissionsAndroid.PERMISSIONS.CAMERA,
+                    {
+                        title: 'Cho phép dùng camera',
+                        message: 'Camera được dùng để tracking tay trong chế độ Shooting.',
+                        buttonPositive: 'OK',
+                    }
+                );
+                if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+                    console.warn('Camera permission denied');
+                }
+            } catch (e) {
+                console.warn('Camera permission request failed', e);
+            }
+        };
+        requestCamera();
     }, []);
 
     useEffect(() => {
@@ -126,6 +151,9 @@ export default function GameScreen() {
                 bounces={false}
                 javaScriptEnabled
                 domStorageEnabled
+                mediaPlaybackRequiresUserAction={false}
+                allowsInlineMediaPlayback
+                mediaCapturePermissionGrantType="grant"
                 androidHardwareAccelerationDisabled={false}
                 overScrollMode="never"
                 scalesPageToFit={false}
