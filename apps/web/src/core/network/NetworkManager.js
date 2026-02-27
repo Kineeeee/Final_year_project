@@ -25,18 +25,40 @@ export class NetworkManager {
         }
     }
 
-    connect({ gameMode, playerDetails = {}, quizSource = 'SYSTEM' } = {}) {
+    connect({ gameMode, playerDetails = {}, quizSource = 'SYSTEM', customNamespace = null, roomMeta = null } = {}) {
         this.quizSource = (quizSource || 'SYSTEM').toUpperCase();
         this.gameMode = gameMode;
+        this.roomMeta = roomMeta || null;
 
         let serverUrl = CONFIG.SERVER_URL;
-        if (gameMode === CONFIG.GAME_MODES.MATH) serverUrl += '/math';
-        if (gameMode === CONFIG.GAME_MODES.ENGLISH) serverUrl += '/english';
+        if (customNamespace) {
+            serverUrl += customNamespace;
+        } else {
+            if (gameMode === CONFIG.GAME_MODES.MATH) serverUrl += '/math';
+            if (gameMode === CONFIG.GAME_MODES.ENGLISH) serverUrl += '/english';
+        }
 
         Logger.info('NetworkManager', `Connecting to Server: ${serverUrl} source=${this.quizSource}`);
         this.socket = socketService.connect(serverUrl, {
             forceNew: true,
             parser
+        });
+
+        this.socket.on('room_full', () => {
+            alert('Phòng hiện đã đủ 30 người chơi. Vui lòng thử lại sau.');
+            this.disconnect({ disconnectSocket: true });
+        });
+        this.socket.on('room_closed', () => {
+            alert('Phòng đã kết thúc. Vui lòng tạo hoặc tham gia phòng khác.');
+            this.disconnect({ disconnectSocket: true });
+        });
+        this.socket.on('room_meta', (meta) => {
+            this.roomMeta = meta;
+            this.scene.events.emit('room:meta', meta);
+        });
+        this.socket.on('room_owner', (payload) => {
+            if (this.roomMeta) this.roomMeta.ownerId = payload.ownerId;
+            this.scene.events.emit('room:owner', payload);
         });
 
         this.setupConnectionEvents(playerDetails);

@@ -8,9 +8,6 @@ export class Boot extends Scene {
 
     preload() {
         Logger.info('Boot', 'Booting game...');
-        //  The Boot Scene is typically used to load the assets needed for the Preloader
-        //  For example, you'd load the background image for the loading bar here
-        //  this.load.image('background', 'assets/bg.png');
     }
 
     create() {

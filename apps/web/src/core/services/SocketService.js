@@ -17,17 +17,13 @@ class SocketService {
     connect(url, options = {}) {
         const targetUrl = url || CONFIG.SERVER_URL;
 
-        // If already connected to the same URL, reuse?
-        // But if options.forceNew is true, we must reconnect.
-        // For simplicity and safety with namespaces, if socket exists, we warn or disconnect if requested.
-
-        if (this.socket && this.socket.connected) {
-            // Check if we need to disconnect (different url or forceNew)
-            // It's hard to check URL on socket object perfectly across versions.
-            // If the user calls connect(), they likely want a connection.
-            // If options.forceNew is set, we disconnect.
-            if (options.forceNew) {
+        // Guarantee fresh session when requested or URL changes to avoid stale listeners.
+        if (this.socket) {
+            const urlChanged = this.currentUrl && this.currentUrl !== targetUrl;
+            if (options.forceNew || urlChanged) {
                 this.disconnect();
+            } else if (this.socket.connected) {
+                return this.socket;
             }
         }
 
@@ -35,6 +31,7 @@ class SocketService {
             Logger.info('Network', `Connecting to ${targetUrl}`);
             const finalOptions = Object.assign({ parser }, options);
             this.socket = io(targetUrl, finalOptions);
+            this.currentUrl = targetUrl;
 
             this.socket.on('connect', () => {
                 Logger.info('Network', `Connected with ID: ${this.socket.id}`);
@@ -60,6 +57,7 @@ class SocketService {
             Logger.info('Network', 'Disconnecting socket...');
             this.socket.disconnect();
             this.socket = null;
+            this.currentUrl = null;
         }
     }
 

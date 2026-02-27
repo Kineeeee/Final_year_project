@@ -33,6 +33,12 @@ class QuizFoodHandler {
                 await this.container.get('playerManager').updatePlayerScore(player, -result.penalty); // Penalty
             }
 
+            // Track per-player answer stats for winner calc
+            if (player && player.playerId) {
+                const pm = this.container.get('playerManager');
+                pm.registerAnswer(player.playerId, { correct: result.correct });
+            }
+
             // Emit Result for Visual Feedback
             if (this.io) {
                 this.io.emit('answerResult', {

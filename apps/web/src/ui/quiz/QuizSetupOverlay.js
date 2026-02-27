@@ -533,7 +533,9 @@ export class QuizSetupOverlay {
         // Loại bỏ nhãn [ĐÚNG], dấu * hay bullet ở đầu.
         return text
             .replace(/\[đúng\]/gi, '')
-            .replace(/^[*\-•\d]+\s*/g, '')
+            // Chỉ bỏ số thứ tự nếu có dấu .) - : theo sau, không bỏ số đầu bài toán (vd "45 + 27")
+            .replace(/^\d+\s*[)\.\-:]\s*/, '')
+            .replace(/^[*\-•]+\s*/, '')
             .trim();
     }
 

@@ -10,7 +10,7 @@ module.exports = {
     TURN_SPEED: 0.05,
     PIXELS_PER_SEGMENT: 12,
     INITIAL_LENGTH: 5,
-    BOT_COUNT: 500,
+    BOT_COUNT: parseInt(process.env.BOT_COUNT || '0', 10),
     BOT_NAMES: [
         'Viper',
         'Python',

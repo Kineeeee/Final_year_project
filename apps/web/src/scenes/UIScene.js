@@ -87,6 +87,13 @@ export class UIScene extends Scene {
                 const src = (payload?.source || 'SYSTEM').toUpperCase();
                 this.uiManager && this.uiManager.updateQuizSource(src);
             },
+            'room:meta': (meta) => this.updateRoomBadge(meta),
+            'room:owner': (payload) => {
+                if (this.roomBadgeMeta) {
+                    this.roomBadgeMeta.ownerId = payload.ownerId;
+                    this.updateRoomBadge(this.roomBadgeMeta);
+                }
+            }
         };
 
         Object.entries(this._gameEventBindings).forEach(([event, handler]) => {
@@ -131,6 +138,24 @@ export class UIScene extends Scene {
         if (this.isDebugVisible) {
             this.updateDebugOverlay();
         }
+    }
+
+    updateRoomBadge(meta) {
+        if (!meta) return;
+        this.roomBadgeMeta = meta;
+        if (!this.roomBadgeText) {
+            this.roomBadgeText = this.add.text(this.scale.width - 20, 16, '', {
+                fontFamily: 'monospace',
+                fontSize: '14px',
+                color: '#ffffff',
+                backgroundColor: 'rgba(0,0,0,0.35)',
+                padding: { x: 8, y: 6 }
+            }).setOrigin(1, 0).setScrollFactor(0).setDepth(2000);
+        }
+        const label = meta.type === 'custom'
+            ? `Custom ${meta.category || ''} · owner: ${meta.ownerUserId || meta.ownerId || 'n/a'} · code: ${meta.code || ''}`
+            : 'System Room';
+        this.roomBadgeText.setText(label);
     }
 
     // Hide quiz widgets when not in quiz mode

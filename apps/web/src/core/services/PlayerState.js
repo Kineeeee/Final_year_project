@@ -24,10 +24,6 @@ class PlayerState {
         this.coins = amount;
         localStorage.setItem('coins', amount);
 
-        // Keep window.userCoins for backward compatibility if other files still use it
-        // but ideally we should remove all usages of window.userCoins
-        window.userCoins = amount;
-
         Logger.debug('PlayerState', `Coins updated: ${amount}`);
     }
 
@@ -93,9 +89,6 @@ class PlayerState {
     setInventory(inventory) {
         this.inventory = inventory;
         localStorage.setItem('inventory', JSON.stringify(inventory));
-
-        // Backward compatibility
-        window.playerInventory = inventory;
 
         Logger.debug('PlayerState', 'Inventory updated');
     }

@@ -34,6 +34,8 @@ class GameServer {
     constructor(io, config = {}) {
         this.io = io;
         this.config = config; // { mode: 'normal'|'quiz', topic: 'math'|'english' }
+        this.closed = false;
+        this.intervals = [];
 
         // Server-authoritative tick counter for snapshots/deltas
         this.serverTick = 0;
@@ -108,7 +110,11 @@ class GameServer {
 
     setupQuizManager() {
         const QuizManager = require('./modules/quiz/QuizManager'); // Ensure import if not global
-        this.quizManager = new QuizManager(this.io, this.container, this.config.topic);
+        this.quizManager = new QuizManager(this.io, this.container, this.config.topic, {
+            userQuiz: this.config.userQuiz,
+            ownerUserId: this.config.ownerUserId,
+            lockedSource: !!this.config.userQuiz
+        });
         this.container.register('quizManager', this.quizManager);
 
         Logger.info('GameServer', `Quiz Mode Enabled: ${this.config.topic}`);
@@ -116,22 +122,23 @@ class GameServer {
     }
 
     shouldEnableBots() {
-        return this.config.mode !== 'quiz';
+        const { BOT_COUNT } = require('./config/constants');
+        return this.config.mode !== 'quiz' && BOT_COUNT > 0;
     }
 
     setupGameLoop() {
         // Main Update Loop (Physics @ 60 FPS)
-        setInterval(() => this.update(), 1000 / FPS);
+        this.intervals.push(setInterval(() => this.update(), 1000 / FPS));
 
         // Broadcast Loop (Network) - Delegated to BroadcastSystem
         // 50% Reduction in traffic without affecting physics precision
-        setInterval(() => this.broadcastSystem.broadcastGameUpdate(), 1000 / BROADCAST_FPS);
+        this.intervals.push(setInterval(() => this.broadcastSystem.broadcastGameUpdate(), 1000 / BROADCAST_FPS));
 
         // Food Refill Loop
-        setInterval(() => this.foodManager.refillFood(), FOOD_REFILL_INTERVAL);
+        this.intervals.push(setInterval(() => this.foodManager.refillFood(), FOOD_REFILL_INTERVAL));
 
         // Leaderboard Loop (global)
-        setInterval(() => this.broadcastSystem.broadcastLeaderboard(), 1000 / LEADERBOARD_FPS);
+        this.intervals.push(setInterval(() => this.broadcastSystem.broadcastLeaderboard(), 1000 / LEADERBOARD_FPS));
     }
 
     update() {
@@ -142,6 +149,17 @@ class GameServer {
 
         // 2. Network System update (if needed)
         this.networkSystem.update();
+    }
+
+    destroy() {
+        if (this.closed) return;
+        this.closed = true;
+        this.intervals.forEach((h) => clearInterval(h));
+        this.intervals = [];
+        if (this.quizManager && this.quizManager.cleanupTimer) {
+            clearInterval(this.quizManager.cleanupTimer);
+        }
+        this.io.disconnectSockets(true);
     }
 }
 

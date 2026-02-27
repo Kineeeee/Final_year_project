@@ -12,6 +12,8 @@ const Logger = require('./src/utils/Logger');
 const { PORT } = require('./src/config/constants');
 const GameServer = require('./src/GameServer');
 const userQuizRoutes = require('./src/modules/quiz/UserQuizRoutes');
+const roomRoutes = require('./src/modules/room/RoomRoutes');
+const RoomRegistry = require('./src/modules/room/RoomRegistry');
 
 const app = express();
 
@@ -62,6 +64,7 @@ app.use(express.static(__dirname + '/public'));
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/questions', require('./src/modules/quiz/QuestionRoutes'));
 app.use('/api/user-quiz', userQuizRoutes);
+app.use('/api/rooms', roomRoutes);
 
 app.get('/', function (req, res) {
     res.send('Server is running');
@@ -87,6 +90,45 @@ const mathServer = new GameServer(mathIO, { mode: 'quiz', topic: 'math' });
 // 3. English Mode
 const englishIO = io.of('/english');
 const englishServer = new GameServer(englishIO, { mode: 'quiz', topic: 'english' });
+
+// 4. Custom Quiz Rooms (dynamic namespace per room code)
+const customIO = io.of(/^\/custom\/[A-Za-z0-9_-]+$/);
+customIO.on('connection', (socket) => {
+    const nsp = socket.nsp;
+    const code = nsp.name.split('/').pop();
+    const room = RoomRegistry.getRoom(code);
+    if (!room) {
+        socket.emit('room_closed');
+        socket.disconnect(true);
+        return;
+    }
+
+    // Create GameServer per room lazily
+    if (!room.gameServer) {
+        room.gameServer = new GameServer(nsp, {
+            mode: 'quiz',
+            topic: room.category,
+            userQuiz: room.quizDoc,
+            isCustom: true,
+            roomCode: code,
+            ownerUserId: room.ownerUserId,
+        });
+    }
+
+    RoomRegistry.addSocket(code, socket.id);
+
+    socket.emit('room_meta', RoomRegistry.getMeta(code));
+
+    socket.on('disconnect', () => {
+        const { ownerChanged, newOwnerId } = RoomRegistry.removeSocket(code, socket.id);
+        if (ownerChanged) {
+            nsp.emit('room_owner', { ownerId: newOwnerId });
+        }
+        if (room.gameServer && room.gameServer.closed && (!room.sockets || room.sockets.size === 0)) {
+            RoomRegistry.closeRoom(code, 'round_end');
+        }
+    });
+});
 
 // Expose live game servers for routes (e.g., user quiz source switching)
 app.locals.gameServers = {

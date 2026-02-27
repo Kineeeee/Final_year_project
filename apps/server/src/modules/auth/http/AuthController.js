@@ -2,6 +2,13 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../../../models/User');
 const Logger = require('../../../utils/Logger');
+const ensureEnv = (key) => {
+    if (!process.env[key]) {
+        throw new Error(`${key} must be defined in environment variables`);
+    }
+    return process.env[key];
+};
+const REFRESH_SECRET = ensureEnv('REFRESH_SECRET');
 
 exports.register = async (req, res) => {
     Logger.info('Auth', 'Register Request:', req.body);
@@ -57,7 +64,7 @@ exports.login = async (req, res) => {
         // Create Refresh Token (separate secret)
         const refreshToken = jwt.sign(
             { userId: user._id, username: user.username },
-            process.env.REFRESH_SECRET,
+            REFRESH_SECRET,
             { expiresIn: '7d' }
         );
 
@@ -122,7 +129,7 @@ exports.refreshToken = async (req, res) => {
     if (!refreshToken) return res.status(401).json({ message: 'Refresh Token required' });
 
     try {
-        const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+        const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
         const user = await User.findById(decoded.userId);
 
         if (!user || user.refreshToken !== refreshToken) {

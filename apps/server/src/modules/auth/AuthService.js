@@ -3,7 +3,10 @@ const Logger = require('../../utils/Logger');
 
 class AuthService {
     constructor() {
-        this.secret = process.env.JWT_SECRET || 'your-secret-key';
+        if (!process.env.JWT_SECRET) {
+            throw new Error('JWT_SECRET must be defined in environment variables');
+        }
+        this.secret = process.env.JWT_SECRET;
         this.expiresIn = '24h';
         // Separate signing key for refresh tokens is handled in controller via REFRESH_SECRET
     }

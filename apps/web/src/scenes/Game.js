@@ -18,6 +18,7 @@ export class Game extends Scene {
         this.myName = data.name;
         this.gameMode = data.mode || CONFIG.GAME_MODES.NORMAL;
         this.quizSource = (data.quizSource || 'SYSTEM').toUpperCase();
+        this.customNamespace = data.customNamespace || null;
     }
 
     create() {
@@ -52,7 +53,8 @@ export class Game extends Scene {
         this.session = new GameSession(this, {
             mode: this.gameMode,
             quizSource: this.quizSource,
-            playerDetails: { color: this.myColor, name: this.myName }
+            playerDetails: { color: this.myColor, name: this.myName },
+            customNamespace: this.customNamespace
         });
         this.session.start();
 
@@ -119,14 +121,6 @@ export class Game extends Scene {
 
     // Needed for session/network manager to find snake by ID
     findSnakeById(id) {
-        // EntityManager doesn't expose a simple unified snake list by ID in the snippet I wrote?
-        // Wait, EntityManager has `snakes` array and `otherSnakes` map.
-        // I should probably add a helper in EntityManager.
-        // For now, let's replicate logic or add method to EntityManager in next step?
-        // Actually, this method is usually used by session.
-        // Let's assume session can access it or I add `findSnakeById` to EntityManager.
-        // I will add it to EntityManager in next step if missing.
-        // Or implement it here using entityManager properties.
         if (!this.entityManager) return null;
         const player = this.entityManager.snakes.find(s => s.playerId === id);
         return player;

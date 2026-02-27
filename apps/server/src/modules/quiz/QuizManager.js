@@ -3,16 +3,23 @@ const Logger = require('../../utils/Logger');
 const { WORLD_SIZE } = require('../../config/constants');
 
 class QuizManager {
-    constructor(io, container, topic) {
+    constructor(io, container, topic, opts = {}) {
         this.io = io;
         this.container = container;
         this.topic = topic; // 'math' or 'english'
+        this.lockedSource = opts.lockedSource || false;
+        this.ownerUserId = opts.ownerUserId || null;
+        if (opts.userQuiz) {
+            this.quizSource = 'user';
+            this.activeUserQuiz = opts.userQuiz;
+            this.activeUserId = this.ownerUserId;
+        }
 
         this.currentQuestion = null;
         this.quizSource = 'system'; // 'system' | 'user'
         this.activeUserQuiz = null; // {questions, _id, category}
         this.activeUserId = null;
-        this.roundDuration = 5 * 60 * 1000; // 5 minutes
+        this.roundDuration = 4 * 60 * 1000; // 4 minutes
         this.roundEndTime = 0;
         this.isActive = false;
 
@@ -60,6 +67,7 @@ class QuizManager {
      * @param {string|null} opts.ownerUserId
      */
     setQuizSource({ source = 'system', userQuiz = null, ownerUserId = null } = {}) {
+        if (this.lockedSource) return;
         if (source === 'user' && userQuiz && Array.isArray(userQuiz.questions) && userQuiz.questions.length > 0) {
             this.quizSource = 'user';
             this.activeUserQuiz = userQuiz;
@@ -206,41 +214,55 @@ class QuizManager {
         }
         const spawnedPositions = [];
         const spawnedFoodBatch = [];
-        const CORRECT_COUNT = 50;
-        const WRONG_COUNT = 150;
+        const TOTAL = 300;
+        const CORRECT_COUNT = Math.floor(TOTAL / 4); // 1/4 correct
+        const WRONG_COUNT = TOTAL - CORRECT_COUNT;
         const qId = this.currentQuestion._id.toString(); // Bind food to this version of question
 
-        // 1. Correct Answers
-        for (let i = 0; i < CORRECT_COUNT; i++) {
-            const food = this.spawnTextFoodNear(
-                Math.random() * WORLD_SIZE,
-                Math.random() * WORLD_SIZE,
-                this.currentQuestion.correctAnswer,
-                true,
-                spawnedPositions,
-                2000,
-                qId
-            );
-            if (food) spawnedFoodBatch.push(food);
+        const batches = [];
+        const batchSize = 50;
+        let pendingCorrect = CORRECT_COUNT;
+        let pendingWrong = WRONG_COUNT;
+
+        while (pendingCorrect > 0 || pendingWrong > 0) {
+            const batch = [];
+            for (let i = 0; i < batchSize && (pendingCorrect > 0 || pendingWrong > 0); i++) {
+                const useCorrect = pendingCorrect > 0 && (pendingWrong === 0 || i % 4 === 0);
+                if (useCorrect) {
+                    const food = this.spawnTextFoodNear(
+                        Math.random() * WORLD_SIZE,
+                        Math.random() * WORLD_SIZE,
+                        this.currentQuestion.correctAnswer,
+                        true,
+                        spawnedPositions,
+                        2000,
+                        qId
+                    );
+                    if (food) batch.push(food);
+                    pendingCorrect--;
+                } else if (pendingWrong > 0) {
+                    const wrongList = this.currentQuestion.wrongAnswers;
+                    const wrongAns = wrongList[Math.floor(Math.random() * wrongList.length)];
+                    const food = this.spawnTextFoodNear(
+                        Math.random() * WORLD_SIZE,
+                        Math.random() * WORLD_SIZE,
+                        wrongAns,
+                        false,
+                        spawnedPositions,
+                        2000,
+                        qId
+                    );
+                    if (food) batch.push(food);
+                    pendingWrong--;
+                }
+            }
+            if (batch.length) batches.push(batch);
         }
 
-        // 2. Wrong Answers
-        const wrongList = this.currentQuestion.wrongAnswers;
-        for (let i = 0; i < WRONG_COUNT; i++) {
-            const wrongAns = wrongList[Math.floor(Math.random() * wrongList.length)];
-            const food = this.spawnTextFoodNear(
-                Math.random() * WORLD_SIZE,
-                Math.random() * WORLD_SIZE,
-                wrongAns,
-                false,
-                spawnedPositions,
-                2000,
-                qId
-            );
-            if (food) spawnedFoodBatch.push(food);
-        }
-
-        this.io.emit('batchFood', spawnedFoodBatch);
+        // Emit batches spaced by 1s to reduce spikes
+        batches.forEach((batch, idx) => {
+            setTimeout(() => this.io.emit('batchFood', batch), idx * 1000);
+        });
     }
 
     spawnTextFoodNear(
@@ -327,7 +349,6 @@ class QuizManager {
     }
 
     endRound() {
-        this.isActive = true; // Wait for kill? No, inactive.
         this.isActive = false;
 
         if (this.questionTimer) clearTimeout(this.questionTimer);
@@ -335,20 +356,30 @@ class QuizManager {
 
         this.currentQuestion = null;
 
-        // Find winner BEFORE killing everyone
+        // Determine winner: most correct answers, tie-break by score then name
         const players = this.playerManager.getAllPlayers();
         let winner = null;
-        let maxScore = -1;
-
-        Object.values(players).forEach((p) => {
-            if (p.score > maxScore) {
-                maxScore = p.score;
+        const asArray = Object.values(players);
+        asArray.forEach((p) => {
+            const c = p.correctAnswers || 0;
+            if (!winner ||
+                c > (winner.correctAnswers || 0) ||
+                (c === (winner.correctAnswers || 0) && (p.score || 0) > (winner.score || 0)) ||
+                (c === (winner.correctAnswers || 0) && (p.score || 0) === (winner.score || 0) && (p.name || '') < (winner.name || ''))
+            ) {
                 winner = p;
             }
         });
 
         this.io.emit('roundEnd', {
-            winner: winner ? { name: winner.name, score: winner.score, color: winner.color } : null,
+            winner: winner
+                ? {
+                      name: winner.name,
+                      score: winner.score,
+                      color: winner.color,
+                      correct: winner.correctAnswers || 0,
+                  }
+                : null,
         });
 
         // FORCE KILL ALL PLAYERS
@@ -356,8 +387,12 @@ class QuizManager {
             this.playerManager.killAllPlayers();
         }
 
-        // Auto Restart
-        setTimeout(() => this.startRound(), 10000);
+        // Close room after round
+        const gameServer = this.container.has('gameServer') ? this.container.get('gameServer') : null;
+        if (gameServer) {
+            gameServer.destroy();
+        }
+        this.io.emit('room_closed');
     }
 
     cleanupJunkFood() {

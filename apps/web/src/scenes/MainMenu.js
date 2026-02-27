@@ -8,6 +8,7 @@ import { CategorySelectOverlay } from '../ui/quiz/CategorySelectOverlay';
 import { userQuizApi } from '../core/services/UserQuizApi';
 import { overlayBlocker } from '../core/services/OverlayBlocker';
 import { authStore } from '../core/state/authStore';
+import { roomService } from '../core/services/RoomService';
 
 export class MainMenu extends Scene {
     constructor() {
@@ -49,7 +50,7 @@ export class MainMenu extends Scene {
 
         // --- 2. HEADER ---
         // Hạ thấp Header xuống một chút (0.15) để Logo không bị cắt ở mép trên màn hình
-        const headerY = height * (isMobile ? 0.24 : 0.28); 
+        const headerY = height * (isMobile ? 0.22 : 0.24); 
         const bannerW = Math.min(620, width - padding * 2);
         const bannerH = isMobile ? 68 : 80;
 
@@ -94,7 +95,7 @@ export class MainMenu extends Scene {
 
         // --- 3. STATS BAR ---
         // Tăng khoảng cách từ Header xuống Stats (từ 70 lên 85) để thoáng hơn
-        const statsY = headerY + (isMobile ? 65 : 85); 
+        const statsY = headerY + (isMobile ? 80 : 95); 
         const statsContainer = this.add.container(centerX, statsY);
         
         const statsBg = this.add.graphics();
@@ -139,7 +140,7 @@ export class MainMenu extends Scene {
         uiRoot.add(statsContainer);
 
         // --- 4. GLOBAL QUIZ SOURCE + UPLOAD ---
-        const sourceY = statsY + (isMobile ? 60 : 80);
+        const sourceY = statsY + (isMobile ? 80 : 90);
         const sourceLabel = this.add.text(centerX - 240, sourceY, 'Quiz Source:', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: isMobile ? '12px' : '14px',
@@ -173,28 +174,27 @@ export class MainMenu extends Scene {
         // --- 5. GAME MODES ---
         const modes = [
             { label: 'QUIZ', mode: 'quiz', icon: 'icon-math', color: 0xff9800, shadow: 0xb36b00 },
+            { label: 'CUSTOM QUIZ', mode: 'custom_quiz', icon: 'icon-english', color: 0x9b59b6, shadow: 0x6c3483 },
             { label: 'SHOOTING', mode: 'shooting', icon: 'icon-shooting', color: 0xf44336, shadow: 0xc62828 },
             { label: 'SURVIVAL', mode: 'normal', icon: 'icon-survival', color: 0x44c448, shadow: 0x1d6a21 }
         ];
 
-        const maxCols = isMobile ? 2 : 3;
+        const maxCols = isMobile ? 2 : Math.min(4, modes.length);
         const cols = Math.min(maxCols, modes.length);
+        const rows = Math.ceil(modes.length / cols);
         const availW = width - padding * 2;
-        const cardGap = isMobile ? 14 : 20;
-        const cardWidth = Math.min(200, (availW - cardGap * (cols - 1)) / cols);
-        const cardHeight = cardWidth * 1.25;
+        const cardGap = isMobile ? 12 : 18;
+        const cardWidth = Math.min(180, (availW - cardGap * (cols - 1)) / cols);
+        const cardHeight = Math.min(190, cardWidth * 1.15);
         const totalRowWidth = (cardWidth * cols) + (cardGap * (cols - 1));
         const startX = centerX - (totalRowWidth / 2) + (cardWidth / 2);
-        
-        // Tăng khoảng cách Start Y của Card để không đụng Stats Bar
-        // Push mode cards further down to clear the stats bar
-        const cardY = centerY + (isMobile ? 130 : 100); 
+        const modesStartY = sourceY + (isMobile ? 120 : 140);
 
         modes.forEach((m, i) => {
             const row = Math.floor(i / cols);
             const col = i % cols;
             const x = startX + (col * (cardWidth + cardGap));
-            const y = cardY + row * (cardHeight + (isMobile ? 14 : 20));
+            const y = modesStartY + row * (cardHeight + (isMobile ? 14 : 18));
             const card = this.add.container(x, y);
             const g = this.add.graphics();
             const w = cardWidth;
@@ -240,22 +240,24 @@ export class MainMenu extends Scene {
 
             card.add(label);
 
+            const hoverUp = () => this.tweens.add({ targets: card, scale: 1.05, y: y - 8, duration: 120, ease: 'Sine.easeOut' });
+            const hoverDown = () => this.tweens.add({ targets: card, scale: 1, y: y, duration: 120, ease: 'Sine.easeOut' });
+
             const hitZone = this.add.rectangle(0, 0, w, h, 0x000000, 0)
                 .setInteractive({ useHandCursor: true })
-                .on('pointerover', () => {
-                    this.tweens.add({ targets: card, y: cardY - 10, scale: 1.05, duration: 100, ease: 'Sine.easeOut' });
-                })
-                .on('pointerout', () => {
-                    this.tweens.add({ targets: card, y: cardY, scale: 1, duration: 100, ease: 'Sine.easeOut' });
-                })
-                .on('pointerdown', () => this.startGame(m.mode));
+                .on('pointerover', hoverUp)
+                .on('pointerout', hoverDown)
+                .on('pointerdown', () => {
+                    this.tweens.add({ targets: card, scale: 0.97, duration: 60, yoyo: true });
+                    this.startGame(m.mode);
+                });
 
             card.add(hitZone);
             uiRoot.add(card);
         });
 
         // --- 6. BOTTOM BUTTONS ---
-        const bottomY = height - (isMobile ? 30 : 60); // move buttons down (leave room for status bar)
+        const bottomY = height - (isMobile ? 40 : 70); // position above safe area
         this.createStylishButton(uiRoot, centerX - 220, bottomY, '🛒 SHOP', 0x3d6cb9, () => {
             this.scene.launch('ShopScene');
             this.scene.pause();
@@ -351,7 +353,16 @@ export class MainMenu extends Scene {
 
         const hit = this.add.rectangle(0, 0, w, h, 0x000000, 0)
             .setInteractive({ useHandCursor: true })
-            .on('pointerdown', callback);
+            .on('pointerover', () => {
+                this.tweens.add({ targets: btn, scale: 1.08, duration: 100, ease: 'Sine.easeOut' });
+            })
+            .on('pointerout', () => {
+                this.tweens.add({ targets: btn, scale: 1, duration: 100, ease: 'Sine.easeOut' });
+            })
+            .on('pointerdown', () => {
+                this.tweens.add({ targets: btn, scale: 0.95, duration: 60, yoyo: true });
+                callback();
+            });
 
         btn.add([g, label, hit]);
         container.add(btn);
@@ -361,6 +372,10 @@ export class MainMenu extends Scene {
         const isBlocked = overlayBlocker.isBlocked();
         if (isBlocked) {
             Logger.warn('MainMenu', 'Start blocked because overlay is active');
+            return;
+        }
+        if (mode === 'custom_quiz') {
+            this.startCustomQuizFlow();
             return;
         }
         if (mode === 'quiz' || mode === 'shooting') {
@@ -373,6 +388,46 @@ export class MainMenu extends Scene {
         this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
             this.scene.start('Game', { mode: mode });
         });
+    }
+
+    async startCustomQuizFlow() {
+        if (overlayBlocker.isBlocked()) return;
+        const choice = prompt('Tạo phòng nhập "create", tham gia phòng nhập room code:');
+        if (!choice) return;
+        const lower = choice.trim().toLowerCase();
+        if (lower === 'create') {
+            this.openCategorySelect('custom_create');
+            return;
+        }
+
+        const code = choice.trim();
+        if (!code) return;
+        this.startCustomRoomJoin(code);
+    }
+
+    startCustomRoomJoin(code) {
+        (async () => {
+            try {
+                const meta = await roomService.getRoomMeta(code);
+                if (meta.players >= meta.capacity) {
+                    alert('Phòng đã đầy.');
+                    return;
+                }
+                Logger.info('MainMenu', `Join custom room ${code}`);
+                const namespace = `/custom/${code}`;
+                this.cameras.main.fadeOut(300);
+                this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+                    this.scene.start('Game', {
+                        mode: 'quiz',
+                        quizSource: 'USER',
+                        customNamespace: namespace,
+                        roomMeta: meta
+                    });
+                });
+            } catch (err) {
+                alert(err.message || 'Không tìm thấy phòng');
+            }
+        })();
     }
 
     async setGlobalQuizSource(src) {
@@ -451,20 +506,35 @@ export class MainMenu extends Scene {
         const overlay = new CategorySelectOverlay({
             onSelect: (category) => {
                 this.input.enabled = true;
-                const source = globalQuizPrefs.getQuizSource();
+                const source = (mode === 'custom_create') ? 'USER' : globalQuizPrefs.getQuizSource();
                 // Validate user quiz for category if USER selected
                 const proceed = async () => {
                     let finalSource = source;
                     if (source === 'USER') {
-                        try {
-                            const status = await userQuizApi.getStatus(category);
-                            if (!status?.isValid) {
-                                finalSource = 'SYSTEM';
-                                alert('Bạn chưa có đề cho category này. Tạm dùng đề hệ thống.');
+                        if (mode === 'custom_create') {
+                            try {
+                                const { namespace } = await roomService.createCustomRoom(category);
+                                Logger.info('MainMenu', `Created custom room ${namespace}`);
+                                this.cameras.main.fadeOut(300);
+                                this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+                                    this.scene.start('Game', { mode: 'quiz', quizSource: 'USER', customNamespace: namespace });
+                                });
+                                return;
+                            } catch (err) {
+                                alert(err.message || 'Tạo phòng custom thất bại');
+                                return;
                             }
-                        } catch (e) {
-                            finalSource = 'SYSTEM';
-                            alert('Không kiểm tra được đề của bạn. Tạm dùng đề hệ thống.');
+                        } else {
+                            try {
+                                const status = await userQuizApi.getStatus(category);
+                                if (!status?.isValid) {
+                                    finalSource = 'SYSTEM';
+                                    alert('Bạn chưa có đề cho category này. Tạm dùng đề hệ thống.');
+                                }
+                            } catch (e) {
+                                finalSource = 'SYSTEM';
+                                alert('Không kiểm tra được đề của bạn. Tạm dùng đề hệ thống.');
+                            }
                         }
                     }
                     if (mode === 'quiz') {

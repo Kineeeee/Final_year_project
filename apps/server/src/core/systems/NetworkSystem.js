@@ -52,6 +52,21 @@ class NetworkSystem {
     handleConnection(socket) {
         Logger.info('NetworkSystem', `User connected: ${socket.id}`);
 
+        const gameServer = this.container.get('gameServer');
+        if (gameServer && gameServer.closed) {
+            socket.emit('room_closed');
+            socket.disconnect(true);
+            return;
+        }
+
+        // Capacity guard: max 30 players per server instance
+        const currentPlayers = Object.keys(this.playerManager.getAllPlayers() || {}).length;
+        if (currentPlayers >= 30) {
+            socket.emit('room_full');
+            socket.disconnect(true);
+            return;
+        }
+
         // Per-socket interest tracking (used for worldDelta)
         if (!socket.data) socket.data = {};
         socket.data._interest = {

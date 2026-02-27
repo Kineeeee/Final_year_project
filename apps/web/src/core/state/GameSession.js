@@ -8,11 +8,13 @@ import { createPlayerInputCommand, createUseItemCommand } from '../../services/n
 import { effectManager } from '../../core/effects/EffectManager';
 
 export class GameSession {
-    constructor(scene, { mode, quizSource, playerDetails } = {}) {
+    constructor(scene, { mode, quizSource, playerDetails, customNamespace, roomMeta } = {}) {
         this.scene = scene;
         this.mode = mode || CONFIG.GAME_MODES.NORMAL;
         this.quizSource = (quizSource || 'SYSTEM').toUpperCase();
         this.playerDetails = playerDetails || { color: undefined, name: undefined };
+        this.customNamespace = customNamespace || null;
+        this.roomMeta = roomMeta || null;
 
         this.gameState = null;
         this.entityManager = null;
@@ -60,6 +62,8 @@ export class GameSession {
                 name: this.playerDetails.name,
             },
             quizSource: this.quizSource,
+            customNamespace: this.customNamespace,
+            roomMeta: this.roomMeta,
         });
 
         // State-driven reconciliation
@@ -97,6 +101,11 @@ export class GameSession {
         this._bind(this.scene.events, 'intent:useItem', (itemId) => {
             if (!itemId) return;
             this.commandQueue.enqueue(createUseItemCommand({ itemId, ts: Date.now() }));
+        });
+
+        // Round end (quiz) -> force GameOver transition
+        this._bind(this.scene.events, 'roundEnd', (payload) => {
+            this.startGameOverOnce({ ...payload, roundEnded: true });
         });
 
         this._startMinimapLoop();

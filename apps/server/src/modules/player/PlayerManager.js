@@ -93,6 +93,8 @@ class PlayerManager {
             inventory: {}, // itemId -> count
             activeEffects: {}, // itemId -> expireTime (ms)
             boostTimer: 0, // Deterministic shrink counter
+            correctAnswers: 0,
+            wrongAnswers: 0,
         };
 
         // Register in Redis
@@ -109,6 +111,13 @@ class PlayerManager {
         }
 
         return this.players[socket.id];
+    }
+
+    registerAnswer(playerId, { correct }) {
+        const player = this.players[playerId];
+        if (!player) return;
+        if (correct) player.correctAnswers = (player.correctAnswers || 0) + 1;
+        else player.wrongAnswers = (player.wrongAnswers || 0) + 1;
     }
 
     addBot(botData) {
