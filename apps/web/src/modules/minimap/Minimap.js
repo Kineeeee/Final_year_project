@@ -57,8 +57,8 @@ export class Minimap {
         this.bg.setDisplaySize(this.size, this.size);
 
         const x = safeArea.right - this.size - margin;
-        // Drop under Ping/FPS text (~40px height) and leave a small gap.
-        const y = safeArea.top + 60 * uiScale + margin;
+        // Drop under HUD stack to avoid overlap
+        const y = safeArea.top + 140 * uiScale + margin;
 
         this.container.setPosition(x, y);
     }

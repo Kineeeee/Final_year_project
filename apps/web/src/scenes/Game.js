@@ -5,11 +5,14 @@ import { Logger } from '../utils/Logger';
 
 import { CONFIG } from '../config/constants';
 import { GameSession } from '../core/state/GameSession';
+import { achievementManager } from '../modules/achievements/AchievementManager';
+import { applyActiveTheme, applyActiveCosmeticsToSnake } from '../modules/achievements/CosmeticApplier';
 
 export class Game extends Scene {
     constructor() {
         super('Game');
         this._didShutdown = false;
+        this.waitingForOwnerStart = false;
     }
 
     init(data) {
@@ -19,6 +22,9 @@ export class Game extends Scene {
         this.gameMode = data.mode || CONFIG.GAME_MODES.NORMAL;
         this.quizSource = (data.quizSource || 'SYSTEM').toUpperCase();
         this.customNamespace = data.customNamespace || null;
+        this.roomMeta = data.roomMeta || null;
+        const alreadyStarted = !!(this.roomMeta && this.roomMeta.started);
+        this.waitingForOwnerStart = !!this.customNamespace && !alreadyStarted;
     }
 
     create() {
@@ -37,16 +43,44 @@ export class Game extends Scene {
         this.setupWorld();
         this.cameraManager = new CameraManager(this);
         this.cameraManager.setup();
+        if (this.waitingForOwnerStart) {
+            // Hide arena visuals until owner starts
+            this.cameras.main.setAlpha(0);
+            this.cameras.main.setBackgroundColor('#000000');
+        }
 
         // UI is handled by UIScene
-        this.scene.launch(CONFIG.SCENES.UI, { mode: this.gameMode, quizSource: this.quizSource });
+        this.scene.launch(CONFIG.SCENES.UI, {
+            mode: this.gameMode,
+            quizSource: this.quizSource,
+            customNamespace: this.customNamespace,
+            roomMeta: this.roomMeta || null,
+        });
         this.scene.bringToTop(CONFIG.SCENES.UI);
 
         this.coinsCollected = 0;
 
+        // Auto-return to Main Menu when server closes the room (quiz/custom)
+        this.events.on('room:closed', () => {
+            if (this._isExiting) return;
+            this._isExiting = true;
+            this.scene.start(CONFIG.SCENES.MAIN_MENU);
+        });
+        this.events.on('room:started', () => this._handleRoomStarted());
+
         // UI Event Listeners
         this.events.on('ui:floatingText', ({ x, y, message, color }) => {
             this.showFloatingText(x, y, message, color);
+        });
+        this.events.on('room:closed', () => {
+            if (this._isExiting) return;
+            this._isExiting = true;
+            this.scene.start(CONFIG.SCENES.MAIN_MENU);
+        });
+        this.events.on('room_left', () => {
+            if (this._isExiting) return;
+            this._isExiting = true;
+            this.scene.start(CONFIG.SCENES.MAIN_MENU);
         });
 
         // Start session-owned state/network/input
@@ -58,6 +92,19 @@ export class Game extends Scene {
         });
         this.session.start();
 
+        // Achievements lifecycle (must start after session + events ready)
+        achievementManager.startSession(this, {
+            mode: this.gameMode,
+            quizSource: this.quizSource,
+            customNamespace: this.customNamespace
+        });
+
+        this._onAchievementUnlocked = () => {
+            if (this.player) {
+                applyActiveCosmeticsToSnake(this, this.player);
+            }
+        };
+        this.events.on('achievement:unlocked', this._onAchievementUnlocked, this);
 
     }
 
@@ -73,6 +120,9 @@ export class Game extends Scene {
             this.session = null;
         }
 
+        // Detach achievements listeners
+        achievementManager.detach();
+
         if (this.staggeredSpawnTimer) {
             this.staggeredSpawnTimer.destroy();
             this.staggeredSpawnTimer = null;
@@ -80,6 +130,16 @@ export class Game extends Scene {
 
         if (this.cameraManager) {
             this.cameraManager.destroy();
+        }
+
+        if (this._themeOverlay) {
+            this._themeOverlay.destroy();
+            this._themeOverlay = null;
+        }
+
+        if (this._onAchievementUnlocked) {
+            this.events.off('achievement:unlocked', this._onAchievementUnlocked, this);
+            this._onAchievementUnlocked = null;
         }
 
         this.networkManager = null;
@@ -101,7 +161,8 @@ export class Game extends Scene {
         const WIDTH_WORLD = CONFIG.WORLD_WIDTH;
         const HEIGHT_WORLD = CONFIG.WORLD_HEIGHT;
         this.physics.world.setBounds(0, 0, WIDTH_WORLD, HEIGHT_WORLD);
-        this.add.tileSprite(0, 0, WIDTH_WORLD, HEIGHT_WORLD, CONFIG.ASSETS.BACKGROUND).setOrigin(0);
+        this.backgroundTile = this.add.tileSprite(0, 0, WIDTH_WORLD, HEIGHT_WORLD, CONFIG.ASSETS.BACKGROUND).setOrigin(0);
+        applyActiveTheme(this);
     }
 
     createPlayer(playerInfo) {
@@ -136,6 +197,7 @@ export class Game extends Scene {
 
     update(time, delta) {
         if (this._isExiting || !this.sys.isActive()) return;
+        if (this.waitingForOwnerStart) return;
 
         if (this.session) {
             this.session.tick(time, delta);
@@ -196,4 +258,11 @@ export class Game extends Scene {
     getFoodChildren() { return this.entityManager ? [...this.entityManager.regularFoodGroup.getChildren(), ...this.entityManager.specialFoodGroup.getChildren()] : []; }
     findFoodById(id) { return this.entityManager ? this.entityManager.findFoodById(id) : null; }
     clearAllFood() { if (this.entityManager) this.entityManager.cleanup(); }
+
+    _handleRoomStarted() {
+        if (!this.waitingForOwnerStart) return;
+        this.waitingForOwnerStart = false;
+        this.cameras.main.setAlpha(1);
+        this.cameras.main.fadeIn(200);
+    }
 }

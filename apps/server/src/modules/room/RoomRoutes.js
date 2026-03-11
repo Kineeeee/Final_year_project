@@ -59,4 +59,37 @@ router.get('/meta/:code', async (req, res) => {
     return res.json(meta);
 });
 
+// List active custom rooms
+router.get('/custom/list', async (_req, res) => {
+    try {
+        const rooms = RoomRegistry.listRooms();
+        return res.json({
+            rooms,
+            capacity: {
+                max: RoomRegistry.maxCustomRooms,
+                current: RoomRegistry.rooms.size,
+                available: Math.max(RoomRegistry.maxCustomRooms - RoomRegistry.rooms.size, 0),
+            },
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'server_error' });
+    }
+});
+
+// Leave lobby (graceful exit from custom room)
+router.post('/custom/leave', async (req, res) => {
+    try {
+        const { code, socketId } = req.body || {};
+        if (!code || !socketId) return res.status(400).json({ message: 'invalid_request' });
+        const room = RoomRegistry.getRoom(code);
+        if (!room) return res.status(404).json({ message: 'room_not_found' });
+        const { ownerChanged, newOwnerId } = RoomRegistry.removeSocket(code, socketId);
+        return res.json({ ownerChanged, newOwnerId });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'server_error' });
+    }
+});
+
 module.exports = router;

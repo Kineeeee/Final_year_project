@@ -5,6 +5,7 @@ import { Snake } from '../modules/snake/Snake';
 import { Coin } from '../modules/food/Coin';
 import { QuizFood } from '../modules/food/QuizFood';
 import { effectManager } from '../core/effects/EffectManager';
+import { applyActiveCosmeticsToSnake, playDeathFx } from '../modules/achievements/CosmeticApplier';
 
 export class EntityManager {
     constructor(scene, gameState) {
@@ -59,6 +60,10 @@ export class EntityManager {
             Object.keys(playerInfo.activeEffects).forEach(itemId => {
                 effectManager.applyEffect(player, itemId, true, 0);
             });
+        }
+
+        if (playerInfo.playerId && this.gameState && playerInfo.playerId === this.gameState.localPlayerId) {
+            applyActiveCosmeticsToSnake(this.scene, player);
         }
 
         return player;
@@ -125,6 +130,7 @@ export class EntityManager {
     killSnake(snake) {
         if (!snake || !snake.alive) return;
         snake.alive = false;
+        playDeathFx(this.scene, snake);
         snake.destroy();
         this.snakes = this.snakes.filter(s => s !== snake);
 

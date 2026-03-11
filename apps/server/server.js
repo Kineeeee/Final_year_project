@@ -85,11 +85,11 @@ const normalServer = new GameServer(io, { mode: 'normal' });
 
 // 2. Math Mode
 const mathIO = io.of('/math');
-const mathServer = new GameServer(mathIO, { mode: 'quiz', topic: 'math' });
+const mathServer = new GameServer(mathIO, { mode: 'quiz', topic: 'math', lockedSource: true });
 
 // 3. English Mode
 const englishIO = io.of('/english');
-const englishServer = new GameServer(englishIO, { mode: 'quiz', topic: 'english' });
+const englishServer = new GameServer(englishIO, { mode: 'quiz', topic: 'english', lockedSource: true });
 
 // 4. Custom Quiz Rooms (dynamic namespace per room code)
 const customIO = io.of(/^\/custom\/[A-Za-z0-9_-]+$/);
@@ -104,6 +104,7 @@ customIO.on('connection', (socket) => {
     }
 
     // Create GameServer per room lazily
+    let isNewServer = false;
     if (!room.gameServer) {
         room.gameServer = new GameServer(nsp, {
             mode: 'quiz',
@@ -112,17 +113,43 @@ customIO.on('connection', (socket) => {
             isCustom: true,
             roomCode: code,
             ownerUserId: room.ownerUserId,
+            ownerSocketId: socket.id,
+            autoStart: false, // wait until owner presses Start
         });
+        isNewServer = true;
     }
 
     RoomRegistry.addSocket(code, socket.id);
 
     socket.emit('room_meta', RoomRegistry.getMeta(code));
 
+    // IMPORTANT: the first socket that triggers server creation won't hit the
+    // NetworkSystem's connection listener (it was registered after this connect event fired).
+    // Manually handle the initial connection to ensure the owner gets a player spawn.
+    if (isNewServer && room.gameServer?.networkSystem?.handleConnection) {
+        room.gameServer.networkSystem.handleConnection(socket);
+    }
+
+    // Push initial waiting snapshot
+    if (room.gameServer?.broadcastWaiting) {
+        room.gameServer.broadcastWaiting();
+    }
+
+    // If match already started, immediately notify the new socket so it skips waiting
+    if (room.gameServer?.matchStarted) {
+        socket.emit('room_started');
+    }
+
     socket.on('disconnect', () => {
         const { ownerChanged, newOwnerId } = RoomRegistry.removeSocket(code, socket.id);
         if (ownerChanged) {
             nsp.emit('room_owner', { ownerId: newOwnerId });
+            if (room.gameServer) {
+                room.gameServer.config.ownerSocketId = newOwnerId;
+            }
+        }
+        if (room.gameServer?.broadcastWaiting) {
+            room.gameServer.broadcastWaiting();
         }
         if (room.gameServer && room.gameServer.closed && (!room.sockets || room.sockets.size === 0)) {
             RoomRegistry.closeRoom(code, 'round_end');
@@ -136,6 +163,15 @@ app.locals.gameServers = {
     math: mathServer,
     english: englishServer,
 };
+
+// Helper endpoint to check custom room capacity (used by frontend to show/hide create button)
+app.get('/api/rooms/custom/capacity', (_req, res) => {
+    res.json({
+        max: RoomRegistry.maxCustomRooms,
+        current: RoomRegistry.rooms.size,
+        available: Math.max(RoomRegistry.maxCustomRooms - RoomRegistry.rooms.size, 0),
+    });
+});
 
 server.listen(PORT, () => {
     Logger.info('Server', `Server is running on port ${PORT}`);

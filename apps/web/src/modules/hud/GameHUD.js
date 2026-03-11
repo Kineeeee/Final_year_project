@@ -1,32 +1,23 @@
 import { COLORS, TEXT_STYLES } from '../../ui/UIConstants';
 
 export class GameHUD {
-    constructor(scene) {
+    constructor(scene, { onExit } = {}) {
         this.scene = scene;
+        this.onExit = onExit;
         this.createElements();
     }
 
     createElements() {
-        // Ping Text (Top-Right, Small & Unobtrusive)
-        this.pingText = this.scene.add
-            .text(0, 0, 'Ping: 0ms', {
+        const makeText = (text, size, color = '#00ff00') =>
+            this.scene.add.text(0, 0, text, {
                 fontFamily: '"Outfit", sans-serif',
-                fontSize: '14px',
-                color: '#00ff00',
+                fontSize: size,
+                color,
                 shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
-            })
-            .setOrigin(1, 0);
+            }).setOrigin(1, 0);
 
-        // FPS Text (Below Ping)
-        this.fpsText = this.scene.add
-            .text(0, 0, 'FPS: 60', {
-                fontFamily: '"Outfit", sans-serif',
-                fontSize: '14px',
-                color: '#00ff00',
-                shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, fill: true }
-            })
-            .setOrigin(1, 0)
-            .setDepth(100);
+        this.pingText = makeText('Ping: 0ms', '14px').setDepth(1100);
+        this.fpsText = makeText('FPS: 60', '14px').setDepth(1100);
 
         // Coin Text (Top-Left, Big & Bold)
         this.coinText = this.scene.add.text(0, 0, 'Coins: 0', {
@@ -75,17 +66,7 @@ export class GameHUD {
             .setOrigin(0.5)
             .setVisible(false);
 
-        // Round Timer (Top Right, below Ping/FPS)
-        this.roundTimerText = this.scene.add
-            .text(0, 0, '', {
-                ...TEXT_STYLES.BODY,
-                fontSize: '20px',
-                color: '#00ffff',
-                stroke: '#000000',
-                strokeThickness: 3
-            })
-            .setOrigin(1, 0)
-            .setVisible(false);
+        this.roundTimerText = makeText('', '20px', '#00ffff').setVisible(false).setDepth(1100);
 
         // Rank Text (Bottom-Left)
         this.rankText = this.scene.add.text(0, 0, 'Rank: --', {
@@ -109,22 +90,54 @@ export class GameHUD {
             stroke: '#000000',
             strokeThickness: 3
         }).setOrigin(0, 1);
+
+        // Exit Button (Top-right cluster)
+        const exitW = 94;
+        const exitH = 32;
+        this.exitBtn = this.scene.add.container(0, 0);
+        const bg = this.scene.add.rectangle(0, 0, exitW, exitH, 0xef4444, 0.9)
+            .setStrokeStyle(2, 0xb91c1c)
+            .setOrigin(1, 0);
+        const label = this.scene.add.text(-exitW / 2, exitH / 2, 'EXIT', {
+            fontFamily: '"Outfit", sans-serif',
+            fontSize: '15px',
+            fontStyle: 'bold',
+            color: '#fff'
+        }).setOrigin(0.5);
+        const hit = this.scene.add.rectangle(0, 0, exitW, exitH, 0x000000, 0)
+            .setOrigin(1, 0)
+            .setInteractive({ useHandCursor: true })
+            .on('pointerdown', () => {
+                if (typeof this.onExit === 'function') this.onExit();
+            });
+        this.exitBtn.add([bg, label, hit]);
+        this.exitBtn.setDepth(1200);
+        this.exitBtn.setScrollFactor(0);
     }
 
     resize(safeArea) {
         const s = safeArea.uiScale || 1;
 
-        // Ping: Top-Right
-        this.pingText.setPosition(safeArea.right, safeArea.top);
-        this.pingText.setScale(s);
+        // Top-right stack with consistent gaps
+        const gap = 10 * s;
+        const baseX = safeArea.right - 8 * s;
+        let y = safeArea.top + 8 * s;
 
-        // FPS: Below Ping
-        this.fpsText.setPosition(safeArea.right, safeArea.top + 20 * s);
-        this.fpsText.setScale(s);
+        const stack = [this.pingText, this.fpsText, this.roundTimerText];
+        stack.forEach((el) => {
+            if (!el) return;
+            el.setScale(s);
+            el.setPosition(baseX, y);
+            const h = el.displayHeight || (el.height ? el.height * s : 16 * s);
+            y += h + gap;
+        });
 
-        // Round Timer: Below FPS (Give some gap)
-        this.roundTimerText.setPosition(safeArea.right, safeArea.top + 50 * s);
-        this.roundTimerText.setScale(s);
+        if (this.exitBtn) {
+            const exitHeight = 32 * s;
+            this.exitBtn.setScale(s);
+            this.exitBtn.setPosition(baseX, y);
+            y += exitHeight + gap;
+        }
 
         // Coins: Top-Left
         this.coinText.setPosition(safeArea.left, safeArea.top);
@@ -161,6 +174,14 @@ export class GameHUD {
         this.rankText.setPosition(leftX, bottomY - 25 * s);
         this.scoreText.setScale(s);
         this.rankText.setScale(s);
+
+        // Exit button: top-right, slightly below round timer
+        if (this.exitBtn) {
+            const x = safeArea.right - 4 * s;
+            const y = safeArea.top + 80 * s;
+            this.exitBtn.setPosition(x, y);
+            this.exitBtn.setScale(s);
+        }
     }
 
     updatePing(ping) {

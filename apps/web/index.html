@@ -4,6 +4,11 @@
 <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg" href="/file.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap"
+        rel="stylesheet" />
     <link rel="stylesheet" href="./src/style.css" />
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -13,28 +18,186 @@
 <body>
     <div id="game-container"></div>
 
-    <!-- LOGIN FORM OVERLAY -->
-    <div id="login-overlay">
-        <div class="login-box">
-            <h2>SNAKE IO</h2>
+    <!-- AUTH OVERLAY -->
+    <div id="login-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <div class="overlay-decor">
+            <div class="blob blob-1"></div>
+            <div class="blob blob-2"></div>
+            <div class="blob blob-3"></div>
+            <div class="stars">
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+        </div>
 
-            <div class="input-group">
-                <input type="text" id="username" placeholder="Username" autocomplete="off" />
+        <div class="auth-shell">
+            <div class="auth-card">
+                <div class="auth-illustration" aria-hidden="true">
+                    <div class="bubble planet"></div>
+                    <div class="bubble comet"></div>
+                    <div class="bubble book"></div>
+                    <div class="floating-tags">
+                        <span class="tag tag-green">Math</span>
+                        <span class="tag tag-yellow">Science</span>
+                        <span class="tag tag-purple">Stories</span>
+                    </div>
+                    <svg class="hero-graphic" viewBox="0 0 360 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="grad1" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#8fd3ff" />
+                                <stop offset="50%" stop-color="#c0b5ff" />
+                                <stop offset="100%" stop-color="#ffe7a3" />
+                            </linearGradient>
+                            <linearGradient id="grad2" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#7dd3fc" />
+                                <stop offset="100%" stop-color="#6ee7b7" />
+                            </linearGradient>
+                        </defs>
+                        <rect x="32" y="70" width="140" height="110" rx="16" fill="url(#grad1)" opacity="0.9" />
+                        <rect x="48" y="88" width="108" height="74" rx="12" fill="#ffffff" opacity="0.9" />
+                        <path d="M200 60c22-14 58-10 72 14 12 21 8 50-6 72l24 12-52 6c-32-2-54-22-54-52 0-22 10-40 16-52Z" fill="#dbeafe" stroke="#8b5cf6" stroke-width="3" />
+                        <circle cx="238" cy="112" r="12" fill="#8b5cf6" opacity="0.35" />
+                        <path d="M115 208 196 188" stroke="#22c55e" stroke-width="10" stroke-linecap="round" />
+                        <path d="M90 200c14 22 46 36 74 24 18-8 28-22 32-36" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" />
+                        <g>
+                            <path d="M64 140c-6-16 4-34 22-40l92-30c18-6 36 2 40 18" fill="#fffaf0" stroke="#ffd166" stroke-width="4" />
+                            <path d="M64 140 86 196l22-8-22-56Z" fill="#ffb4b4" />
+                            <path d="m86 196 22-8 8 22-22 8Z" fill="#fb7185" />
+                            <path d="M196 112c10-6 14-16 10-24-4-10-16-14-30-10-16 4-26 16-22 28 4 10 18 14 32 6Z" fill="#e0f2fe" stroke="#60a5fa" stroke-width="3" />
+                        </g>
+                    </svg>
+                    <p class="illustration-copy">Learn, play, and launch new skills into orbit.</p>
+                </div>
+
+                <div class="auth-content">
+                    <div class="auth-header">
+                        <div>
+                            <p class="eyebrow">BrightLearn Portal</p>
+                            <h1 id="auth-title">Welcome, space learner!</h1>
+                            <p class="subtitle" id="auth-toggle-text">Log in to continue your adventure.</p>
+                        </div>
+                        <span class="badge">Kid Safe</span>
+                    </div>
+
+                    <div class="tab-row" role="tablist" aria-label="Authentication modes">
+                        <button class="tab active" data-auth-tab="login" aria-selected="true" role="tab">Login</button>
+                        <button class="tab" data-auth-tab="signup" aria-selected="false" role="tab">Create Account</button>
+                    </div>
+
+                    <form id="login-form" class="auth-form active" novalidate aria-label="Login form">
+                        <div class="auth-field">
+                            <input type="text" id="username" name="username" autocomplete="username" placeholder=" " required />
+                            <label for="username">Email or Username</label>
+                            <small class="auth-field__feedback"></small>
+                        </div>
+
+                        <div class="auth-field">
+                            <input type="password" id="password" name="password" autocomplete="current-password" placeholder=" "
+                                required />
+                            <label for="password">Password</label>
+                            <small class="auth-field__feedback"></small>
+                        </div>
+
+                        <div class="auth-row">
+                            <label class="remember">
+                                <input type="checkbox" id="remember-me" />
+                                <span>Remember me</span>
+                            </label>
+                            <a href="#" id="forgot-password" class="link">Forgot password?</a>
+                        </div>
+
+                        <button type="button" id="btn-login" class="primary-btn">Login</button>
+
+                        <p class="divider"><span>or continue with</span></p>
+                        <div class="social-row">
+                            <button type="button" class="social-btn google" id="btn-google">
+                                <span class="icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path fill="#EA4335"
+                                            d="M12 10.2v3.84h5.44C17.1 16.98 14.84 18.6 12 18.6c-3.66 0-6.64-2.98-6.64-6.64S8.34 5.32 12 5.32c1.66 0 3.16.6 4.32 1.58l2.92-2.92C17.34 2.52 14.84 1.4 12 1.4 5.84 1.4.88 6.36.88 12.52S5.84 23.64 12 23.64c5.52 0 10.12-4 10.12-11.64 0-.76-.08-1.5-.2-2.2H12Z" />
+                                    </svg>
+                                </span>
+                                Continue with Google
+                            </button>
+                            <button type="button" class="social-btn facebook" id="btn-facebook">
+                                <span class="icon">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path fill="#fff"
+                                            d="M15 4h2.4V0H13a5 5 0 0 0-5 5v3H5v4h3v12h4.2V12h3.5l.5-4H12V5c0-.9.7-1 1.4-1H15Z" />
+                                    </svg>
+                                </span>
+                                Continue with Facebook
+                            </button>
+                        </div>
+
+                        <button type="button" id="btn-guest" class="ghost-btn">Play as Guest</button>
+                        <p id="login-message" role="status" aria-live="polite"></p>
+                    </form>
+
+                    <form id="signup-form" class="auth-form" novalidate aria-label="Create account form">
+                        <div class="auth-field">
+                            <input type="text" id="signup-name" name="signup-name" autocomplete="name" placeholder=" "
+                                required />
+                            <label for="signup-name">Child's first name</label>
+                            <small class="auth-field__feedback"></small>
+                        </div>
+
+                        <div class="auth-field">
+                            <input type="email" id="signup-email" name="signup-email" autocomplete="email" placeholder=" "
+                                required />
+                            <label for="signup-email">Parent email</label>
+                            <small class="auth-field__feedback"></small>
+                        </div>
+
+                        <div class="auth-field auth-field--stacked">
+                            <input type="password" id="signup-password" name="signup-password" autocomplete="new-password"
+                                minlength="8" maxlength="12" placeholder=" " required />
+                            <label for="signup-password">Create a password</label>
+                            <div class="password-meter" aria-hidden="true">
+                                <span id="strength-bar"></span>
+                            </div>
+                            <div class="strength-label" id="strength-label">Start typing to see strength</div>
+                            <ul class="requirements" aria-live="polite">
+                                <li data-rule="length">8–12 characters</li>
+                                <li data-rule="upper">At least 1 uppercase</li>
+                                <li data-rule="lower">At least 1 lowercase</li>
+                                <li data-rule="number">At least 1 number</li>
+                                <li data-rule="special">At least 1 special character</li>
+                            </ul>
+                            <small class="auth-field__feedback"></small>
+                        </div>
+
+                        <div class="auth-field">
+                            <input type="password" id="signup-confirm" name="signup-confirm" autocomplete="new-password"
+                                placeholder=" " required />
+                            <label for="signup-confirm">Confirm password</label>
+                            <small class="auth-field__feedback"></small>
+                        </div>
+
+                        <button type="button" id="btn-register" class="primary-btn">Create account</button>
+                        <p id="signup-message" class="inline-message" role="status" aria-live="polite"></p>
+                    </form>
+                </div>
             </div>
 
-            <div class="input-group">
-                <input type="password" id="password" placeholder="Password" />
+            <!-- Password reset modal -->
+            <div id="reset-modal" class="modal" aria-hidden="true">
+                <div class="modal__backdrop" data-close-reset></div>
+                <div class="modal__dialog" role="dialog" aria-labelledby="reset-title" aria-modal="true">
+                    <button class="modal__close" type="button" data-close-reset aria-label="Close reset dialog">×</button>
+                    <p class="eyebrow">Forgot password</p>
+                    <h3 id="reset-title">Send a reset link</h3>
+                    <p class="subtitle">Enter the parent email you use to sign in.</p>
+
+                    <div class="auth-field">
+                        <input type="email" id="reset-email" name="reset-email" autocomplete="email" placeholder=" " required />
+                        <label for="reset-email">Parent email</label>
+                        <small class="auth-field__feedback"></small>
+                    </div>
+
+                    <button type="button" id="reset-submit" class="primary-btn">Send reset link</button>
+                    <p id="reset-message" class="inline-message" role="status" aria-live="polite"></p>
+                </div>
             </div>
-
-            <button id="btn-login">LOGIN</button>
-            <button id="btn-register" class="secondary-btn">REGISTER</button>
-
-            <!-- THÊM NÚT GUEST Ở ĐÂY -->
-            <button id="btn-guest" class="guest-btn" style="background-color: #ff9800; margin-top: 10px">
-                PLAY AS GUEST
-            </button>
-
-            <p id="login-message"></p>
         </div>
     </div>
 

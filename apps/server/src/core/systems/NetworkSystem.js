@@ -18,7 +18,11 @@ class NetworkSystem {
     get quizManager() { return this.container.has('quizManager') ? this.container.get('quizManager') : null; }
 
     async initialize() {
-        await RedisClient.connect();
+        // Attach listeners immediately to avoid races; connect to Redis in background
+        RedisClient.connect().catch((err) => {
+            Logger.error('NetworkSystem', 'Redis connect failed', err);
+        });
+
         this.io.on(SOCKET_EVENT.CONNECTION, (socket) => this.handleConnection(socket));
         this.setupEventBusListeners();
     }
@@ -116,6 +120,11 @@ class NetworkSystem {
                 this.quizManager.clearUserQuizIfOwner(socket.data.user.userId);
             }
             this.playerManager.removePlayer(socket.id);
+            const gameServer = this.container.get('gameServer');
+            if (gameServer && gameServer.broadcastWaiting) {
+                // RoomRegistry removal is handled at namespace level for custom rooms to avoid double removal
+                gameServer.broadcastWaiting();
+            }
         });
 
         // Ping/Pong
@@ -123,6 +132,10 @@ class NetworkSystem {
 
         // Gameplay
         socket.on(SOCKET_EVENT.PLAYER_INPUT, (inputData) => {
+            const gameServer = this.container.get('gameServer');
+            if (gameServer && gameServer.config.mode === 'quiz' && !gameServer.matchStarted) {
+                return; // ignore inputs before match start/end
+            }
             // Anti-Spam: Rate Limit (60 packets/sec max)
             const now = Date.now();
             if (!socket.rateLimit) socket.rateLimit = { count: 0, lastCheck: now };
@@ -158,6 +171,24 @@ class NetworkSystem {
                     // Mark socket as authenticated (optional)
                     socket.data.user = decoded;
                     socket.data.quizSource = 'SYSTEM';
+
+                    // Reclaim ownership if creator rejoins custom room
+                    const gameServer = this.container.get('gameServer');
+                    if (gameServer?.config?.isCustom && gameServer.config?.roomCode) {
+                        try {
+                            const RoomRegistry = require('../../modules/room/RoomRegistry');
+                            const room = RoomRegistry.getRoom(gameServer.config.roomCode);
+                            if (room && room.ownerUserId && room.ownerUserId.toString() === decoded.userId.toString()) {
+                                if (room.ownerId !== socket.id) {
+                                    room.ownerId = socket.id;
+                                    gameServer.config.ownerSocketId = socket.id;
+                                    this.io.emit('room_owner', { ownerId: socket.id });
+                                }
+                            }
+                        } catch (err) {
+                            Logger.error('NetworkSystem', 'Reclaim owner failed', err);
+                        }
+                    }
 
                     // If user requests personal quiz, validate before honoring
                     if (requestedQuizSource === 'USER' && this.config.topic) {
@@ -227,6 +258,11 @@ class NetworkSystem {
             }
 
             this.playerManager.handleInitPlayer(socket.id, finalData);
+
+            const gameServer = this.container.get('gameServer');
+            if (gameServer && gameServer.broadcastWaiting) {
+                gameServer.broadcastWaiting();
+            }
         });
 
         // Shop
@@ -236,6 +272,50 @@ class NetworkSystem {
 
         socket.on(SOCKET_EVENT.USE_ITEM, (itemId) => {
             this.shopManager.handleUseItem(socket.id, itemId);
+        });
+
+        // Leave lobby gracefully
+        socket.on('leaveLobby', () => {
+            const gameServer = this.container.get('gameServer');
+            if (!gameServer || !gameServer.config?.isCustom) {
+                socket.disconnect(true);
+                return;
+            }
+            const roomCode = gameServer.config.roomCode;
+            const RoomRegistry = require('../../modules/room/RoomRegistry');
+            const { ownerChanged, newOwnerId } = RoomRegistry.removeSocket(roomCode, socket.id);
+            if (ownerChanged) {
+                gameServer.config.ownerSocketId = newOwnerId || null;
+                this.io.emit('room_owner', { ownerId: newOwnerId || null });
+            }
+            socket.emit('room_left');
+            socket.disconnect(true);
+            if (gameServer.broadcastWaiting) gameServer.broadcastWaiting();
+        });
+
+        // Owner can kick players in custom lobby
+        socket.on('kickPlayer', (targetId) => {
+            const gameServer = this.container.get('gameServer');
+            if (!gameServer || !gameServer.config?.isCustom) return;
+            if (socket.id !== gameServer.config.ownerSocketId) return;
+            const targetSocket =
+                this.io.sockets?.get?.(targetId) ||
+                this.io.sockets?.sockets?.get?.(targetId);
+            if (targetSocket) {
+                targetSocket.emit('kicked');
+                targetSocket.disconnect(true);
+            }
+            if (gameServer.broadcastWaiting) gameServer.broadcastWaiting();
+        });
+
+        // Custom room start (owner only)
+        socket.on('roomStart', () => {
+            const gameServer = this.container.get('gameServer');
+            if (!gameServer || !gameServer.config?.isCustom) return;
+            if (socket.id !== gameServer.config.ownerSocketId) return;
+            if (gameServer.quizManager && gameServer.quizManager.isActive) return;
+            gameServer.quizManager?.startRound();
+            gameServer.io.emit('room_started');
         });
     }
 

@@ -6,6 +6,7 @@ class RoomRegistry {
         this.rooms = new Map(); // code -> room data
         this.maxCustomRooms = 2;
         this.emptyTtlMs = 5 * 60 * 1000; // close after 5m empty
+        this.joinGraceMs = 2 * 60 * 1000; // close if nobody joins within 2m
     }
 
     generateCode() {
@@ -32,9 +33,20 @@ class RoomRegistry {
             lastActive: Date.now(),
             sockets: new Set(),
             closeTimer: null,
+            joinGraceTimer: null,
         };
         this.rooms.set(code, room);
         Logger.info('RoomRegistry', `Created custom room ${code} for user ${ownerUserId || 'unknown'}`);
+
+        // Auto-close if creator never joins
+        room.joinGraceTimer = setTimeout(() => {
+            const r = this.rooms.get(code);
+            if (!r) return;
+            if (!r.sockets || r.sockets.size === 0) {
+                this.closeRoom(code, 'join_timeout');
+            }
+        }, this.joinGraceMs);
+
         return { code, room };
     }
 
@@ -48,6 +60,10 @@ class RoomRegistry {
         room.sockets.add(socketId);
         room.lastActive = Date.now();
         if (!room.ownerId) room.ownerId = socketId;
+        if (room.joinGraceTimer) {
+            clearTimeout(room.joinGraceTimer);
+            room.joinGraceTimer = null;
+        }
         if (room.closeTimer) {
             clearTimeout(room.closeTimer);
             room.closeTimer = null;
@@ -76,6 +92,7 @@ class RoomRegistry {
         const room = this.rooms.get(code);
         if (!room) return;
         if (room.closeTimer) clearTimeout(room.closeTimer);
+        if (room.joinGraceTimer) clearTimeout(room.joinGraceTimer);
         if (room.gameServer && typeof room.gameServer.destroy === 'function') {
             room.gameServer.destroy();
         }
@@ -96,7 +113,12 @@ class RoomRegistry {
             capacity: 30,
             createdAt: room.createdAt,
             lastActive: room.lastActive,
+            started: !!(room.gameServer && room.gameServer.matchStarted),
         };
+    }
+
+    listRooms() {
+        return Array.from(this.rooms.values()).map((room) => this.getMeta(room.code));
     }
 }
 

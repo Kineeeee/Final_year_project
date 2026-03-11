@@ -6,13 +6,13 @@ import { Minimap } from '../minimap/Minimap';
 import { CONFIG } from '../../config/constants';
 
 export class UIManager {
-    constructor(scene, mode = 'normal') {
+    constructor(scene, mode = 'normal', { onExit } = {}) {
         this.scene = scene;
         this.mode = mode;
         this.components = {};
 
         // Initialize Components
-        this.components.hud = new GameHUD(scene);
+        this.components.hud = new GameHUD(scene, { onExit });
         this.components.leaderboard = new Leaderboard(scene);
         this.components.items = new ItemSlots(scene, mode); // Pass mode to ItemSlots
 

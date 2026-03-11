@@ -9,16 +9,21 @@ class QuizManager {
         this.topic = topic; // 'math' or 'english'
         this.lockedSource = opts.lockedSource || false;
         this.ownerUserId = opts.ownerUserId || null;
+        this.isCustom = !!opts.isCustom;
+        this.roomCode = opts.roomCode || null;
+
+        // Defaults
+        this.currentQuestion = null;
+        this.quizSource = 'system'; // 'system' | 'user'
+        this.activeUserQuiz = null; // {questions, _id, category}
+        this.activeUserId = null;
+
+        // If a user quiz is provided (custom room), keep it as the active source
         if (opts.userQuiz) {
             this.quizSource = 'user';
             this.activeUserQuiz = opts.userQuiz;
             this.activeUserId = this.ownerUserId;
         }
-
-        this.currentQuestion = null;
-        this.quizSource = 'system'; // 'system' | 'user'
-        this.activeUserQuiz = null; // {questions, _id, category}
-        this.activeUserId = null;
         this.roundDuration = 4 * 60 * 1000; // 4 minutes
         this.roundEndTime = 0;
         this.isActive = false;
@@ -41,6 +46,8 @@ class QuizManager {
 
     async startRound() {
         this.isActive = true;
+        const gameServer = this.container.has('gameServer') ? this.container.get('gameServer') : null;
+        if (gameServer) gameServer.matchStarted = true;
         this.roundEndTime = Date.now() + this.roundDuration;
 
         // Reset Player State
@@ -350,6 +357,8 @@ class QuizManager {
 
     endRound() {
         this.isActive = false;
+        const gameServer = this.container.has('gameServer') ? this.container.get('gameServer') : null;
+        if (gameServer) gameServer.matchStarted = false;
 
         if (this.questionTimer) clearTimeout(this.questionTimer);
         if (this.cleanupTimer) clearInterval(this.cleanupTimer);
@@ -371,28 +380,51 @@ class QuizManager {
             }
         });
 
-        this.io.emit('roundEnd', {
+        const results = asArray.map((p) => ({
+            id: p.id,
+            name: p.name,
+            questionsSolved: p.correctAnswers || 0,
+            score: p.score || 0,
+        })).sort((a, b) => b.questionsSolved - a.questionsSolved || b.score - a.score);
+
+        this.io.emit('result', {
             winner: winner
                 ? {
+                      id: winner.id,
                       name: winner.name,
-                      score: winner.score,
-                      color: winner.color,
-                      correct: winner.correctAnswers || 0,
+                      questionsSolved: winner.correctAnswers || 0,
+                      score: winner.score || 0,
                   }
                 : null,
+            players: results,
+            mode: this.isCustom ? 'custom' : 'quiz',
         });
 
-        // FORCE KILL ALL PLAYERS
-        if (this.playerManager) {
+        // FORCE KILL ALL PLAYERS (custom only, public arena keeps players for next round)
+        if (this.isCustom && this.playerManager) {
             this.playerManager.killAllPlayers();
         }
 
-        // Close room after round
-        const gameServer = this.container.has('gameServer') ? this.container.get('gameServer') : null;
-        if (gameServer) {
-            gameServer.destroy();
+        if (this.isCustom) {
+            // Close room after short delay so clients can see result
+            setTimeout(() => {
+                if (gameServer) gameServer.destroy();
+                this.io.emit('room_closed');
+                if (this.roomCode) {
+                    try {
+                        const RoomRegistry = require('../room/RoomRegistry');
+                        RoomRegistry.closeRoom(this.roomCode, 'round_end');
+                    } catch (err) {
+                        Logger.error('QuizManager', 'Failed to close custom room after endRound', err);
+                    }
+                }
+            }, 1500);
+        } else {
+            // Public arena: restart next round
+            setTimeout(() => {
+                this.startRound();
+            }, 3000);
         }
-        this.io.emit('room_closed');
     }
 
     cleanupJunkFood() {

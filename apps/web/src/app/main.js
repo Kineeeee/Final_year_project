@@ -9,9 +9,10 @@ import { ShopScene } from '../modules/shop/ShopScene';
 import { ShootingScene } from '../modules/combat/ShootingScene';
 import { HowToPlayScene } from '../scenes/HowToPlayScene';
 import { AuthManager } from '../modules/auth/AuthManager';
+import { AchievementsScene } from '../modules/achievements/AchievementsScene';
 
-const BASE_WIDTH = 1280;
-const BASE_HEIGHT = 720;
+const BASE_WIDTH = 1920;
+const BASE_HEIGHT = 1080;
 
 // Detect Mobile Device
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -54,6 +55,7 @@ const config = {
         UIScene,
         ShopScene,
         ShootingScene,
+        AchievementsScene,
         HowToPlayScene,
         GameOver
     ]

@@ -5,6 +5,7 @@ import { AuthService } from '../core/services/AuthService';
 import { QuizSetupOverlay } from '../ui/quiz/QuizSetupOverlay';
 import { globalQuizPrefs } from '../core/services/GlobalQuizPrefs';
 import { CategorySelectOverlay } from '../ui/quiz/CategorySelectOverlay';
+import { CustomRoomOverlay } from '../ui/quiz/CustomRoomOverlay';
 import { userQuizApi } from '../core/services/UserQuizApi';
 import { overlayBlocker } from '../core/services/OverlayBlocker';
 import { authStore } from '../core/state/authStore';
@@ -27,6 +28,10 @@ export class MainMenu extends Scene {
         const centerY = height / 2;
         const isMobile = width < 1080;
         const padding = isMobile ? 18 : 32;
+        const uiScale = isMobile ? 1.05 : 1.5;
+        const scaleVal = (n) => Math.round(n * uiScale);
+        this.uiScale = uiScale;
+        this.scaleVal = scaleVal;
 
         // --- 1. BACKGROUND ---
         if (this.textures.exists('menu-bg')) {
@@ -51,8 +56,8 @@ export class MainMenu extends Scene {
         // --- 2. HEADER ---
         // Hạ thấp Header xuống một chút (0.15) để Logo không bị cắt ở mép trên màn hình
         const headerY = height * (isMobile ? 0.22 : 0.24); 
-        const bannerW = Math.min(620, width - padding * 2);
-        const bannerH = isMobile ? 68 : 80;
+        const bannerW = Math.min(scaleVal(620), width - padding * 2);
+        const bannerH = scaleVal(isMobile ? 68 : 80);
 
         // A. VẼ BANNER (NỀN) TRƯỚC
         const banner = this.add.graphics();
@@ -80,10 +85,10 @@ export class MainMenu extends Scene {
         // C. TITLE TEXT (VẼ SAU CÙNG ĐỂ NỔI LÊN TRÊN)
         const titleText = this.add.text(centerX, headerY, 'SNAKE ARENA', { // +10 để dịch chữ xuống dưới 1 chút, tránh Logo
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: isMobile ? '30px' : '38px',
+            fontSize: `${scaleVal(isMobile ? 30 : 38)}px`,
             color: '#ffffff',
             stroke: '#000000',
-            strokeThickness: 6,
+            strokeThickness: Math.max(6, Math.round(6 * uiScale)),
             shadow: { offsetX: 4, offsetY: 4, color: '#000000', blur: 0, fill: true }
         }).setOrigin(0.5);
 
@@ -95,13 +100,13 @@ export class MainMenu extends Scene {
 
         // --- 3. STATS BAR ---
         // Tăng khoảng cách từ Header xuống Stats (từ 70 lên 85) để thoáng hơn
-        const statsY = headerY + (isMobile ? 80 : 95); 
+        const statsY = headerY + scaleVal(isMobile ? 80 : 95); 
         const statsContainer = this.add.container(centerX, statsY);
         
         const statsBg = this.add.graphics();
-        const statsW = Math.min(620, width - padding * 2);
-        const statsH = 46;
-        const r = 10;
+        const statsW = Math.min(scaleVal(620), width - padding * 2);
+        const statsH = scaleVal(40);
+        const r = scaleVal(10);
         
         // Layer 1: Shadow/Outline
         statsBg.fillStyle(0x000000, 1);
@@ -119,31 +124,31 @@ export class MainMenu extends Scene {
 
         const statsStyle = { 
             fontFamily: '"Press Start 2P", monospace', 
-            fontSize: isMobile ? '12px' : '14px', // Giảm xuống 14px để an toàn cho tên dài
+            fontSize: `${scaleVal(isMobile ? 12 : 14)}px`, // Giảm xuống 14px để an toàn cho tên dài
             color: '#FFD700', 
             stroke: '#000000',
-            strokeThickness: 4,
+            strokeThickness: Math.max(3, Math.round(4 * uiScale)),
             shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 0, fill: true }
         };
         
         // Căn chỉnh lại tọa độ text để không bị đè nhau
-        const iconUser = this.add.text(-260, 0, '👤', { fontSize: '18px' }).setOrigin(0.5); 
-        const txtUser = this.add.text(-240, 0, username, statsStyle).setOrigin(0, 0.5); // Canh lề trái
+        const iconUser = this.add.text(-scaleVal(260), 0, '👤', { fontSize: `${scaleVal(18)}px` }).setOrigin(0.5); 
+        const txtUser = this.add.text(-scaleVal(240), 0, username, statsStyle).setOrigin(0, 0.5); // Canh lề trái
 
-        const iconCoin = this.add.text(-30, 0, '💰', { fontSize: '18px' }).setOrigin(0.5);
-        const txtCoin = this.add.text(-10, 0, `${coins}`, statsStyle).setOrigin(0, 0.5);
+        const iconCoin = this.add.text(-scaleVal(30), 0, '💰', { fontSize: `${scaleVal(18)}px` }).setOrigin(0.5);
+        const txtCoin = this.add.text(-scaleVal(10), 0, `${coins}`, statsStyle).setOrigin(0, 0.5);
 
-        const iconCup = this.add.text(150, 0, '🏆', { fontSize: '18px' }).setOrigin(0.5);
-        const txtScore = this.add.text(170, 0, `Best: ${highScore}`, statsStyle).setOrigin(0, 0.5);
+        const iconCup = this.add.text(scaleVal(150), 0, '🏆', { fontSize: `${scaleVal(18)}px` }).setOrigin(0.5);
+        const txtScore = this.add.text(scaleVal(170), 0, `Best: ${highScore}`, statsStyle).setOrigin(0, 0.5);
         
         statsContainer.add([iconUser, txtUser, iconCoin, txtCoin, iconCup, txtScore]);
         uiRoot.add(statsContainer);
 
         // --- 4. GLOBAL QUIZ SOURCE + UPLOAD ---
-        const sourceY = statsY + (isMobile ? 80 : 90);
+        const sourceY = statsY + scaleVal(isMobile ? 80 : 90);
         const sourceLabel = this.add.text(centerX - 240, sourceY, 'Quiz Source:', {
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: isMobile ? '12px' : '14px',
+            fontSize: `${scaleVal(isMobile ? 12 : 14)}px`,
             color: '#ffffff',
             stroke: '#000000',
             strokeThickness: 4,
@@ -152,12 +157,12 @@ export class MainMenu extends Scene {
         const makeChip = (text, value, color) => {
             const chip = this.add.text(0, 0, text, {
                 fontFamily: '"Press Start 2P", monospace',
-                fontSize: '12px',
+                fontSize: `${scaleVal(12)}px`,
                 color: '#ffffff',
                 backgroundColor: color,
-                padding: { x: 14, y: 8 },
+                padding: { x: scaleVal(14), y: scaleVal(8) },
                 stroke: '#000000',
-                strokeThickness: 3
+                strokeThickness: Math.max(2, Math.round(3 * uiScale))
             }).setOrigin(0.5).setInteractive({ useHandCursor: true });
             chip.on('pointerdown', () => this.setGlobalQuizSource(value));
             return chip;
@@ -183,12 +188,12 @@ export class MainMenu extends Scene {
         const cols = Math.min(maxCols, modes.length);
         const rows = Math.ceil(modes.length / cols);
         const availW = width - padding * 2;
-        const cardGap = isMobile ? 12 : 18;
-        const cardWidth = Math.min(180, (availW - cardGap * (cols - 1)) / cols);
-        const cardHeight = Math.min(190, cardWidth * 1.15);
+        const cardGap = scaleVal(isMobile ? 12 : 18);
+        const cardWidth = Math.min(scaleVal(180), (availW - cardGap * (cols - 1)) / cols);
+        const cardHeight = Math.min(scaleVal(190), cardWidth * 1.15);
         const totalRowWidth = (cardWidth * cols) + (cardGap * (cols - 1));
         const startX = centerX - (totalRowWidth / 2) + (cardWidth / 2);
-        const modesStartY = sourceY + (isMobile ? 120 : 140);
+        const modesStartY = sourceY + scaleVal(isMobile ? 120 : 140);
 
         modes.forEach((m, i) => {
             const row = Math.floor(i / cols);
@@ -220,7 +225,7 @@ export class MainMenu extends Scene {
 
             if (this.textures.exists(m.icon)) {
                 const icon = this.add.image(0, -25, m.icon);
-                const maxDim = 110;
+                const maxDim = scaleVal(110);
                 if(icon.width > maxDim || icon.height > maxDim) {
                     const scale = Math.min(maxDim / icon.width, maxDim / icon.height);
                     icon.setScale(scale);
@@ -228,15 +233,15 @@ export class MainMenu extends Scene {
                 card.add(icon);
             }
 
-            const label = this.add.text(0, h/2 - 45, m.label, {
-                fontFamily: '"Press Start 2P", monospace',
-                fontSize: isMobile ? '14px' : '18px',
-                color: '#ffffff',
-                stroke: '#000000',
-                strokeThickness: 6,
-                align: 'center',
-                wordWrap: { width: w - 10 }
-            }).setOrigin(0.5);
+                const label = this.add.text(0, h/2 - scaleVal(45), m.label, {
+                    fontFamily: '"Press Start 2P", monospace',
+                    fontSize: `${scaleVal(isMobile ? 14 : 18)}px`,
+                    color: '#ffffff',
+                    stroke: '#000000',
+                    strokeThickness: Math.max(5, Math.round(6 * uiScale)),
+                    align: 'center',
+                    wordWrap: { width: w - 10 }
+                }).setOrigin(0.5);
 
             card.add(label);
 
@@ -257,16 +262,33 @@ export class MainMenu extends Scene {
         });
 
         // --- 6. BOTTOM BUTTONS ---
-        const bottomY = height - (isMobile ? 40 : 70); // position above safe area
-        this.createStylishButton(uiRoot, centerX - 220, bottomY, '🛒 SHOP', 0x3d6cb9, () => {
-            this.scene.launch('ShopScene');
-            this.scene.pause();
-        });
-        this.createStylishButton(uiRoot, centerX, bottomY, '🎨 SKINS', 0x8e44ad, () => {
-            this.scene.start('CustomizeScene');
-        });
-        this.createStylishButton(uiRoot, centerX + 220, bottomY, 'UPLOAD QUIZ', 0x2980b9, () => {
-            this.openUploadOverlay();
+        const bottomY = height - (isMobile ? scaleVal(40) : scaleVal(70)); // position above safe area
+        const bottomButtons = [
+            {
+                label: '🛒 SHOP',
+                color: 0x3d6cb9,
+                action: () => { this.scene.launch('ShopScene'); this.scene.pause(); }
+            },
+            {
+                label: '🏅 ACHIEV.',
+                color: 0xf59e0b,
+                action: () => { this.scene.launch('AchievementsScene'); this.scene.pause(); }
+            },
+            {
+                label: '🎨 SKINS',
+                color: 0x8e44ad,
+                action: () => { this.scene.start('CustomizeScene'); }
+            },
+            {
+                label: 'UPLOAD QUIZ',
+                color: 0x2980b9,
+                action: () => { this.openUploadOverlay(); }
+            }
+        ];
+        const spacing = scaleVal(180);
+        const bottomStartX = centerX - spacing * ((bottomButtons.length - 1) / 2);
+        bottomButtons.forEach((btn, idx) => {
+            this.createStylishButton(uiRoot, bottomStartX + idx * spacing, bottomY, btn.label, btn.color, btn.action);
         });
 
         // --- 6. TOP RIGHT BUTTONS ---
@@ -297,10 +319,11 @@ export class MainMenu extends Scene {
     }
 
     createStylishButton(container, x, y, text, color, callback) {
+        const scaleVal = this.scaleVal || ((n) => n);
         const btn = this.add.container(x, y);
-        const w = 200;
-        const h = 55;
-        const r = 10;
+        const w = scaleVal(200);
+        const h = scaleVal(55);
+        const r = scaleVal(10);
         const g = this.add.graphics();
         const darkColor = Phaser.Display.Color.IntegerToColor(color).darken(15).color;
 
@@ -313,7 +336,7 @@ export class MainMenu extends Scene {
 
         const label = this.add.text(0, -3, text, {
             fontFamily: '"Press Start 2P", monospace',
-            fontSize: '20px',
+            fontSize: `${scaleVal(20)}px`,
             color: '#ffffff',
             stroke: '#000000',
             strokeThickness: 4
@@ -378,7 +401,16 @@ export class MainMenu extends Scene {
             this.startCustomQuizFlow();
             return;
         }
-        if (mode === 'quiz' || mode === 'shooting') {
+        if (mode === 'quiz') {
+            // Immediate join system quiz arena (no category selection)
+            Logger.info('MainMenu', 'Starting Quiz Arena (system questions)');
+            this.cameras.main.fadeOut(300);
+            this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+                this.scene.start('Game', { mode: 'math', quizSource: 'SYSTEM' });
+            });
+            return;
+        }
+        if (mode === 'shooting') {
             this.openCategorySelect(mode);
             return;
         }
@@ -392,17 +424,23 @@ export class MainMenu extends Scene {
 
     async startCustomQuizFlow() {
         if (overlayBlocker.isBlocked()) return;
-        const choice = prompt('Tạo phòng nhập "create", tham gia phòng nhập room code:');
-        if (!choice) return;
-        const lower = choice.trim().toLowerCase();
-        if (lower === 'create') {
-            this.openCategorySelect('custom_create');
-            return;
+        if (!this.customOverlay) {
+            this.customOverlay = new CustomRoomOverlay({
+                onJoin: (code) => {
+                    this.customOverlay?.close();
+                    this.startCustomRoomJoin(code);
+                },
+                onCreate: () => {
+                    this.customOverlay?.close();
+                    this.openCategorySelect('custom_create');
+                },
+                onClose: () => {
+                    this.input.enabled = true;
+                }
+            });
         }
-
-        const code = choice.trim();
-        if (!code) return;
-        this.startCustomRoomJoin(code);
+        this.input.enabled = false;
+        await this.customOverlay.open();
     }
 
     startCustomRoomJoin(code) {

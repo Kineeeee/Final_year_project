@@ -36,6 +36,7 @@ class GameServer {
         this.config = config; // { mode: 'normal'|'quiz', topic: 'math'|'english' }
         this.closed = false;
         this.intervals = [];
+        this.matchStarted = false;
 
         // Server-authoritative tick counter for snapshots/deltas
         this.serverTick = 0;
@@ -113,12 +114,17 @@ class GameServer {
         this.quizManager = new QuizManager(this.io, this.container, this.config.topic, {
             userQuiz: this.config.userQuiz,
             ownerUserId: this.config.ownerUserId,
-            lockedSource: !!this.config.userQuiz
+            lockedSource: this.config.lockedSource || !!this.config.userQuiz,
+            isCustom: !!this.config.isCustom,
+            roomCode: this.config.roomCode || null,
         });
         this.container.register('quizManager', this.quizManager);
 
         Logger.info('GameServer', `Quiz Mode Enabled: ${this.config.topic}`);
-        this.quizManager.startRound();
+        // Auto-start rounds unless explicitly disabled (custom rooms wait for owner start)
+        if (this.config.autoStart !== false) {
+            this.quizManager.startRound();
+        }
     }
 
     shouldEnableBots() {
@@ -142,6 +148,13 @@ class GameServer {
     }
 
     update() {
+        // In custom rooms, pause gameplay until owner starts the match
+        if (this.config.isCustom && !this.matchStarted) {
+            if (this.networkSystem && typeof this.networkSystem.update === 'function') {
+                this.networkSystem.update();
+            }
+            return;
+        }
         // 1. Update Managers (Physics & Logic)
         if (this.quizManager) this.quizManager.update();
         if (this.botManager) this.botManager.update();
@@ -160,6 +173,27 @@ class GameServer {
             clearInterval(this.quizManager.cleanupTimer);
         }
         this.io.disconnectSockets(true);
+    }
+
+    /**
+     * Emit waiting-room snapshot (custom rooms only)
+     */
+    broadcastWaiting() {
+        if (!this.config.isCustom) return;
+        if (!this.playerManager) return;
+
+        const players = Object.values(this.playerManager.getAllPlayers() || {}).map((p) => ({
+            id: p.id,
+            name: p.name || 'Player',
+        }));
+
+        this.io.emit('room_waiting', {
+            players,
+            count: players.length,
+            ownerId: this.config.ownerSocketId || null,
+            roomCode: this.config.roomCode || null,
+            started: !!this.matchStarted,
+        });
     }
 }
 

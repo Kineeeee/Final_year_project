@@ -22,6 +22,10 @@ export class AuthService {
         return this._authRequest('refresh', {});
     }
 
+    async forgotPassword(email) {
+        return this._authRequest('forgot', { email });
+    }
+
     async _authRequest(endpoint, body) {
         Logger.info('AuthService', `Calling API: ${endpoint} for user: ${body.username}`);
 

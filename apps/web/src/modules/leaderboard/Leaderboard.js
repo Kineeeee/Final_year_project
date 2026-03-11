@@ -36,7 +36,8 @@ export class Leaderboard {
         const scale = safeArea.uiScale || 1;
 
         const x = safeArea.left;
-        const y = safeArea.top + 40 * scale; // Gap for Coins
+        // Position lower to avoid overlapping quiz/question text
+        const y = safeArea.top + 60 * scale;
 
         this.container.setPosition(x, y);
         this.container.setScale(scale);

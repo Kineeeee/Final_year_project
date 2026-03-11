@@ -1,4 +1,3 @@
-import { Logger } from '../../utils/Logger';
 import { authStore } from '../../core/state/authStore';
 import { AuthService } from '../../core/services/AuthService';
 import { playerState } from '../../core/services/PlayerState';
@@ -8,7 +7,7 @@ export class AuthManager {
         this.gameStartCallback = gameStartCallback;
         this.authService = new AuthService();
 
-        // DOM Elements
+        // Core login elements
         this.loginOverlay = document.getElementById('login-overlay');
         this.usernameInput = document.getElementById('username');
         this.passwordInput = document.getElementById('password');
@@ -17,20 +16,91 @@ export class AuthManager {
         this.loginMessage = document.getElementById('login-message');
         this.btnGuest = document.getElementById('btn-guest');
 
+        // Signup + UI enhancements
+        this.signupNameInput = document.getElementById('signup-name');
+        this.signupEmailInput = document.getElementById('signup-email');
+        this.signupPasswordInput = document.getElementById('signup-password');
+        this.signupConfirmInput = document.getElementById('signup-confirm');
+        this.signupMessage = document.getElementById('signup-message');
+        this.strengthBar = document.getElementById('strength-bar');
+        this.strengthLabel = document.getElementById('strength-label');
+        this.requirementItems = document.querySelectorAll('.requirements [data-rule]');
+        this.tabButtons = document.querySelectorAll('[data-auth-tab]');
+        this.forms = document.querySelectorAll('.auth-form');
+        this.authSubtitle = document.getElementById('auth-toggle-text');
+        this.rememberCheckbox = document.getElementById('remember-me');
+        this.forgotLink = document.getElementById('forgot-password');
+        this.googleBtn = document.getElementById('btn-google');
+        this.facebookBtn = document.getElementById('btn-facebook');
+        this.resetModal = document.getElementById('reset-modal');
+        this.resetEmailInput = document.getElementById('reset-email');
+        this.resetSubmit = document.getElementById('reset-submit');
+        this.resetMessage = document.getElementById('reset-message');
+        this.resetClosers = document.querySelectorAll('[data-close-reset]');
+
         this.initListeners();
+        this.restoreRemembered();
+        this.updateStrength();
         this.checkAutoLogin();
     }
 
     initListeners() {
-        if (this.btnLogin) this.btnLogin.addEventListener('click', () => this.handleLogin());
-        if (this.btnRegister) this.btnRegister.addEventListener('click', () => this.handleRegister());
-        if (this.btnGuest) this.btnGuest.addEventListener('click', () => this.handleGuest());
+        this.btnLogin?.addEventListener('click', () => this.handleLogin());
+        this.btnRegister?.addEventListener('click', () => this.handleRegister());
+        this.btnGuest?.addEventListener('click', () => this.handleGuest());
+
+        this.tabButtons.forEach((btn) =>
+            btn.addEventListener('click', () => this.switchMode(btn.dataset.authTab || 'login'))
+        );
+
+        [
+            this.usernameInput,
+            this.passwordInput,
+            this.signupNameInput,
+            this.signupEmailInput,
+            this.signupPasswordInput,
+            this.signupConfirmInput
+        ].forEach((input) => {
+            input?.addEventListener('input', () => this.clearFieldError(input));
+        });
+
+        this.signupPasswordInput?.addEventListener('input', () => this.updateStrength());
+        this.signupConfirmInput?.addEventListener('input', () => this.validateConfirmMatch(false));
+
+        this.forgotLink?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.openResetModal();
+        });
+
+        this.googleBtn?.addEventListener('click', () => this.showMessage('Google sign-in coming soon.', false));
+        this.facebookBtn?.addEventListener('click', () => this.showMessage('Facebook sign-in coming soon.', false));
+
+        this.resetSubmit?.addEventListener('click', () => this.handleReset());
+        this.resetEmailInput?.addEventListener('input', () => this.clearFieldError(this.resetEmailInput));
+        this.resetClosers.forEach((el) =>
+            el.addEventListener('click', () => this.closeResetModal())
+        );
     }
 
     showMessage(msg, isError = true) {
         if (this.loginMessage) {
             this.loginMessage.textContent = msg;
-            this.loginMessage.style.color = isError ? '#ff4444' : '#00ff00';
+            this.loginMessage.style.color = isError ? '#e36464' : '#16a34a';
+        }
+    }
+
+    showSignupMessage(msg, isError = true) {
+        if (this.signupMessage) {
+            this.signupMessage.textContent = msg;
+            this.signupMessage.style.color = isError ? '#e36464' : '#16a34a';
+        }
+    }
+
+    restoreRemembered() {
+        const remembered = localStorage.getItem('remembered-username');
+        if (remembered && this.usernameInput) {
+            this.usernameInput.value = remembered;
+            if (this.rememberCheckbox) this.rememberCheckbox.checked = true;
         }
     }
 
@@ -44,8 +114,16 @@ export class AuthManager {
     async handleLogin() {
         const { username, password } = this.getCredentials();
         if (!username || !password) {
-            this.showMessage('Please enter username and password');
+            if (!username) this.showFieldError(this.usernameInput, 'Please enter your email or username');
+            if (!password) this.showFieldError(this.passwordInput, 'Please enter your password');
+            this.showMessage('Please fill in all fields');
             return;
+        }
+
+        if (this.rememberCheckbox?.checked) {
+            localStorage.setItem('remembered-username', username);
+        } else {
+            localStorage.removeItem('remembered-username');
         }
 
         try {
@@ -61,19 +139,20 @@ export class AuthManager {
     }
 
     async handleRegister() {
-        const { username, password } = this.getCredentials();
-        if (!username || !password) {
-            this.showMessage('Please enter username and password');
-            return;
-        }
+        const valid = this.validateSignupFields();
+        if (!valid) return;
+
+        const username = this.signupEmailInput?.value.trim() || this.signupNameInput?.value.trim();
+        const password = this.signupPasswordInput?.value.trim();
 
         try {
             await this.authService.register(username, password);
-            this.showMessage('Registration successful! Please login.', false);
-            // Clear password field
+            this.showSignupMessage('Registration successful! Please login.', false);
+            if (this.usernameInput) this.usernameInput.value = username;
             if (this.passwordInput) this.passwordInput.value = '';
+            this.switchMode('login');
         } catch (error) {
-            this.showMessage(error.message);
+            this.showSignupMessage(error.message || 'Registration failed');
         }
     }
 
@@ -89,6 +168,167 @@ export class AuthManager {
 
     hideOverlay() {
         if (this.loginOverlay) this.loginOverlay.style.display = 'none';
+    }
+
+    switchMode(mode) {
+        this.tabButtons.forEach((btn) => {
+            const isActive = btn.dataset.authTab === mode;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-selected', String(isActive));
+        });
+
+        this.forms.forEach((form) => {
+            const targetId = `${mode}-form`;
+            form.classList.toggle('active', form.id === targetId);
+        });
+
+        if (this.authSubtitle) {
+            this.authSubtitle.textContent =
+                mode === 'signup'
+                    ? 'Create a parent account to guide your young learner.'
+                    : 'Log in to continue your adventure.';
+        }
+
+        this.showMessage('', false);
+        this.showSignupMessage('', false);
+    }
+
+    showFieldError(input, message) {
+        if (!input) return;
+        const field = input.closest('.auth-field');
+        if (!field) return;
+        const feedback = field.querySelector('.auth-field__feedback');
+
+        field.classList.toggle('has-error', Boolean(message));
+        field.classList.toggle('valid', !message && input.value.trim().length > 0);
+        if (feedback) feedback.textContent = message || '';
+    }
+
+    clearFieldError(input) {
+        if (!input) return;
+        this.showFieldError(input, '');
+    }
+
+    evaluatePasswordRules(password) {
+        return {
+            length: password.length >= 8 && password.length <= 12,
+            upper: /[A-Z]/.test(password),
+            lower: /[a-z]/.test(password),
+            number: /\d/.test(password),
+            special: /[^A-Za-z0-9]/.test(password)
+        };
+    }
+
+    updateStrength() {
+        const password = this.signupPasswordInput?.value || '';
+        const rules = this.evaluatePasswordRules(password);
+        const score = Object.values(rules).filter(Boolean).length;
+
+        const widths = [0, 26, 42, 64, 82, 100];
+        const colors = ['#e5e7eb', '#fbbf24', '#f59e0b', '#7cd1b8', '#4ade80', '#22c55e'];
+        const meterIndex = password.length === 0 ? 0 : Math.max(1, score);
+
+        if (this.strengthBar) {
+            this.strengthBar.style.width = `${widths[meterIndex]}%`;
+            this.strengthBar.style.background = colors[meterIndex];
+        }
+
+        if (this.strengthLabel) {
+            const labels = [
+                'Start typing to see strength',
+                'Too short',
+                'Add more variety',
+                'Getting stronger',
+                'Great password',
+                'Ready to launch'
+            ];
+            this.strengthLabel.textContent = labels[meterIndex];
+        }
+
+        this.requirementItems.forEach((item) => {
+            const rule = item.dataset.rule;
+            const met = rules[rule];
+            item.classList.toggle('met', Boolean(met));
+        });
+
+        return rules;
+    }
+
+    validateConfirmMatch(showError = true) {
+        const password = this.signupPasswordInput?.value || '';
+        const confirm = this.signupConfirmInput?.value || '';
+        const matches = password === confirm && confirm.length > 0;
+        if (!this.signupConfirmInput) return true;
+        if (!matches && showError) {
+            this.showFieldError(this.signupConfirmInput, 'Passwords must match');
+        } else if (matches) {
+            this.showFieldError(this.signupConfirmInput, '');
+        }
+        return matches;
+    }
+
+    validateSignupFields() {
+        let isValid = true;
+        const name = this.signupNameInput?.value.trim() || '';
+        const email = this.signupEmailInput?.value.trim() || '';
+
+        if (!name) {
+            this.showFieldError(this.signupNameInput, 'Please add a name');
+            isValid = false;
+        }
+
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            this.showFieldError(this.signupEmailInput, 'Enter a valid email');
+            isValid = false;
+        }
+
+        const rules = this.updateStrength();
+        const unmet = Object.keys(rules).filter((key) => !rules[key]);
+        if (unmet.length > 0) {
+            this.showFieldError(this.signupPasswordInput, 'Please meet all password requirements');
+            isValid = false;
+        }
+
+        if (!this.validateConfirmMatch()) {
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    openResetModal() {
+        this.resetMessage && (this.resetMessage.textContent = '');
+        if (this.resetEmailInput) {
+            this.resetEmailInput.value = this.usernameInput?.value || '';
+            this.clearFieldError(this.resetEmailInput);
+        }
+        this.resetModal?.classList.add('open');
+    }
+
+    closeResetModal() {
+        this.resetModal?.classList.remove('open');
+    }
+
+    async handleReset() {
+        const email = this.resetEmailInput?.value.trim() || '';
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            this.showFieldError(this.resetEmailInput, 'Enter a valid email');
+            return;
+        }
+
+        try {
+            await this.authService.forgotPassword(email);
+            if (this.resetMessage) {
+                this.resetMessage.textContent = 'Reset link sent! Check your inbox.';
+                this.resetMessage.style.color = '#16a34a';
+            }
+            setTimeout(() => this.closeResetModal(), 1200);
+        } catch (error) {
+            if (this.resetMessage) {
+                this.resetMessage.textContent = error.message || 'Could not send reset link.';
+                this.resetMessage.style.color = '#e36464';
+            }
+        }
     }
 
     saveSession(data) {

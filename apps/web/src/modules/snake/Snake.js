@@ -360,6 +360,30 @@ export class Snake {
             this.nameText.setPosition(this.head.x, this.head.y - 25);
         }
 
+        if (this.cosmeticGlow) {
+            this.cosmeticGlow.setPosition(this.head.x, this.head.y);
+        }
+
+        if (this.cosmeticAura) {
+            this.cosmeticAura.setPosition(this.head.x, this.head.y);
+            if (this.cosmeticAura.pulse) {
+                const pulse = 1 + Math.sin(time * 0.004) * 0.08;
+                this.cosmeticAura.setScale(pulse);
+            }
+        }
+
+        if (this.cosmeticHeadFx) {
+            this.cosmeticHeadFx.setPosition(this.head.x, this.head.y - 30);
+        }
+
+        if (this.cosmeticTitleText) {
+            this.cosmeticTitleText.setPosition(this.head.x, this.head.y - 48);
+        }
+
+        if (this.cosmeticTrailEmitter) {
+            this.cosmeticTrailEmitter.emitParticleAt(this.head.x, this.head.y);
+        }
+
         // Update Magnet Visuals (Wave Effect)
         if (this.isMagnetActive && this.magnetGraphics) {
             this.magnetGraphics.clear();
@@ -531,5 +555,11 @@ export class Snake {
         // Effects Cleanup
         if (this.magnetGraphics) this.magnetGraphics.destroy();
         if (this.speedEmitter) this.speedEmitter.destroy();
+        if (this.cosmeticTrailEmitter) this.cosmeticTrailEmitter.destroy();
+        if (this.cosmeticGlow) this.cosmeticGlow.destroy();
+        if (this.cosmeticAura) this.cosmeticAura.destroy();
+        if (this.cosmeticHeadFx) this.cosmeticHeadFx.destroy();
+        if (this.cosmeticTitleText) this.cosmeticTitleText.destroy();
+        if (this.cosmeticShimmerTween) this.cosmeticShimmerTween.stop();
     }
 }

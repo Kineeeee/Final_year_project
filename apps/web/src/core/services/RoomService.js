@@ -31,6 +31,24 @@ class RoomService {
         }
         return data;
     }
+
+    async listRooms() {
+        const res = await fetch(`${CONFIG.SERVER_URL}/api/rooms/custom/list`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data?.message || 'Không lấy được danh sách phòng');
+        }
+        return data; // { rooms: [...], capacity }
+    }
+
+    async getCapacity() {
+        const res = await fetch(`${CONFIG.SERVER_URL}/api/rooms/custom/capacity`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data?.message || 'Không lấy được sức chứa');
+        }
+        return data; // { max, current, available }
+    }
 }
 
 export const roomService = new RoomService();

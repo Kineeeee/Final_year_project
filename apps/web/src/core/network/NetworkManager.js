@@ -50,16 +50,25 @@ export class NetworkManager {
         });
         this.socket.on('room_closed', () => {
             alert('Phòng đã kết thúc. Vui lòng tạo hoặc tham gia phòng khác.');
+            this.scene.events.emit('room:closed');
             this.disconnect({ disconnectSocket: true });
         });
         this.socket.on('room_meta', (meta) => {
             this.roomMeta = meta;
             this.scene.events.emit('room:meta', meta);
+            if (meta?.started) {
+                this.scene.events.emit('room:started');
+            }
         });
         this.socket.on('room_owner', (payload) => {
             if (this.roomMeta) this.roomMeta.ownerId = payload.ownerId;
             this.scene.events.emit('room:owner', payload);
         });
+        this.socket.on('room_waiting', (payload) => this.scene.events.emit('room:waiting', payload));
+        this.socket.on('room_started', () => this.scene.events.emit('room:started'));
+        this.socket.on('room_left', () => this.scene.events.emit('room_left'));
+        this.socket.on('kicked', () => this.scene.events.emit('room:kicked'));
+        this.socket.on('result', (payload) => this.scene.events.emit('match:result', payload));
 
         this.setupConnectionEvents(playerDetails);
         this.setupGameplayEvents();
@@ -96,6 +105,7 @@ export class NetworkManager {
         // Send initialization data
         this.socket.on('connect', () => {
             Logger.info('NetworkManager', 'Connected to Server');
+            this.scene.events.emit('network:connected', { socketId: this.socket.id });
             const initData = {
                 color: playerDetails.color,
                 name: playerDetails.name,
@@ -545,6 +555,9 @@ export class NetworkManager {
     }
 
     handleAnswerResult(data) {
+        // Broadcast for UI / achievements
+        this.scene.events.emit('answer:result', data);
+
         this.scene.events.emit('ui:floatingText', {
             x: data.x,
             y: data.y,

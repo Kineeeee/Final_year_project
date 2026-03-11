@@ -396,6 +396,8 @@ class PlayerManager {
     resetScores() {
         Object.values(this.players).forEach((p) => {
             p.score = 0;
+            p.correctAnswers = 0;
+            p.wrongAnswers = 0;
             // Also reset length/sections if needed, but score=0 usually implies restart
             if (p.sections && p.sections.length > 0) {
                 while (p.sections.length > 5) {
