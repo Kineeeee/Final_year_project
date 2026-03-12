@@ -11,16 +11,18 @@ export const REWARDS = {
     chips_small: { id: 'chips_small', type: 'chips', name: 'Brain Chips', amount: 15, rarity: 'bronze' },
 
     // Skins
-    skin_professor: { id: 'skin_professor', type: 'skin', name: 'Professor Snake', rarity: 'gold', tint: 0x4b5563, accent: 0xfcd34d },
-    skin_golden: { id: 'skin_golden', type: 'skin', name: 'Golden Snake', rarity: 'diamond', tint: 0xffd54f, shine: true },
-    skin_graphite_serpent: { id: 'skin_graphite_serpent', type: 'skin', name: 'Graphite Serpent', rarity: 'gold', tint: 0x2f3b52 },
-    skin_giant: { id: 'skin_giant', type: 'skin', name: 'Giant Slate', rarity: 'gold', tint: 0x475569 },
-    skin_math: { id: 'skin_math', type: 'skin', name: 'Chalkboard', rarity: 'silver', tint: 0x0ea5e9 },
-    skin_vocab: { id: 'skin_vocab', type: 'skin', name: 'Dictionary Print', rarity: 'silver', tint: 0x8b5cf6 },
-    skin_science: { id: 'skin_science', type: 'skin', name: 'Lab Neon', rarity: 'silver', tint: 0x10b981 },
-    skin_phantom: { id: 'skin_phantom', type: 'skin', name: 'Phantom Serpent', rarity: 'mythic', tint: 0x9ca3af, alpha: 0.6 },
+    skin_default: { id: 'skin_default', type: 'skin', name: 'Original Snake', rarity: 'bronze', texture: 'snake-circle', preloadPath: 'snake/circle.png', isDefault: true },
+    skin_professor: { id: 'skin_professor', type: 'skin', name: 'Professor Snake', rarity: 'gold', texture: 'skin_professor', preloadPath: 'skins/skin_professor.png' },
+    skin_golden: { id: 'skin_golden', type: 'skin', name: 'Golden Snake', rarity: 'diamond', texture: 'skin_golden', preloadPath: 'skins/skin_golden.png' },
+    skin_graphite_serpent: { id: 'skin_graphite_serpent', type: 'skin', name: 'Graphite Serpent', rarity: 'gold', texture: 'skin_graphite_serpent', preloadPath: 'skins/skin_graphite_serpent.png' },
+    skin_giant: { id: 'skin_giant', type: 'skin', name: 'Giant Slate', rarity: 'gold', texture: 'skin_giant', preloadPath: 'skins/skin_giant.png' },
+    skin_math: { id: 'skin_math', type: 'skin', name: 'Chalkboard', rarity: 'silver', texture: 'skin_math', preloadPath: 'skins/skin_math.png' },
+    skin_vocab: { id: 'skin_vocab', type: 'skin', name: 'Dictionary Print', rarity: 'silver', texture: 'skin_vocab', preloadPath: 'skins/skin_vocab.png' },
+    skin_science: { id: 'skin_science', type: 'skin', name: 'Lab Neon', rarity: 'silver', texture: 'skin_science', preloadPath: 'skins/skin_science.png' },
+    skin_phantom: { id: 'skin_phantom', type: 'skin', name: 'Phantom Serpent', rarity: 'mythic', texture: 'skin_phantom', preloadPath: 'skins/skin_phantom.png' },
 
     // Trails
+    trail_default: { id: 'trail_default', type: 'trail', name: 'No Trail', rarity: 'bronze', color: 0x000000, speed: 0, lifespan: 0, isDefault: true },
     trail_neon_line: { id: 'trail_neon_line', type: 'trail', name: 'Neon Line', rarity: 'bronze', color: 0x22d3ee, width: 8 },
     trail_lightning_dash: { id: 'trail_lightning_dash', type: 'trail', name: 'Lightning Dash', rarity: 'silver', color: 0xfbbf24, sparkle: true },
     trail_photon_beam: { id: 'trail_photon_beam', type: 'trail', name: 'Photon Beam', rarity: 'diamond', color: 0x7dd3fc, speed: 240 },
@@ -52,8 +54,86 @@ export const REWARDS = {
     shimmer_mega: { id: 'shimmer_mega', type: 'shimmer', name: 'Segment Shimmer', rarity: 'diamond' },
 
     // Themes
-    theme_clean_slate: { id: 'theme_clean_slate', type: 'theme', name: 'Clean Slate', rarity: 'gold', backgroundColor: '#0b1220', overlayAlpha: 0.18 },
+    theme_default: { id: 'theme_default', type: 'theme', name: 'Classic Grid', rarity: 'bronze', bgTexture: 'background', preloadPath: 'themes/tile.png', isDefault: true },
+    theme_clean_slate: { id: 'theme_clean_slate', type: 'theme', name: 'Clean Slate', rarity: 'gold', bgTexture: 'theme_clean_slate_bg', preloadPath: 'themes/theme_clean_slate_bg.png' },
+    theme_space: { id: 'theme_space', type: 'theme', name: 'Deep Space', rarity: 'mythic', bgTexture: 'theme_space_bg', preloadPath: 'themes/theme_space_bg.png' },
 
     // Stickers / misc
     sticker_smile: { id: 'sticker_smile', type: 'sticker', name: 'First Game Sticker', rarity: 'bronze' }
 };
+
+export const GENERATED_SKIN_TEXTURE_PREFIX = 'reward_skin_';
+
+function resolveReward(rewardOrId) {
+    if (!rewardOrId) return null;
+    if (typeof rewardOrId === 'string') return REWARDS[rewardOrId] || null;
+    return rewardOrId;
+}
+
+export function getGeneratedSkinTextureKey(rewardOrId) {
+    const reward = resolveReward(rewardOrId);
+    if (!reward || reward.type !== 'skin') return null;
+    return `${GENERATED_SKIN_TEXTURE_PREFIX}${reward.id}`;
+}
+
+export function getSkinTextureKey(rewardOrId) {
+    const reward = resolveReward(rewardOrId);
+    if (!reward || reward.type !== 'skin') return null;
+    return reward.texture || getGeneratedSkinTextureKey(reward);
+}
+
+export function ensureSkinTextureForScene(scene, rewardOrId) {
+    const reward = resolveReward(rewardOrId);
+    if (!reward || reward.type !== 'skin') return null;
+
+    if (reward.texture) {
+        return reward.texture;
+    }
+
+    const generatedKey = getGeneratedSkinTextureKey(reward);
+    if (!scene || !scene.textures || !generatedKey) {
+        return generatedKey;
+    }
+
+    if (!scene.textures.exists(generatedKey)) {
+        const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+        const fill = reward.tint || 0xffffff;
+        const alpha = reward.alpha ?? 1;
+
+        graphics.fillStyle(fill, alpha);
+        graphics.fillCircle(15, 15, 15);
+        graphics.lineStyle(3, 0xffffff, Math.min(0.35, alpha));
+        graphics.strokeCircle(15, 15, 12);
+        graphics.generateTexture(generatedKey, 30, 30);
+        graphics.destroy();
+    }
+
+    return generatedKey;
+}
+
+export function getRewardPreloadEntries() {
+    const entries = [];
+    const seen = new Set();
+
+    Object.values(REWARDS).forEach((reward) => {
+        if (reward.texture && reward.type === 'skin') {
+            const key = reward.texture;
+            const path = reward.preloadPath || `skins/${reward.texture}.png`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                entries.push({ key, path });
+            }
+        }
+
+        if (reward.bgTexture && reward.type === 'theme') {
+            const key = reward.bgTexture;
+            const path = reward.preloadPath || `themes/${reward.bgTexture}.png`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                entries.push({ key, path });
+            }
+        }
+    });
+
+    return entries;
+}

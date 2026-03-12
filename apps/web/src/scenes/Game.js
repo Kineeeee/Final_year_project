@@ -7,12 +7,14 @@ import { CONFIG } from '../config/constants';
 import { GameSession } from '../core/state/GameSession';
 import { achievementManager } from '../modules/achievements/AchievementManager';
 import { applyActiveTheme, applyActiveCosmeticsToSnake } from '../modules/achievements/CosmeticApplier';
+import { GAME_PHASE, canTransitionPhase } from '../core/state/GamePhases';
 
 export class Game extends Scene {
     constructor() {
         super('Game');
         this._didShutdown = false;
         this.waitingForOwnerStart = false;
+        this.phase = GAME_PHASE.IDLE;
     }
 
     init(data) {
@@ -25,10 +27,16 @@ export class Game extends Scene {
         this.roomMeta = data.roomMeta || null;
         const alreadyStarted = !!(this.roomMeta && this.roomMeta.started);
         this.waitingForOwnerStart = !!this.customNamespace && !alreadyStarted;
+        this.phase = this.waitingForOwnerStart ? GAME_PHASE.WAITING_ROOM : GAME_PHASE.PLAYING;
     }
 
     create() {
         Logger.info('Game', 'Game Scene Created');
+
+        const lowQuality = this.game?.registry?.get?.('graphics.lowQuality');
+        if (typeof lowQuality === 'boolean') {
+            CONFIG.GRAPHICS.LOW_QUALITY = lowQuality;
+        }
 
         this._didShutdown = false;
         this._isExiting = false;
@@ -63,6 +71,7 @@ export class Game extends Scene {
         // Auto-return to Main Menu when server closes the room (quiz/custom)
         this.events.on('room:closed', () => {
             if (this._isExiting) return;
+            this.setPhase(GAME_PHASE.EXITING);
             this._isExiting = true;
             this.scene.start(CONFIG.SCENES.MAIN_MENU);
         });
@@ -72,13 +81,9 @@ export class Game extends Scene {
         this.events.on('ui:floatingText', ({ x, y, message, color }) => {
             this.showFloatingText(x, y, message, color);
         });
-        this.events.on('room:closed', () => {
-            if (this._isExiting) return;
-            this._isExiting = true;
-            this.scene.start(CONFIG.SCENES.MAIN_MENU);
-        });
         this.events.on('room_left', () => {
             if (this._isExiting) return;
+            this.setPhase(GAME_PHASE.EXITING);
             this._isExiting = true;
             this.scene.start(CONFIG.SCENES.MAIN_MENU);
         });
@@ -113,6 +118,7 @@ export class Game extends Scene {
     shutdown() {
         if (this._didShutdown) return;
         this._didShutdown = true;
+        this.setPhase(GAME_PHASE.EXITING);
         this._isExiting = true;
 
         if (this.session) {
@@ -198,6 +204,7 @@ export class Game extends Scene {
     update(time, delta) {
         if (this._isExiting || !this.sys.isActive()) return;
         if (this.waitingForOwnerStart) return;
+        if (this.phase === GAME_PHASE.RESULT || this.phase === GAME_PHASE.GAME_OVER) return;
 
         if (this.session) {
             this.session.tick(time, delta);
@@ -221,8 +228,16 @@ export class Game extends Scene {
         Logger.info('Game', `Snake died. Is Player: ${isPlayer}`);
 
         if (isPlayer) {
+            if (this.phase === GAME_PHASE.RESULT) return;
             this.player = null;
-            const payload = { score: snake.score ?? 0, coins: this.coinsCollected };
+            const payload = { 
+                score: snake.score ?? 0, 
+                coins: this.coinsCollected,
+                mode: this.gameMode,
+                quizSource: this.quizSource,
+                customNamespace: this.customNamespace
+            };
+            this.setPhase(GAME_PHASE.GAME_OVER);
             if (this.session && this.session.startGameOverOnce) {
                 this.session.startGameOverOnce(payload);
             } else {
@@ -262,7 +277,16 @@ export class Game extends Scene {
     _handleRoomStarted() {
         if (!this.waitingForOwnerStart) return;
         this.waitingForOwnerStart = false;
+        this.setPhase(GAME_PHASE.PLAYING);
         this.cameras.main.setAlpha(1);
         this.cameras.main.fadeIn(200);
+    }
+
+    setPhase(nextPhase) {
+        if (!nextPhase) return;
+        const current = this.phase || GAME_PHASE.IDLE;
+        if (!canTransitionPhase(current, nextPhase)) return;
+        this.phase = nextPhase;
+        this.events.emit('phase:changed', { from: current, to: nextPhase });
     }
 }

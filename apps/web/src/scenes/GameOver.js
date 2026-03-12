@@ -146,14 +146,23 @@ export class GameOver extends Scene {
         }
 
         // Buttons
+        const isCustom = data.customNamespace != null;
+        
         const playAgainBtn = new UIButton(
             this,
             centerX,
             centerY + 200,
-            'PLAY AGAIN',
+            isCustom ? 'FIND NEW ROOM' : 'PLAY AGAIN',
             () => {
                 socketService.disconnect();
-                this.scene.start('Game');
+                if (isCustom) {
+                    this.scene.start('MainMenu');
+                } else {
+                    this.scene.start('Game', { 
+                        mode: data.mode, 
+                        quizSource: data.quizSource 
+                    });
+                }
             },
             { width: 300, height: 70, color: COLORS.PRIMARY, fontSize: 32 }
         );

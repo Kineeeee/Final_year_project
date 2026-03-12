@@ -2,45 +2,19 @@ import { ACHIEVEMENTS } from './achievementsCatalog';
 import { REWARDS, REWARD_CHIPS_BY_RARITY } from './rewardsCatalog';
 import { Logger } from '../../utils/Logger';
 import { CONFIG } from '../../config/constants';
-
-const STORAGE_KEY = 'achievements:v1';
-
-const defaultState = () => ({
-    progress: {
-        totalCorrect: 0,
-        totalWrong: 0,
-        bestStreak: 0,
-        maxLength: 0,
-        survivalSeconds: 0,
-        bestRank: 9999,
-        matchesPlayed: 0,
-        consecutiveMatches: 0,
-        uniqueTopics: [],
-        mathCorrect: 0,
-        englishCorrect: 0,
-        scienceCorrect: 0,
-        uniqueSubjects: [],
-    },
-    unlocked: {}, // { achievementId: timestamp }
-    rewardsOwned: {}, // { rewardId: true }
-    activeCosmetics: {
-        skin: null,
-        trail: null,
-        glow: null,
-        aura: null,
-        headFx: null,
-        title: null,
-        spawnFx: null,
-        deathFx: null,
-        theme: null,
-        decal: null,
-        shimmer: null,
-    },
-    brainChips: 0,
-    meta: {
-        lastSessionEndedAt: null,
-    }
-});
+import {
+    defaultAchievementState,
+    loadAchievementState,
+    saveAchievementState,
+} from './services/AchievementStorageService';
+import {
+    requestEquipReward,
+    requestUnequipReward,
+    syncServerCosmetics,
+    syncServerUnlocks,
+    slotForRewardType,
+    emitSocketSafely,
+} from './services/AchievementCosmeticsService';
 
 class AchievementManager {
     constructor() {
@@ -330,11 +304,7 @@ class AchievementManager {
 
         this.state.rewardsOwned[rewardId] = true;
 
-        // Auto-equip if slot empty
-        const slot = this._slotForReward(reward.type);
-        if (slot && !this.state.activeCosmetics[slot]) {
-            this.state.activeCosmetics[slot] = rewardId;
-        }
+        this.state.rewardsOwned[rewardId] = true;
 
         return { ...reward, duplicate: false };
     }
@@ -453,32 +423,7 @@ class AchievementManager {
     }
 
     _slotForReward(type) {
-        switch (type) {
-            case 'skin':
-                return 'skin';
-            case 'trail':
-                return 'trail';
-            case 'glow':
-                return 'glow';
-            case 'aura':
-                return 'aura';
-            case 'headFx':
-                return 'headFx';
-            case 'title':
-                return 'title';
-            case 'spawnFx':
-                return 'spawnFx';
-            case 'deathFx':
-                return 'deathFx';
-            case 'theme':
-                return 'theme';
-            case 'decal':
-                return 'decal';
-            case 'shimmer':
-                return 'shimmer';
-            default:
-                return null;
-        }
+        return slotForRewardType(type);
     }
 
     // --- Accessors for UI ---
@@ -492,39 +437,62 @@ class AchievementManager {
         };
     }
 
-    equipReward(rewardId) {
-        const reward = REWARDS[rewardId];
-        if (!reward || !this.state.rewardsOwned[rewardId]) return false;
-        const slot = this._slotForReward(reward.type);
-        if (!slot) return false;
-        this.state.activeCosmetics[slot] = rewardId;
-        this._saveState();
-        return true;
+    _emitSocket(networkManager, eventName, payload) {
+        return emitSocketSafely(networkManager, eventName, payload);
+    }
+
+    _emitCosmeticsUpdated() {
+        if (this.scene && this.scene.events) {
+            this.scene.events.emit('cosmetics:updated', this.state.activeCosmetics);
+        }
+    }
+
+    requestEquipReward(networkManager, rewardId) {
+        return requestEquipReward({
+            state: this.state,
+            rewardId,
+            saveState: () => this._saveState(),
+            emitUpdated: () => this._emitCosmeticsUpdated(),
+            networkManager,
+        });
+    }
+
+    requestUnequipReward(networkManager, category) {
+        return requestUnequipReward({
+            state: this.state,
+            category,
+            saveState: () => this._saveState(),
+            emitUpdated: () => this._emitCosmeticsUpdated(),
+            networkManager,
+        });
+    }
+    
+    // Fallback sync from server overrides local prediction
+    syncServerCosmetics(serverCosmetics) {
+        syncServerCosmetics({
+            state: this.state,
+            serverCosmetics,
+            saveState: () => this._saveState(),
+            emitUpdated: () => this._emitCosmeticsUpdated(),
+            baseActiveCosmetics: defaultAchievementState().activeCosmetics,
+        });
+    }
+
+    syncServerUnlocks(unlockedRewardsArray) {
+        syncServerUnlocks({
+            state: this.state,
+            unlockedRewardsArray,
+            saveState: () => this._saveState(),
+        });
     }
 
     // --- Storage ---
     _loadState() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return defaultState();
-            const parsed = JSON.parse(raw);
-            const progress = { ...defaultState().progress, ...(parsed.progress || {}) };
-            if (!progress.bestRank || progress.bestRank < 0) {
-                progress.bestRank = defaultState().progress.bestRank;
-            }
-            return { ...defaultState(), ...parsed, progress };
-        } catch (e) {
-            Logger.error('Achievements', 'Failed to load state', e);
-            return defaultState();
-        }
+        return loadAchievementState();
     }
 
     _saveState() {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
-        } catch (e) {
-            // Storage might be unavailable (private mode). Ignore.
-        }
+        saveAchievementState(this.state);
     }
 
     // --- Internals ---

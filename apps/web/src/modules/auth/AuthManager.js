@@ -41,6 +41,7 @@ export class AuthManager {
         this.initListeners();
         this.restoreRemembered();
         this.updateStrength();
+        this.initSocialLogins();
         this.checkAutoLogin();
     }
 
@@ -72,8 +73,14 @@ export class AuthManager {
             this.openResetModal();
         });
 
-        this.googleBtn?.addEventListener('click', () => this.showMessage('Google sign-in coming soon.', false));
-        this.facebookBtn?.addEventListener('click', () => this.showMessage('Facebook sign-in coming soon.', false));
+        this.googleBtn?.addEventListener('click', () => this.handleGoogleClick());
+        this.facebookBtn?.addEventListener('click', () => {
+            if (window.FB) {
+                window.FB.login(this.handleFacebookCallback.bind(this), { scope: 'public_profile,email' });
+            } else {
+                this.showMessage('Facebook SDK not loaded yet', true);
+            }
+        });
 
         this.resetSubmit?.addEventListener('click', () => this.handleReset());
         this.resetEmailInput?.addEventListener('input', () => this.clearFieldError(this.resetEmailInput));
@@ -328,6 +335,65 @@ export class AuthManager {
                 this.resetMessage.textContent = error.message || 'Could not send reset link.';
                 this.resetMessage.style.color = '#e36464';
             }
+        }
+    }
+
+    initSocialLogins() {
+        if (window.google) {
+            this.googleClient = window.google.accounts.oauth2.initTokenClient({
+                client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || 'PENDING_CLIENT_ID',
+                callback: this.handleGoogleCallback.bind(this),
+                scope: 'email profile openid',
+            });
+        }
+        
+        window.fbAsyncInit = function() {
+            window.FB.init({
+                appId: import.meta.env.VITE_FACEBOOK_APP_ID || 'PENDING_APP_ID',
+                cookie: true,
+                xfbml: true,
+                version: 'v18.0'
+            });
+        };
+    }
+
+    handleGoogleClick() {
+        if (this.googleClient) {
+            this.googleClient.requestAccessToken();
+        } else if (window.google) {
+            this.initSocialLogins();
+            if (this.googleClient) this.googleClient.requestAccessToken();
+        } else {
+            this.showMessage('Google SDK not loaded yet', true);
+        }
+    }
+
+    async handleGoogleCallback(response) {
+        if (response.error) {
+            this.showMessage('Google login failed or cancelled', true);
+            return;
+        }
+        await this.processSocialLogin('google', response.access_token);
+    }
+
+    async handleFacebookCallback(response) {
+        if (response.status === 'connected') {
+            await this.processSocialLogin('facebook', response.authResponse.accessToken);
+        } else {
+            this.showMessage('Facebook login failed or cancelled', true);
+        }
+    }
+
+    async processSocialLogin(provider, token) {
+        try {
+            const data = await authStore.socialLogin(provider, token);
+            if (data) {
+                this.hideOverlay();
+                this.gameStartCallback();
+            }
+        } catch (error) {
+            console.error(`[Auth] ${provider} login failed`, error);
+            this.showMessage(error.message || `${provider} login failed.`);
         }
     }
 

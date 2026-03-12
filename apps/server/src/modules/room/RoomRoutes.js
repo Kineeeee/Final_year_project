@@ -3,6 +3,7 @@ const router = express.Router();
 const AuthService = require('../auth/AuthService');
 const UserQuiz = require('../../models/UserQuiz');
 const RoomRegistry = require('./RoomRegistry');
+const { validateRoomCode } = require('../../utils/Validation');
 
 // Simple auth middleware: expects Bearer token or token in body
 function requireAuth(req, res, next) {
@@ -56,6 +57,12 @@ router.get('/meta/:code', async (req, res) => {
     const code = req.params.code;
     const meta = RoomRegistry.getMeta(code);
     if (!meta) return res.status(404).json({ message: 'room_not_found' });
+    
+    // Check if room has already started to prevent mid-game joins
+    if (meta.started) {
+        return res.status(403).json({ message: 'room_already_started' });
+    }
+    
     return res.json(meta);
 });
 
@@ -78,13 +85,24 @@ router.get('/custom/list', async (_req, res) => {
 });
 
 // Leave lobby (graceful exit from custom room)
-router.post('/custom/leave', async (req, res) => {
+router.post('/custom/leave', requireAuth, async (req, res) => {
     try {
-        const { code, socketId } = req.body || {};
-        if (!code || !socketId) return res.status(400).json({ message: 'invalid_request' });
-        const room = RoomRegistry.getRoom(code);
+        const { code } = req.body || {};
+        const safeCode = validateRoomCode(code);
+        if (!safeCode) return res.status(400).json({ message: 'invalid_request' });
+
+        const socketId = RoomRegistry.getSocketByUser(req.user.userId);
+        if (!socketId) return res.status(404).json({ message: 'socket_not_found' });
+
+        const room = RoomRegistry.getRoom(safeCode);
         if (!room) return res.status(404).json({ message: 'room_not_found' });
-        const { ownerChanged, newOwnerId } = RoomRegistry.removeSocket(code, socketId);
+
+        // Only allow leaving your own active room membership.
+        if (!room.sockets.has(socketId)) {
+            return res.status(403).json({ message: 'not_in_room' });
+        }
+
+        const { ownerChanged, newOwnerId } = RoomRegistry.removeSocket(safeCode, socketId);
         return res.json({ ownerChanged, newOwnerId });
     } catch (err) {
         console.error(err);

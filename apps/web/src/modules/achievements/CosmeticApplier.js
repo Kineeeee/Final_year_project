@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import { achievementManager } from './AchievementManager';
-import { REWARDS } from './rewardsCatalog';
+import { REWARDS, getGeneratedSkinTextureKey, getSkinTextureKey } from './rewardsCatalog';
 import { Logger } from '../../utils/Logger';
 
 const DEFAULT_BG = '#028af8';
 
-export function applyActiveCosmeticsToSnake(scene, snake) {
+export function applyActiveCosmeticsToSnake(scene, snake, activeData) {
     if (!scene || !snake) return;
-    const active = achievementManager.state?.activeCosmetics || {};
+    const active = activeData || achievementManager.state?.activeCosmetics || {};
 
     cleanupCosmetics(snake);
 
@@ -19,7 +19,7 @@ export function applyActiveCosmeticsToSnake(scene, snake) {
         try {
             switch (reward.type) {
                 case 'skin':
-                    applySkin(snake, reward);
+                    applySkin(scene, snake, reward);
                     break;
                 case 'trail':
                     applyTrail(scene, snake, reward);
@@ -81,9 +81,22 @@ export function applyActiveTheme(scene) {
     const colorHex = reward?.backgroundColor || DEFAULT_BG;
     scene.cameras?.main?.setBackgroundColor(colorHex);
 
-    if (scene.backgroundTile && scene.backgroundTile.setTint) {
-        const tintInt = Phaser.Display.Color.HexStringToColor(colorHex).color;
-        scene.backgroundTile.setTint(tintInt);
+    if (scene.backgroundTile) {
+        if (reward?.bgTexture) {
+            scene.backgroundTile.setTexture(reward.bgTexture);
+            scene.backgroundTile.clearTint();
+        } else if (reward) {
+            scene.backgroundTile.setTexture('background');
+            if (scene.backgroundTile.setTint && reward.backgroundColor) {
+                const tintInt = Phaser.Display.Color.HexStringToColor(colorHex).color;
+                scene.backgroundTile.setTint(tintInt);
+            } else {
+                scene.backgroundTile.clearTint();
+            }
+        } else {
+            scene.backgroundTile.setTexture('background');
+            scene.backgroundTile.clearTint();
+        }
     }
 
     if (!reward || !reward.overlayAlpha) {
@@ -133,12 +146,70 @@ function cleanupCosmetics(snake) {
     snake.cosmeticDeathFx = null;
 }
 
-function applySkin(snake, reward) {
-    if (reward.tint) snake.setColor(reward.tint);
-    if (reward.alpha) {
-        snake.head.setAlpha(reward.alpha);
-        snake.body.forEach((b) => b.setAlpha(reward.alpha));
+function applySkin(scene, snake, reward) {
+    const resolvedTexture = resolveSkinTextureKey(scene, reward);
+    const usesDefaultBase = reward.isDefault && resolvedTexture === 'snake-circle';
+    const fallbackTint = (!usesDefaultBase && resolvedTexture === 'snake-circle' && reward.tint)
+        ? reward.tint
+        : null;
+
+    const appearance = {
+        textureKey: resolvedTexture,
+        tint: usesDefaultBase ? snake.color : fallbackTint,
+        alpha: reward.alpha ?? 1,
+        preserveColor: usesDefaultBase,
+    };
+
+    if (typeof snake.setSkinAppearance === 'function') {
+        snake.setSkinAppearance(appearance);
+        return;
     }
+
+    const headSprite = snake.head?.getAt ? snake.head.getAt(0) : null;
+    if (headSprite && headSprite.setTexture) headSprite.setTexture(appearance.textureKey);
+    if (headSprite && headSprite.setAlpha) headSprite.setAlpha(appearance.alpha);
+
+    snake.body.forEach((part) => {
+        part.setTexture(appearance.textureKey);
+        part.setAlpha(appearance.alpha);
+    });
+
+    if (appearance.tint === null || appearance.tint === undefined) {
+        if (headSprite?.clearTint) headSprite.clearTint();
+        snake.body.forEach((part) => part.clearTint && part.clearTint());
+    } else {
+        if (headSprite?.setTint) headSprite.setTint(appearance.tint);
+        snake.body.forEach((part) => part.setTint && part.setTint(appearance.tint));
+    }
+}
+
+function resolveSkinTextureKey(scene, reward) {
+    const directTexture = getSkinTextureKey(reward);
+    if (reward.texture && directTexture && scene.textures.exists(directTexture)) {
+        return directTexture;
+    }
+
+    const generated = getGeneratedSkinTextureKey(reward);
+    if (generated && !scene.textures.exists(generated) && reward.tint) {
+        generateTintSkinTexture(scene, generated, reward.tint, reward.alpha ?? 1);
+    }
+    if (generated && scene.textures.exists(generated)) {
+        return generated;
+    }
+
+    return 'snake-circle';
+}
+
+function generateTintSkinTexture(scene, key, tint, alpha = 1) {
+    if (!scene || !key || scene.textures.exists(key)) return;
+
+    const graphics = scene.make.graphics({ x: 0, y: 0, add: false });
+    graphics.fillStyle(tint || 0xffffff, alpha);
+    graphics.fillCircle(15, 15, 15);
+    graphics.lineStyle(3, 0xffffff, Math.min(0.35, alpha));
+    graphics.strokeCircle(15, 15, 12);
+    graphics.generateTexture(key, 30, 30);
+    graphics.destroy();
 }
 
 function applyTrail(scene, snake, reward) {

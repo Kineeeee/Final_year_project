@@ -3,6 +3,14 @@ const RedisClient = require('../../infra/database/RedisConnection');
 const AuthService = require('../../modules/auth/AuthService');
 const { SOCKET_EVENT } = require('../../events/EventTypes');
 const UserQuiz = require('../../models/UserQuiz');
+const RoomRegistry = require('../../modules/room/RoomRegistry');
+const { ROOM_LIFECYCLE } = require('../GamePhases');
+const {
+    validatePlayerInput,
+    validateInitPlayerPayload,
+    validateEquipCosmeticPayload,
+    validateSocketId,
+} = require('../../utils/Validation');
 
 class NetworkSystem {
     constructor(io, container, config) {
@@ -71,6 +79,13 @@ class NetworkSystem {
             return;
         }
 
+        // Room Start guard: Prevent mid-game joins for custom rooms
+        if (gameServer && gameServer.config?.isCustom && gameServer.matchStarted) {
+            socket.emit('room_already_started');
+            socket.disconnect(true);
+            return;
+        }
+
         // Per-socket interest tracking (used for worldDelta)
         if (!socket.data) socket.data = {};
         socket.data._interest = {
@@ -116,6 +131,7 @@ class NetworkSystem {
         // Disconnect
         socket.on(SOCKET_EVENT.DISCONNECT, () => {
             Logger.info('NetworkSystem', `User disconnected: ${socket.id}`);
+            RoomRegistry.clearSocketUser(socket.id);
             if (this.quizManager && socket.data?.user?.userId) {
                 this.quizManager.clearUserQuizIfOwner(socket.data.user.userId);
             }
@@ -136,6 +152,10 @@ class NetworkSystem {
             if (gameServer && gameServer.config.mode === 'quiz' && !gameServer.matchStarted) {
                 return; // ignore inputs before match start/end
             }
+
+            const validatedInput = validatePlayerInput(inputData);
+            if (!validatedInput) return;
+
             // Anti-Spam: Rate Limit (60 packets/sec max)
             const now = Date.now();
             if (!socket.rateLimit) socket.rateLimit = { count: 0, lastCheck: now };
@@ -150,17 +170,23 @@ class NetworkSystem {
                 return;
             }
 
-            this.playerManager.handlePlayerInput(socket.id, inputData);
+            this.playerManager.handlePlayerInput(socket.id, validatedInput);
         });
 
         socket.on(SOCKET_EVENT.INIT_PLAYER, async (data) => {
+            const safeData = validateInitPlayerPayload(data);
+            if (!safeData) {
+                Logger.warn('NetworkSystem', `Rejected invalid initPlayer payload from ${socket.id}`);
+                return;
+            }
+
             // SECURITY: Verify Token if provided
-            let finalData = { ...data };
-            const requestedQuizSource = (data.quizSource || 'SYSTEM').toUpperCase();
+            let finalData = { ...safeData };
+            const requestedQuizSource = (safeData.quizSource || 'SYSTEM').toUpperCase();
             socket.data.quizSource = 'SYSTEM';
 
-            if (data.token) {
-                const decoded = AuthService.verifyToken(data.token);
+            if (safeData.token) {
+                const decoded = AuthService.verifyToken(safeData.token);
 
                 if (decoded) {
                     Logger.info('NetworkSystem', `Authenticated User: ${decoded.username}`);
@@ -170,6 +196,7 @@ class NetworkSystem {
 
                     // Mark socket as authenticated (optional)
                     socket.data.user = decoded;
+                    RoomRegistry.setUserSocket(decoded.userId, socket.id);
                     socket.data.quizSource = 'SYSTEM';
 
                     // Reclaim ownership if creator rejoins custom room
@@ -245,10 +272,10 @@ class NetworkSystem {
                 // if (data.name) this.players[id].username = data.name; -> THIS IS THE FLAW.
 
                 // FIX: We FORCE a Guest name if no token.
-                if (!finalData.name || !finalData.name.startsWith('Guest_')) {
-                    finalData.name = `Guest_${Math.floor(Math.random() * 1000)}`
-                }
+                // Do not allow users to pass arbitrary string names as guest
+                finalData.name = `Guest_${Math.floor(Math.random() * 1000)}`;
                 delete finalData.username;
+                
                 if (requestedQuizSource === 'USER') {
                     socket.emit('quizSourceChanged', {
                         source: 'SYSTEM',
@@ -272,6 +299,45 @@ class NetworkSystem {
 
         socket.on(SOCKET_EVENT.USE_ITEM, (itemId) => {
             this.shopManager.handleUseItem(socket.id, itemId);
+        });
+
+        // Cosmetics Equip Sync
+        socket.on('equip_cosmetic', async (payload) => {
+            const validated = validateEquipCosmeticPayload(payload);
+            if (!validated) return;
+            const { rewardId, category } = validated;
+
+            const player = this.playerManager.players[socket.id];
+            if (!player || !player.username || player.username.startsWith('Guest_')) return; // DB only
+            
+            // Verify Ownership (allow null to unequip)
+            if (rewardId !== null && (!player.unlockedRewards || !player.unlockedRewards.includes(rewardId))) {
+                Logger.warn('NetworkSystem', `Player ${player.username} attempted to equip unowned reward: ${rewardId}`);
+                return;
+            }
+
+            try {
+                const UserRepository = require('../../repositories/UserRepository');
+                const updatedCosmetics = await UserRepository.equipCosmetic(player.username, category, rewardId);
+                
+                // Update Session State
+                player.cosmetics = updatedCosmetics;
+                
+                // Acknowledge back to client to update their own activeCosmetics explicitly
+                socket.emit('playerState', { cosmetics: player.cosmetics });
+
+                // Broadcast change visually to the room Lobby
+                this.io.emit('playerProperties', {
+                    id: socket.id,
+                    color: player.color,
+                    name: player.name,
+                    cosmetics: player.cosmetics,
+                });
+                
+                Logger.info('NetworkSystem', `Equipped ${rewardId} to ${category} for ${player.username}`);
+            } catch (err) {
+                Logger.error('NetworkSystem', 'Error equipping cosmetic', err);
+            }
         });
 
         // Leave lobby gracefully
@@ -298,9 +364,11 @@ class NetworkSystem {
             const gameServer = this.container.get('gameServer');
             if (!gameServer || !gameServer.config?.isCustom) return;
             if (socket.id !== gameServer.config.ownerSocketId) return;
+            const safeTargetId = validateSocketId(targetId);
+            if (!safeTargetId) return;
             const targetSocket =
-                this.io.sockets?.get?.(targetId) ||
-                this.io.sockets?.sockets?.get?.(targetId);
+                this.io.sockets?.get?.(safeTargetId) ||
+                this.io.sockets?.sockets?.get?.(safeTargetId);
             if (targetSocket) {
                 targetSocket.emit('kicked');
                 targetSocket.disconnect(true);
@@ -312,8 +380,15 @@ class NetworkSystem {
         socket.on('roomStart', () => {
             const gameServer = this.container.get('gameServer');
             if (!gameServer || !gameServer.config?.isCustom) return;
-            if (socket.id !== gameServer.config.ownerSocketId) return;
+            const roomCode = gameServer.config?.roomCode;
+            const room = roomCode ? RoomRegistry.getRoom(roomCode) : null;
+            if (!room || !room.sockets?.has(socket.id)) return;
+            if (socket.id !== gameServer.config.ownerSocketId || socket.id !== room.ownerId) return;
+            if (![ROOM_LIFECYCLE.CREATED, ROOM_LIFECYCLE.WAITING].includes(room.lifecycle)) return;
             if (gameServer.quizManager && gameServer.quizManager.isActive) return;
+            if (roomCode) {
+                RoomRegistry.setLifecycle(roomCode, ROOM_LIFECYCLE.STARTING);
+            }
             gameServer.quizManager?.startRound();
             gameServer.io.emit('room_started');
         });

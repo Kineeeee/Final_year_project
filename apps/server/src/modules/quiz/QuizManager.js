@@ -1,6 +1,7 @@
 const Question = require('../../models/Question');
 const Logger = require('../../utils/Logger');
 const { WORLD_SIZE } = require('../../config/constants');
+const { GAME_PHASE, ROOM_LIFECYCLE } = require('../../core/GamePhases');
 
 class QuizManager {
     constructor(io, container, topic, opts = {}) {
@@ -47,7 +48,14 @@ class QuizManager {
     async startRound() {
         this.isActive = true;
         const gameServer = this.container.has('gameServer') ? this.container.get('gameServer') : null;
-        if (gameServer) gameServer.matchStarted = true;
+        if (gameServer) {
+            gameServer.matchStarted = true;
+            gameServer.phase = GAME_PHASE.PLAYING;
+            if (gameServer.config?.isCustom && gameServer.config?.roomCode) {
+                const RoomRegistry = require('../room/RoomRegistry');
+                RoomRegistry.setLifecycle(gameServer.config.roomCode, ROOM_LIFECYCLE.PLAYING);
+            }
+        }
         this.roundEndTime = Date.now() + this.roundDuration;
 
         // Reset Player State
@@ -358,7 +366,14 @@ class QuizManager {
     endRound() {
         this.isActive = false;
         const gameServer = this.container.has('gameServer') ? this.container.get('gameServer') : null;
-        if (gameServer) gameServer.matchStarted = false;
+        if (gameServer) {
+            gameServer.matchStarted = false;
+            gameServer.phase = GAME_PHASE.RESULT;
+            if (gameServer.config?.isCustom && gameServer.config?.roomCode) {
+                const RoomRegistry = require('../room/RoomRegistry');
+                RoomRegistry.setLifecycle(gameServer.config.roomCode, ROOM_LIFECYCLE.RESULT);
+            }
+        }
 
         if (this.questionTimer) clearTimeout(this.questionTimer);
         if (this.cleanupTimer) clearInterval(this.cleanupTimer);
@@ -400,14 +415,38 @@ class QuizManager {
             mode: this.isCustom ? 'custom' : 'quiz',
         });
 
-        // FORCE KILL ALL PLAYERS (custom only, public arena keeps players for next round)
-        if (this.isCustom && this.playerManager) {
-            this.playerManager.killAllPlayers();
-        }
+        this.io.emit('roundEnd', {
+            winner: winner
+                ? {
+                      id: winner.id,
+                      name: winner.name,
+                      questionsSolved: winner.correctAnswers || 0,
+                      score: winner.score || 0,
+                  }
+                : null,
+            players: results,
+            mode: this.isCustom ? 'custom' : 'quiz',
+        });
 
         if (this.isCustom) {
+            // Keep RESULT phase visible first, then end sockets and close room.
+            if (this.playerManager) {
+                setTimeout(() => {
+                    this.playerManager.killAllPlayers();
+                }, 1200);
+            }
+
             // Close room after short delay so clients can see result
             setTimeout(() => {
+                if (gameServer) gameServer.phase = GAME_PHASE.CLOSED;
+                if (gameServer?.config?.roomCode) {
+                    try {
+                        const RoomRegistry = require('../room/RoomRegistry');
+                        RoomRegistry.setLifecycle(gameServer.config.roomCode, ROOM_LIFECYCLE.CLOSED);
+                    } catch (err) {
+                        Logger.error('QuizManager', 'Failed to set room lifecycle CLOSED', err);
+                    }
+                }
                 if (gameServer) gameServer.destroy();
                 this.io.emit('room_closed');
                 if (this.roomCode) {
@@ -418,10 +457,11 @@ class QuizManager {
                         Logger.error('QuizManager', 'Failed to close custom room after endRound', err);
                     }
                 }
-            }, 1500);
+            }, 2500);
         } else {
             // Public arena: restart next round
             setTimeout(() => {
+                if (gameServer) gameServer.phase = GAME_PHASE.PLAYING;
                 this.startRound();
             }, 3000);
         }

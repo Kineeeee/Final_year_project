@@ -2,6 +2,10 @@ import { Scene } from 'phaser';
 import { UIManager } from '../modules/ui/UIManager';
 import { overlayBlocker } from '../core/services/OverlayBlocker';
 import { achievementManager } from '../modules/achievements/AchievementManager';
+import { GAME_PHASE } from '../core/state/GamePhases';
+import { UISceneInputController } from './controllers/UISceneInputController';
+import { UISceneWaitingController } from './controllers/UISceneWaitingController';
+import { UISceneResultController } from './controllers/UISceneResultController';
 
 export class UIScene extends Scene {
     constructor() {
@@ -9,12 +13,7 @@ export class UIScene extends Scene {
         this.uiManager = null;
         this._gameEventBindings = null;
         this._keyboardBindings = null;
-        this.waitingOverlay = null;
-        this.waitingCountText = null;
-        this.waitingListText = null;
-        this.waitingStartBtn = null;
-        this.waitingStartLabel = null;
-        this.waitingLeaveBtn = null;
+
         this.waitingRoot = null;
         this.waitingListEl = null;
         this.waitingHeaderEl = null;
@@ -27,18 +26,23 @@ export class UIScene extends Scene {
         this.waitingStarted = false;
         this.customNamespace = null;
         this.roomMeta = null;
+
         this.resultOverlay = null;
         this.resultButtons = [];
         this.resultBlockToken = null;
+
         this.uiPhase = 'idle';
         this._leavingRoom = false;
 
-        // Debug Overlay
         this.debugContainer = null;
         this.debugText = null;
         this.isDebugVisible = false;
         this.lastPing = 0;
         this._achievementToasts = [];
+
+        this.inputController = new UISceneInputController();
+        this.waitingController = new UISceneWaitingController();
+        this.resultController = new UISceneResultController();
     }
 
     create(data) {
@@ -49,9 +53,9 @@ export class UIScene extends Scene {
         this.waitingStarted = false;
         this.waitingLastPayload = null;
         this._leavingRoom = false;
+
         this._unsubOverlay = overlayBlocker.subscribe(() => {
             this._overlayBlocked = overlayBlocker.isBlocked();
-            // disable all input when blocked
             if (this.input && this.input.enabled !== undefined) {
                 this.input.enabled = !this._overlayBlocked;
             }
@@ -59,44 +63,38 @@ export class UIScene extends Scene {
 
         achievementManager.attachUiScene(this);
 
-        // If UIScene is restarted/reused, ensure previous UI is fully torn down
         if (this.uiManager) {
             this.uiManager.destroy();
             this.uiManager = null;
         }
 
-        // Scene instances are reused across restarts; ensure cleanup is bound each run.
         this.events.off('shutdown', this._onShutdown, this);
         this.events.off('destroy', this._onShutdown, this);
         this.events.once('shutdown', this._onShutdown, this);
         this.events.once('destroy', this._onShutdown, this);
 
-        // Initialize UI Manager
         this.uiManager = new UIManager(this, this.gameMode, { onExit: () => this.forceExitToMenu() });
         this.uiManager.updateQuizSource(this.quizSource);
 
-        // Waiting overlay for custom rooms (skip if match already started)
         const alreadyStarted = !!(this.roomMeta && this.roomMeta.started);
         if (this.customNamespace && !alreadyStarted) {
             this.createWaitingOverlay();
             this.uiPhase = 'waiting';
+            this.setGamePhase(GAME_PHASE.WAITING_ROOM);
         } else {
             this._teardownWaitingOverlay();
             this.waitingStarted = false;
             this.uiPhase = 'idle';
+            this.setGamePhase(GAME_PHASE.PLAYING);
         }
 
-        // In normal mode, hide quiz widgets proactively
         if (this.gameMode === 'normal' && this.uiManager && this.uiManager.components?.hud) {
             this.uiManager.components.hud.questionText?.setVisible(false);
             this.uiManager.components.hud.timerText?.setVisible(false);
             this.uiManager.components.hud.roundTimerText?.setVisible(false);
         }
 
-        // Connect to Game Events
         const gameScene = this.scene.get('Game');
-
-        // Defensive: avoid duplicating bindings if create() is called again
         this._unbindGameEvents();
 
         this._gameEventBindings = [
@@ -107,20 +105,14 @@ export class UIScene extends Scene {
             }],
             ['coinsChanged', (payload) => this.uiManager && this.uiManager.updateCoins(payload)],
             ['updateQuestion', (payload) => {
-                if (this._isQuizMode()) {
-                    this.uiManager && this.uiManager.updateQuestion(payload);
-                }
+                if (this._isQuizMode()) this.uiManager && this.uiManager.updateQuestion(payload);
             }],
             ['roundStart', (payload) => {
-                if (this._isQuizMode()) {
-                    this.uiManager && this.uiManager.startRoundTimer(payload);
-                }
+                if (this._isQuizMode()) this.uiManager && this.uiManager.startRoundTimer(payload);
                 this.onRoundStart();
             }],
             ['roundEnd', (payload) => {
-                if (this._isQuizMode()) {
-                    this.uiManager && this.uiManager.showWinner(payload);
-                }
+                if (this._isQuizMode()) this.uiManager && this.uiManager.showWinner(payload);
             }],
             ['updateInventory', (payload) => this.uiManager && this.uiManager.updateInventory(payload)],
             ['itemActivated', (payload) => this.uiManager && this.uiManager.onItemActivated(payload)],
@@ -132,11 +124,17 @@ export class UIScene extends Scene {
             }],
             ['room:meta', (meta) => this.updateRoomBadge(meta)],
             ['room:owner', (payload) => {
+                const oldOwnerId = this.roomBadgeMeta?.ownerId;
                 if (this.roomBadgeMeta) {
                     this.roomBadgeMeta.ownerId = payload.ownerId;
                     this.updateRoomBadge(this.roomBadgeMeta);
                 }
                 this.updateWaitingOverlay(this.waitingLastPayload, payload?.ownerId);
+                if (oldOwnerId && oldOwnerId !== payload.ownerId && this.uiPhase === 'playing') {
+                    const isNowMe = payload.ownerId === this.localSocketId;
+                    const msg = isNowMe ? 'Host disconnected! You are now the Host.' : 'Host disconnected! Migrating Host...';
+                    this.uiManager && this.uiManager.showToast({ message: msg, color: 0xf59e0b });
+                }
             }],
             ['room:waiting', (payload) => this.updateWaitingOverlay(payload)],
             ['room:started', () => this.onRoomStarted()],
@@ -155,44 +153,13 @@ export class UIScene extends Scene {
             gameScene.events.on(event, handler);
         });
 
-        // Keyboard Inputs (Desktop) - Keep here or move to Controls component?
-        // Game.js handles 'keydown', but UIScene usually sets up listeners.
         if (this.sys.game.device.os.desktop) {
-            this._unbindKeyboard();
-            const one = () => this.tryUseItem(gameScene, 'speed');
-
-            let two, three;
-            // Quiz modes only have Speed and Ghost
-            // Rebind: 1=Speed, 2=Ghost
-            if (this.gameMode !== 'normal') {
-                two = () => this.tryUseItem(gameScene, 'ghost');
-                this._keyboardBindings = [
-                    ['keydown-ONE', one],
-                    ['keydown-TWO', two]
-                ];
-            } else {
-                // Normal: 1=Speed, 2=Magnet, 3=Ghost
-                two = () => this.tryUseItem(gameScene, 'magnet');
-                three = () => this.tryUseItem(gameScene, 'ghost');
-                this._keyboardBindings = [
-                    ['keydown-ONE', one],
-                    ['keydown-TWO', two],
-                    ['keydown-THREE', three],
-                ];
-            }
-            this._keyboardBindings.forEach(([evt, fn]) => this.input.keyboard.on(evt, fn));
+            this.inputController.bindKeyboard(this, gameScene);
         }
-
-        // Debug Toggle (F3)
-        this.input.keyboard.on('keydown-F3', () => {
-            this.toggleDebugOverlay();
-        });
     }
 
-    update(time, delta) {
-        if (this.isDebugVisible) {
-            this.updateDebugOverlay();
-        }
+    update() {
+        if (this.isDebugVisible) this.updateDebugOverlay();
     }
 
     updateRoomBadge(meta) {
@@ -213,7 +180,6 @@ export class UIScene extends Scene {
         this.roomBadgeText.setText(label);
     }
 
-    // Hide quiz widgets when not in quiz mode
     preRender() {
         if (this.gameMode === 'normal' && this.uiManager && this.uiManager.components?.hud) {
             this.uiManager.components.hud.questionText?.setVisible(false);
@@ -252,30 +218,21 @@ export class UIScene extends Scene {
     }
 
     _unbindKeyboard() {
-        if (!this._keyboardBindings) return;
-        if (this.input && this.input.keyboard && this.input.keyboard.off) {
-            this._keyboardBindings.forEach(([evt, fn]) => this.input.keyboard.off(evt, fn));
-        }
-        this._keyboardBindings = null;
+        this.inputController.unbindKeyboard(this);
     }
 
     tryUseItem(gameScene, itemId) {
         if (overlayBlocker.isBlocked()) return;
-        // Validation: Don't use if not allowed in this mode
         if (this._overlayBlocked) return;
-        if (this.gameMode !== 'normal') {
-            // Quiz modes (math, english, quiz) only allow speed and ghost
-            if (itemId === 'magnet') return;
-        }
+        if (this.gameMode !== 'normal' && itemId === 'magnet') return;
+
         if (gameScene && gameScene.events) {
             gameScene.events.emit('intent:useItem', itemId);
         } else if (gameScene && gameScene.useItem) {
-            // Fallback
             gameScene.useItem(itemId);
         }
     }
 
-    // Public method called by Game.js
     getMobileInput() {
         return this.uiManager ? this.uiManager.getMobileInput() : null;
     }
@@ -284,12 +241,14 @@ export class UIScene extends Scene {
         this.hideResultOverlay();
         if (this.uiPhase !== 'waiting') {
             this.uiPhase = 'playing';
+            this.setGamePhase(GAME_PHASE.PLAYING);
         }
     }
 
     onRoomStarted() {
         this.waitingStarted = true;
         this.uiPhase = 'playing';
+        this.setGamePhase(GAME_PHASE.PLAYING);
         this.hideWaitingOverlay({ reason: 'start' });
     }
 
@@ -311,15 +270,13 @@ export class UIScene extends Scene {
         if (this._leavingRoom) return;
         this.waitingStarted = false;
         this._teardownWaitingOverlay();
-        try {
-            alert('You were kicked from the room.');
-        } catch (e) {
-            // ignore alert failures (e.g., non-browser env)
-        }
+        this.uiManager && this.uiManager.showToast && this.uiManager.showToast({
+            message: 'You were kicked from the room.',
+            color: 0xef4444,
+        });
         this.returnToMenu('kicked');
     }
 
-    // --- Achievement Toasts ---
     showAchievementToast(payload) {
         if (!payload) return;
         const { width } = this.scale;
@@ -394,308 +351,50 @@ export class UIScene extends Scene {
             onComplete: () => toast.destroy(),
         });
 
-        // Re-stack remaining toasts
         const baseY = 110;
         this._achievementToasts.forEach((t, idx) => {
             this.tweens.add({ targets: t, y: baseY + idx * 78, duration: 160, ease: 'Sine.easeOut' });
         });
     }
 
-    // --- Custom Room Waiting Overlay ---
     createWaitingOverlay() {
-        if (!this.customNamespace || this.waitingRoot) return;
-        if (!this.waitingBlockToken) {
-            this.waitingBlockToken = overlayBlocker.block('waiting-room');
-        }
-
-        const root = document.createElement('div');
-        root.className = 'waiting-overlay';
-        root.innerHTML = `
-            <div class=\"waiting-overlay__backdrop\"></div>
-            <div class=\"waiting-overlay__panel\">
-                <div class=\"waiting-overlay__header\">
-                    <div>
-                        <div class=\"waiting-overlay__eyebrow\">Waiting Room</div>
-                        <div class=\"waiting-overlay__title\" data-room-title>Loading room…</div>
-                    </div>
-                    <div class=\"waiting-overlay__owner\" data-owner>Owner: —</div>
-                </div>
-                <div class=\"waiting-overlay__list\" data-player-list></div>
-                <div class=\"waiting-overlay__controls\">
-                    <button class=\"waiting-btn waiting-btn--danger\" data-action=\"leave\">Leave Room</button>
-                    <div class=\"waiting-overlay__spacer\"></div>
-                    <button class=\"waiting-btn waiting-btn--primary\" data-action=\"start\">Start Match</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(root);
-
-        this.waitingRoot = root;
-        this.waitingListEl = root.querySelector('[data-player-list]');
-        this.waitingHeaderEl = root.querySelector('[data-room-title]');
-        this.waitingOwnerBadge = root.querySelector('[data-owner]');
-        this.waitingStartEl = root.querySelector('[data-action=\"start\"]');
-        this.waitingLeaveEl = root.querySelector('[data-action=\"leave\"]');
-
-        if (this.waitingLeaveEl) this.waitingLeaveEl.onclick = () => this.leaveRoom();
-        if (this.waitingStartEl) this.waitingStartEl.onclick = () => this.emitRoomStart();
-        this.uiPhase = 'waiting';
+        this.waitingController.createWaitingOverlay(this);
     }
 
     _teardownWaitingOverlay() {
-        if (this.waitingRoot) {
-            this.waitingRoot.remove();
-        }
-        this.waitingRoot = null;
-        this.waitingListEl = null;
-        this.waitingHeaderEl = null;
-        this.waitingOwnerBadge = null;
-        this.waitingStartEl = null;
-        this.waitingLeaveEl = null;
-        this.waitingLastPayload = null;
-        if (this.waitingBlockToken) {
-            overlayBlocker.unblock(this.waitingBlockToken);
-            this.waitingBlockToken = null;
-        }
+        this.waitingController.teardownWaitingOverlay(this);
     }
 
     hideWaitingOverlay({ reason = 'start' } = {}) {
-        this.waitingStarted = true;
-        this._teardownWaitingOverlay();
-        if (reason === 'start') {
-            this.uiPhase = 'playing';
-        }
+        this.waitingController.hideWaitingOverlay(this, { reason });
     }
 
     updateWaitingOverlay(payload = {}, forcedOwnerId = null) {
-        if (!this.customNamespace) return;
-        if (payload?.started || this.waitingStarted) {
-            this.onRoomStarted();
-            return;
-        }
-        this.waitingLastPayload = payload || this.waitingLastPayload || {};
-        if (!this.waitingRoot) this.createWaitingOverlay();
-
-        const players = payload.players || this.waitingLastPayload.players || [];
-        const count = payload.count ?? players.length ?? 0;
-        const ownerId = forcedOwnerId || payload.ownerId || this.waitingLastPayload.ownerId || null;
-        const roomCode = payload.roomCode || this.waitingLastPayload.roomCode || this.customNamespace?.split('/')?.pop() || '';
-
-        if (this.waitingHeaderEl) {
-            this.waitingHeaderEl.textContent = `Room ${roomCode} · ${count}/30 players`;
-        }
-        if (this.waitingOwnerBadge) {
-            this.waitingOwnerBadge.textContent = ownerId ? `Owner: ${ownerId}` : 'Owner: n/a';
-        }
-
-        const isOwner = !!(ownerId && this.localSocketId && ownerId === this.localSocketId);
-        if (this.waitingStartEl) {
-            const showBtn = isOwner && !this.waitingStarted;
-            this.waitingStartEl.style.display = showBtn ? 'inline-flex' : 'none';
-            this.waitingStartEl.disabled = this.waitingStarted;
-        }
-
-        this.renderWaitingPlayers(players, { ownerId, isOwner });
-
-        if (!this.waitingBlockToken) {
-            this.waitingBlockToken = overlayBlocker.block('waiting-room');
-        }
-        this.uiPhase = 'waiting';
+        this.waitingController.updateWaitingOverlay(this, payload, forcedOwnerId);
     }
 
     renderWaitingPlayers(players = [], { ownerId = null, isOwner = false } = {}) {
-        if (!this.waitingListEl) return;
-        this.waitingListEl.innerHTML = '';
-        if (!players || players.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'waiting-player waiting-player--empty';
-            empty.textContent = 'Waiting for players...';
-            this.waitingListEl.appendChild(empty);
-            return;
-        }
-
-        players.forEach((p) => {
-            const row = document.createElement('div');
-            row.className = 'waiting-player';
-
-            const avatar = document.createElement('div');
-            avatar.className = 'waiting-player__avatar';
-            avatar.textContent = (p.name || 'P')[0].toUpperCase();
-
-            const meta = document.createElement('div');
-            meta.className = 'waiting-player__meta';
-            meta.innerHTML = `
-                <div class=\"waiting-player__name\">${p.name || 'Player'}</div>
-                <div class=\"waiting-player__id\">${p.id || ''}</div>
-            `;
-
-            row.appendChild(avatar);
-            row.appendChild(meta);
-
-            if (isOwner && p.id !== this.localSocketId) {
-                const kickBtn = document.createElement('button');
-                kickBtn.className = 'waiting-btn waiting-btn--ghost';
-                kickBtn.textContent = 'Kick';
-                kickBtn.onclick = () => this.kickPlayer(p.id);
-                row.appendChild(kickBtn);
-            } else if (ownerId && p.id === ownerId) {
-                const badge = document.createElement('span');
-                badge.className = 'waiting-player__owner-pill';
-                badge.textContent = 'Owner';
-                row.appendChild(badge);
-            }
-
-            this.waitingListEl.appendChild(row);
-        });
+        this.waitingController.renderWaitingPlayers(this, players, { ownerId, isOwner });
     }
 
     emitRoomStart() {
-        if (!this.customNamespace) return;
-        if (this.waitingStartEl) {
-            this.waitingStartEl.disabled = true;
-            this.time.delayedCall(800, () => {
-                if (this.waitingStartEl) this.waitingStartEl.disabled = false;
-            });
-        }
-        const gameScene = this.scene.get('Game');
-        const socket = gameScene?.networkManager?.socket;
-        socket?.emit('roomStart');
+        this.waitingController.emitRoomStart(this);
     }
 
     leaveRoom() {
-        if (!this.customNamespace) {
-            this.returnToMenu('leave');
-            return;
-        }
-        if (this._leavingRoom) return;
-        this._leavingRoom = true;
-
-        const gameScene = this.scene.get('Game');
-        const socket = gameScene?.networkManager?.socket;
-        if (socket) {
-            socket.emit('leaveLobby');
-        }
-        // The server will disconnect us; also locally transition
-        this.returnToMenu('leave');
+        this.waitingController.leaveRoom(this);
     }
 
     kickPlayer(targetId) {
-        if (!targetId || !this.customNamespace) return;
-        const gameScene = this.scene.get('Game');
-        const socket = gameScene?.networkManager?.socket;
-        socket?.emit('kickPlayer', targetId);
+        this.waitingController.kickPlayer(this, targetId);
     }
 
-    // --- Result Overlay ---
     showResultOverlay(payload = {}) {
-        // Always block input
-        this._teardownWaitingOverlay();
-        this.uiPhase = 'result';
-        this.resultBlockToken = overlayBlocker.block('result');
-
-        if (this.resultOverlay) this.resultOverlay.destroy(true);
-        this.resultButtons = [];
-
-        const { width, height } = this.scale;
-        const container = this.add.container(width / 2, height / 2).setDepth(3000);
-        const bg = this.add.rectangle(0, 0, width, height, 0x000000, 0.55).setOrigin(0.5);
-        container.add(bg);
-
-        const panelW = Math.min(600, width - 80);
-        const panelH = 360;
-        const panel = this.add.graphics();
-        panel.fillStyle(0x111827, 0.95);
-        panel.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 18);
-        panel.lineStyle(2, 0x4b5563, 1);
-        panel.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 18);
-        container.add(panel);
-
-        const title = this.add.text(0, -panelH / 2 + 30, 'RESULT', {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: '26px',
-            fontStyle: 'bold',
-            color: '#e5e7eb',
-        }).setOrigin(0.5);
-        container.add(title);
-
-        const winner = payload.winner;
-        const winnerText = this.add.text(0, -60, winner
-            ? `Winner: ${winner.name || 'Unknown'} (${winner.questionsSolved || 0} solved)`
-            : 'No winner', {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: '20px',
-            color: '#fcd34d',
-        }).setOrigin(0.5);
-        container.add(winnerText);
-
-        const myId = this.localSocketId;
-        const me = (payload.players || []).find((p) => p.id === myId);
-        const mySolved = me?.questionsSolved ?? 0;
-        const myScore = me?.score ?? 0;
-
-        const stats = this.add.text(0, 0, `Your solved: ${mySolved}\nYour score: ${myScore}`, {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: '18px',
-            color: '#e5e7eb',
-            align: 'center',
-        }).setOrigin(0.5);
-        container.add(stats);
-
-        const listY = 80;
-        const topList = (payload.players || []).slice(0, 5).map((p, idx) =>
-            `${idx + 1}. ${p.name || 'Player'} — ${p.questionsSolved || 0} solved, ${p.score || 0} pts`
-        ).join('\n');
-        const listText = this.add.text(0, listY, topList || 'No players', {
-            fontFamily: '"Outfit", sans-serif',
-            fontSize: '16px',
-            color: '#cbd5e1',
-            align: 'center',
-            lineSpacing: 4,
-        }).setOrigin(0.5);
-        container.add(listText);
-
-        const btnY = panelH / 2 - 50;
-        const makeBtn = (x, label, color, handler) => {
-            const rect = this.add.rectangle(x, btnY, 150, 44, color, 0.9)
-                .setStrokeStyle(2, Phaser.Display.Color.IntegerToColor(color).darken(20).color)
-                .setInteractive({ useHandCursor: true })
-                .on('pointerdown', handler);
-            const txt = this.add.text(x, btnY, label, {
-                fontFamily: '"Outfit", sans-serif',
-                fontSize: '18px',
-                fontStyle: 'bold',
-                color: '#0b0f16',
-            }).setOrigin(0.5);
-            container.add(rect);
-            container.add(txt);
-            this.resultButtons.push(rect, txt);
-        };
-
-        if (payload.mode === 'custom') {
-            makeBtn(0, 'MAIN MENU', 0xf59e0b, () => this.returnToMenu('result'));
-        } else {
-            makeBtn(-90, 'PLAY AGAIN', 0x22c55e, () => this.hideResultOverlay('restart'));
-            makeBtn(90, 'MAIN MENU', 0xf59e0b, () => this.returnToMenu('result'));
-        }
-
-        this.resultOverlay = container;
+        this.resultController.showResultOverlay(this, payload);
     }
 
     hideResultOverlay(reason = 'continue') {
-        if (this.resultOverlay) {
-            this.resultOverlay.destroy(true);
-            this.resultOverlay = null;
-            this.resultButtons = [];
-        }
-        if (this.resultBlockToken) {
-            overlayBlocker.unblock(this.resultBlockToken);
-            this.resultBlockToken = null;
-        }
-        if (reason === 'menu') {
-            this.uiPhase = 'idle';
-        } else {
-            this.uiPhase = 'playing';
-        }
+        this.resultController.hideResultOverlay(this, reason);
     }
 
     forceExitToMenu() {
@@ -711,6 +410,7 @@ export class UIScene extends Scene {
         if (!this._leavingRoom) {
             this._leavingRoom = true;
         }
+        this.setGamePhase(GAME_PHASE.EXITING);
 
         this._teardownWaitingOverlay();
         this.hideResultOverlay('menu');
@@ -742,19 +442,14 @@ export class UIScene extends Scene {
         if (this.uiManager) this.uiManager.updateMinimapFood(foodData);
     }
 
-    // --- DEBUG OVERLAY ---
     toggleDebugOverlay() {
         this.isDebugVisible = !this.isDebugVisible;
 
         if (this.isDebugVisible) {
-            if (!this.debugContainer) {
-                this.createDebugOverlay();
-            }
+            if (!this.debugContainer) this.createDebugOverlay();
             this.debugContainer.setVisible(true);
-        } else {
-            if (this.debugContainer) {
-                this.debugContainer.setVisible(false);
-            }
+        } else if (this.debugContainer) {
+            this.debugContainer.setVisible(false);
         }
     }
 
@@ -783,7 +478,6 @@ export class UIScene extends Scene {
 
         if (gameScene && gameScene.entityManager) {
             entities = gameScene.entityManager.snakes.length;
-            // Count foods
             foods = (gameScene.entityManager.regularFoodGroup?.getLength() || 0) +
                 (gameScene.entityManager.specialFoodGroup?.getLength() || 0);
         }
@@ -797,5 +491,16 @@ export class UIScene extends Scene {
         ].join('\n');
 
         this.debugText.setText(info);
+    }
+
+    setGamePhase(phase) {
+        gameSceneSetPhase(this, phase);
+    }
+}
+
+function gameSceneSetPhase(uiScene, phase) {
+    const gameScene = uiScene?.scene?.get?.('Game');
+    if (gameScene && typeof gameScene.setPhase === 'function') {
+        gameScene.setPhase(phase);
     }
 }

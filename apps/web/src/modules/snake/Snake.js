@@ -41,6 +41,13 @@ export class Snake {
         headSprite.setTint(this.color);
         this.head.add(headSprite);
 
+        this.skinAppearance = {
+            textureKey: spriteKey,
+            tint: this.color,
+            alpha: 1,
+            preserveColor: true,
+        };
+
         // Physics for head (for collision)
         scene.physics.add.existing(this.head);
         // Match Server Radius: 15 * scale
@@ -76,13 +83,59 @@ export class Snake {
 
     setColor(color) {
         this.color = color;
-        // Update Head (First child of container)
+
+        // Preserve player color for default skin profiles.
+        if (this.skinAppearance?.preserveColor) {
+            this.skinAppearance.tint = color;
+            const headSprite = this.head.getAt(0);
+            if (headSprite) {
+                this._applySkinAppearanceToPart(headSprite);
+            }
+            this.body.forEach((segment) => this._applySkinAppearanceToPart(segment));
+        }
+    }
+
+    setSkinAppearance(appearance = {}) {
+        const next = {
+            textureKey: appearance.textureKey || 'snake-circle',
+            tint: appearance.tint ?? null,
+            alpha: appearance.alpha ?? 1,
+            preserveColor: !!appearance.preserveColor,
+        };
+
+        if (next.preserveColor && (next.tint === null || next.tint === undefined)) {
+            next.tint = this.color;
+        }
+
+        this.skinAppearance = next;
+
         const headSprite = this.head.getAt(0);
         if (headSprite) {
-            headSprite.setTint(color);
+            this._applySkinAppearanceToPart(headSprite);
         }
-        // Update Body
-        this.body.forEach(segment => segment.setTint(color));
+        this.body.forEach((segment) => this._applySkinAppearanceToPart(segment));
+    }
+
+    _applySkinAppearanceToPart(part) {
+        if (!part) return;
+
+        const appearance = this.skinAppearance || {};
+        const textureKey = appearance.textureKey || 'snake-circle';
+        const alpha = appearance.alpha ?? 1;
+
+        if (part.texture?.key !== textureKey && part.setTexture) {
+            part.setTexture(textureKey);
+        }
+
+        if (appearance.tint === null || appearance.tint === undefined) {
+            if (part.clearTint) part.clearTint();
+        } else if (part.setTint) {
+            part.setTint(appearance.tint);
+        }
+
+        if (part.setAlpha) {
+            part.setAlpha(alpha);
+        }
     }
 
     setName(name) {
@@ -136,13 +189,14 @@ export class Snake {
     grow() {
         Logger.debug('Snake', 'Growing snake');
         let bodyPart;
+        const textureKey = this.skinAppearance?.textureKey || 'snake-circle';
 
         if (this.segmentPool) {
             // Get from pool
-            bodyPart = this.segmentPool.get(this.head.x, this.head.y, 'snake-circle');
+            bodyPart = this.segmentPool.get(this.head.x, this.head.y, textureKey);
             bodyPart.setActive(true).setVisible(true);
         } else {
-            bodyPart = this.scene.add.image(this.head.x, this.head.y, 'snake-circle');
+            bodyPart = this.scene.add.image(this.head.x, this.head.y, textureKey);
         }
 
         this.scene.physics.add.existing(bodyPart);
@@ -153,7 +207,7 @@ export class Snake {
 
         bodyPart.setDepth(5 - this.body.length * 0.001); // Ensure decreasing depth for tail
         bodyPart.setScale(this.scale);
-        bodyPart.setTint(this.color); // Match head color
+        this._applySkinAppearanceToPart(bodyPart);
         this.body.push(bodyPart);
         // this.bodyGroup.add(bodyPart); // Removed usage of bodyGroup for segments to avoid removal issues with pool
 

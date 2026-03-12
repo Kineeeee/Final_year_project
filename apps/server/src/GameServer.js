@@ -1,4 +1,5 @@
 const { FPS, FOOD_REFILL_INTERVAL, BROADCAST_FPS, INTEREST_VIEW_RADIUS, LEADERBOARD_FPS, LEADERBOARD_TOP_N } = require('./config/constants');
+const { GAME_PHASE } = require('./core/GamePhases');
 const PlayerManager = require('./modules/player/PlayerManager');
 const FoodManager = require('./modules/food/FoodManager');
 const SpawnManager = require('./modules/player/SpawnManager');
@@ -37,6 +38,7 @@ class GameServer {
         this.closed = false;
         this.intervals = [];
         this.matchStarted = false;
+        this.phase = this.config.isCustom ? GAME_PHASE.WAITING_ROOM : GAME_PHASE.PLAYING;
 
         // Server-authoritative tick counter for snapshots/deltas
         this.serverTick = 0;
@@ -150,6 +152,7 @@ class GameServer {
     update() {
         // In custom rooms, pause gameplay until owner starts the match
         if (this.config.isCustom && !this.matchStarted) {
+            this.phase = GAME_PHASE.WAITING_ROOM;
             if (this.networkSystem && typeof this.networkSystem.update === 'function') {
                 this.networkSystem.update();
             }

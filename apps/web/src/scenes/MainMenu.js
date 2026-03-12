@@ -2,22 +2,23 @@ import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
 import { playerState } from '../core/services/PlayerState';
 import { AuthService } from '../core/services/AuthService';
-import { QuizSetupOverlay } from '../ui/quiz/QuizSetupOverlay';
-import { globalQuizPrefs } from '../core/services/GlobalQuizPrefs';
-import { CategorySelectOverlay } from '../ui/quiz/CategorySelectOverlay';
-import { CustomRoomOverlay } from '../ui/quiz/CustomRoomOverlay';
-import { userQuizApi } from '../core/services/UserQuizApi';
 import { overlayBlocker } from '../core/services/OverlayBlocker';
 import { authStore } from '../core/state/authStore';
-import { roomService } from '../core/services/RoomService';
+import { ProfileModal } from '../ui/ProfileModal';
+import { RewardsInventoryModal } from '../ui/RewardsInventoryModal';
+import { MainMenuFlowController } from './controllers/MainMenuFlowController';
 
 export class MainMenu extends Scene {
     constructor() {
         super('MainMenu');
+        this.flow = null;
     }
 
     create() {
         Logger.info('MainMenu', 'Showing Main Menu');
+
+        // Defensive reset: avoid stale overlay lock from previous scenes blocking menu interactions.
+        overlayBlocker.reset();
 
         if (this.scene.get('UIScene')) {
             this.scene.stop('UIScene');
@@ -47,6 +48,10 @@ export class MainMenu extends Scene {
 
         // Tạo Container chính chứa toàn bộ UI
         const uiRoot = this.add.container(0, 0);
+        this.flow = new MainMenuFlowController(this);
+
+        // UI Events
+        this.events.on('showToast', data => this.showToast(data.message, data.color));
 
         // DATA
         const username = playerState.getUsername ? playerState.getUsername() : 'Guest';
@@ -99,53 +104,119 @@ export class MainMenu extends Scene {
 
 
         // --- 3. STATS BAR ---
-        // Tăng khoảng cách từ Header xuống Stats (từ 70 lên 85) để thoáng hơn
-        const statsY = headerY + scaleVal(isMobile ? 80 : 95); 
-        const statsContainer = this.add.container(centerX, statsY);
-        
+        const statsY = headerY + scaleVal(isMobile ? 96 : 106);
+        const statsContainer = this.add.container(centerX, statsY).setDepth(30);
+        const statsW = Math.min(scaleVal(720), width - padding * 2);
+        const statsCols = isMobile ? 2 : 4;
+        const statsRows = Math.ceil(4 / statsCols);
+        const chipGapX = scaleVal(isMobile ? 10 : 12);
+        const chipGapY = scaleVal(isMobile ? 10 : 0);
+        const chipH = scaleVal(isMobile ? 42 : 46);
+        const chipW = Math.floor((statsW - scaleVal(20) - chipGapX * (statsCols - 1)) / statsCols);
+        const statsInnerH = (chipH * statsRows) + chipGapY * (statsRows - 1);
+        const statsH = statsInnerH + scaleVal(18);
+        const r = scaleVal(12);
+
         const statsBg = this.add.graphics();
-        const statsW = Math.min(scaleVal(620), width - padding * 2);
-        const statsH = scaleVal(40);
-        const r = scaleVal(10);
-        
-        // Layer 1: Shadow/Outline
-        statsBg.fillStyle(0x000000, 1);
-        statsBg.fillRoundedRect(-statsW/2 - 2, -statsH/2 - 2, statsW + 4, statsH + 4, r + 2);
-
-        // Layer 2: Border Xanh Sáng
-        statsBg.fillStyle(0x5c8aae, 1); 
-        statsBg.fillRoundedRect(-statsW/2, -statsH/2, statsW, statsH, r);
-
-        // Layer 3: Nền Xanh Đậm
-        statsBg.fillStyle(0x242d42, 1); 
-        statsBg.fillRoundedRect(-statsW/2 + 3, -statsH/2 + 3, statsW - 6, statsH - 6, r - 2);
-
+        statsBg.fillStyle(0x000000, 0.9);
+        statsBg.fillRoundedRect(-statsW / 2 - 3, -statsH / 2 - 3, statsW + 6, statsH + 6, r + 2);
+        statsBg.fillStyle(0x5c8aae, 1);
+        statsBg.fillRoundedRect(-statsW / 2, -statsH / 2, statsW, statsH, r);
+        statsBg.fillStyle(0x1f2b44, 1);
+        statsBg.fillRoundedRect(-statsW / 2 + 3, -statsH / 2 + 3, statsW - 6, statsH - 6, r - 2);
         statsContainer.add(statsBg);
 
-        const statsStyle = { 
-            fontFamily: '"Press Start 2P", monospace', 
-            fontSize: `${scaleVal(isMobile ? 12 : 14)}px`, // Giảm xuống 14px để an toàn cho tên dài
-            color: '#FFD700', 
-            stroke: '#000000',
-            strokeThickness: Math.max(3, Math.round(4 * uiScale)),
-            shadow: { offsetX: 2, offsetY: 2, color: '#000000', blur: 0, fill: true }
+        const usernameShort = (username && username.length > 10)
+            ? `${username.slice(0, 9)}…`
+            : username;
+
+        const chipFont = `${scaleVal(isMobile ? 9 : 10)}px`;
+        const iconFont = `${scaleVal(isMobile ? 15 : 16)}px`;
+
+        const createStatusChip = ({ idx, icon, text, accent = 0x34dbcb, onClick }) => {
+            const col = idx % statsCols;
+            const row = Math.floor(idx / statsCols);
+            const startX = -((chipW * statsCols) + (chipGapX * (statsCols - 1))) / 2 + chipW / 2;
+            const x = startX + col * (chipW + chipGapX);
+            const y = -statsInnerH / 2 + chipH / 2 + row * (chipH + chipGapY);
+
+            const chip = this.add.container(x, y);
+            const chipBg = this.add.graphics();
+
+            const drawChip = (hover = false) => {
+                chipBg.clear();
+                chipBg.fillStyle(0x0b1220, hover ? 0.98 : 0.9);
+                chipBg.fillRoundedRect(-chipW / 2, -chipH / 2, chipW, chipH, 8);
+                chipBg.lineStyle(2, hover ? 0xffffff : accent, hover ? 0.75 : 0.6);
+                chipBg.strokeRoundedRect(-chipW / 2, -chipH / 2, chipW, chipH, 8);
+            };
+
+            drawChip(false);
+
+            const iconTxt = this.add.text(-chipW / 2 + scaleVal(10), 0, icon, {
+                fontSize: iconFont
+            }).setOrigin(0, 0.5);
+
+            const valueTxt = this.add.text(-chipW / 2 + scaleVal(34), 0, text, {
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: chipFont,
+                color: '#ffe59a',
+                stroke: '#000000',
+                strokeThickness: Math.max(2, Math.round(2 * uiScale))
+            }).setOrigin(0, 0.5);
+
+            const hit = this.add.rectangle(0, 0, chipW, chipH, 0x000000, 0)
+                .setInteractive({ useHandCursor: true })
+                .on('pointerover', () => {
+                    drawChip(true);
+                    this.tweens.add({ targets: chip, scale: 1.04, duration: 90, ease: 'Sine.easeOut' });
+                })
+                .on('pointerout', () => {
+                    drawChip(false);
+                    this.tweens.add({ targets: chip, scale: 1, duration: 90, ease: 'Sine.easeOut' });
+                })
+                .on('pointerdown', () => {
+                    this.tweens.add({ targets: chip, scale: 0.96, duration: 60, yoyo: true });
+                    if (onClick) onClick();
+                });
+
+            chip.add([chipBg, iconTxt, valueTxt, hit]);
+            statsContainer.add(chip);
         };
-        
-        // Căn chỉnh lại tọa độ text để không bị đè nhau
-        const iconUser = this.add.text(-scaleVal(260), 0, '👤', { fontSize: `${scaleVal(18)}px` }).setOrigin(0.5); 
-        const txtUser = this.add.text(-scaleVal(240), 0, username, statsStyle).setOrigin(0, 0.5); // Canh lề trái
 
-        const iconCoin = this.add.text(-scaleVal(30), 0, '💰', { fontSize: `${scaleVal(18)}px` }).setOrigin(0.5);
-        const txtCoin = this.add.text(-scaleVal(10), 0, `${coins}`, statsStyle).setOrigin(0, 0.5);
+        createStatusChip({
+            idx: 0,
+            icon: '👤',
+            text: usernameShort || 'Guest',
+            accent: 0x34dbcb,
+            onClick: () => this.openProfileOverlay()
+        });
+        createStatusChip({
+            idx: 1,
+            icon: '💰',
+            text: `${coins}`,
+            accent: 0xf1c40f,
+            onClick: () => this.showToast(`Coins: ${coins}`, '#f1c40f')
+        });
+        createStatusChip({
+            idx: 2,
+            icon: '🏆',
+            text: `Best ${highScore}`,
+            accent: 0x38bdf8,
+            onClick: () => this.showToast(`Best score: ${highScore}`, '#38bdf8')
+        });
+        createStatusChip({
+            idx: 3,
+            icon: '🎒',
+            text: 'Kho do',
+            accent: 0xa78bfa,
+            onClick: () => this.openInventoryOverlay()
+        });
 
-        const iconCup = this.add.text(scaleVal(150), 0, '🏆', { fontSize: `${scaleVal(18)}px` }).setOrigin(0.5);
-        const txtScore = this.add.text(scaleVal(170), 0, `Best: ${highScore}`, statsStyle).setOrigin(0, 0.5);
-        
-        statsContainer.add([iconUser, txtUser, iconCoin, txtCoin, iconCup, txtScore]);
         uiRoot.add(statsContainer);
 
         // --- 4. GLOBAL QUIZ SOURCE + UPLOAD ---
-        const sourceY = statsY + scaleVal(isMobile ? 80 : 90);
+        const sourceY = statsY + (statsH / 2) + scaleVal(isMobile ? 30 : 34);
         const sourceLabel = this.add.text(centerX - 240, sourceY, 'Quiz Source:', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: `${scaleVal(isMobile ? 12 : 14)}px`,
@@ -173,10 +244,45 @@ export class MainMenu extends Scene {
         this.chipSystem.setPosition(centerX - (isMobile ? 60 : 0), sourceY);
         this.chipUser.setPosition(centerX + (isMobile ? 60 : 170), sourceY);
         uiRoot.add([sourceLabel, this.chipSystem, this.chipUser]);
-        this.refreshSourceChips();
-        this.preloadUserQuizStatus();
+        this.flow.refreshSourceChips();
+        this.flow.preloadUserQuizStatus();
 
-        // --- 5. GAME MODES ---
+        // --- 5. BOTTOM BUTTONS LAYOUT PLAN (used to avoid overlap with mode cards) ---
+        const bottomButtons = [
+            {
+                label: '🛒 SHOP',
+                color: 0x3d6cb9,
+                action: () => { this.scene.launch('ShopScene'); this.scene.pause(); }
+            },
+            {
+                label: '🏅 ACHIEV.',
+                color: 0xf59e0b,
+                action: () => { this.scene.launch('AchievementsScene'); this.scene.pause(); }
+            },
+            {
+                label: '🎨 SKINS',
+                color: 0x8e44ad,
+                action: () => { this.scene.start('CustomizeScene'); }
+            },
+            {
+                label: 'UPLOAD QUIZ',
+                color: 0x2980b9,
+                action: () => { this.flow.openUploadOverlay(); }
+            }
+        ];
+
+        const buttonWidth = scaleVal(200);
+        const buttonHeight = scaleVal(55);
+        const buttonGapX = scaleVal(isMobile ? 18 : 20);
+        const buttonGapY = scaleVal(isMobile ? 14 : 0);
+        const buttonsCols = isMobile ? 2 : bottomButtons.length;
+        const buttonsRows = Math.ceil(bottomButtons.length / buttonsCols);
+        const buttonsGridWidth = (buttonsCols * buttonWidth) + ((buttonsCols - 1) * buttonGapX);
+        const buttonsGridHeight = (buttonsRows * buttonHeight) + ((buttonsRows - 1) * buttonGapY);
+        const buttonsSafeBottom = isMobile ? scaleVal(22) : scaleVal(26);
+        const buttonsTopY = height - buttonsSafeBottom - buttonsGridHeight;
+
+        // --- 6. GAME MODES ---
         const modes = [
             { label: 'QUIZ', mode: 'quiz', icon: 'icon-math', color: 0xff9800, shadow: 0xb36b00 },
             { label: 'CUSTOM QUIZ', mode: 'custom_quiz', icon: 'icon-english', color: 0x9b59b6, shadow: 0x6c3483 },
@@ -190,16 +296,26 @@ export class MainMenu extends Scene {
         const availW = width - padding * 2;
         const cardGap = scaleVal(isMobile ? 12 : 18);
         const cardWidth = Math.min(scaleVal(180), (availW - cardGap * (cols - 1)) / cols);
-        const cardHeight = Math.min(scaleVal(190), cardWidth * 1.15);
+
+        const modesStartY = sourceY + scaleVal(isMobile ? 116 : 132);
+        const modesBottomLimit = buttonsTopY - scaleVal(isMobile ? 16 : 22);
+        const rowGap = isMobile ? 14 : 18;
+        const maxHeightBySpace = rows > 0
+            ? Math.floor((modesBottomLimit - modesStartY - rowGap * (rows - 1)) / rows)
+            : scaleVal(190);
+        const cardHeight = Math.max(
+            scaleVal(isMobile ? 124 : 150),
+            Math.min(scaleVal(190), Math.min(cardWidth * 1.15, maxHeightBySpace))
+        );
+
         const totalRowWidth = (cardWidth * cols) + (cardGap * (cols - 1));
         const startX = centerX - (totalRowWidth / 2) + (cardWidth / 2);
-        const modesStartY = sourceY + scaleVal(isMobile ? 120 : 140);
 
         modes.forEach((m, i) => {
             const row = Math.floor(i / cols);
             const col = i % cols;
             const x = startX + (col * (cardWidth + cardGap));
-            const y = modesStartY + row * (cardHeight + (isMobile ? 14 : 18));
+            const y = modesStartY + row * (cardHeight + rowGap);
             const card = this.add.container(x, y);
             const g = this.add.graphics();
             const w = cardWidth;
@@ -224,8 +340,8 @@ export class MainMenu extends Scene {
             card.add(g);
 
             if (this.textures.exists(m.icon)) {
-                const icon = this.add.image(0, -25, m.icon);
-                const maxDim = scaleVal(110);
+                const icon = this.add.image(0, -Math.round(cardHeight * 0.16), m.icon);
+                const maxDim = Math.min(scaleVal(110), Math.round(cardHeight * 0.48));
                 if(icon.width > maxDim || icon.height > maxDim) {
                     const scale = Math.min(maxDim / icon.width, maxDim / icon.height);
                     icon.setScale(scale);
@@ -233,7 +349,7 @@ export class MainMenu extends Scene {
                 card.add(icon);
             }
 
-                const label = this.add.text(0, h/2 - scaleVal(45), m.label, {
+                const label = this.add.text(0, h/2 - scaleVal(isMobile ? 34 : 45), m.label, {
                     fontFamily: '"Press Start 2P", monospace',
                     fontSize: `${scaleVal(isMobile ? 14 : 18)}px`,
                     color: '#ffffff',
@@ -254,44 +370,25 @@ export class MainMenu extends Scene {
                 .on('pointerout', hoverDown)
                 .on('pointerdown', () => {
                     this.tweens.add({ targets: card, scale: 0.97, duration: 60, yoyo: true });
-                    this.startGame(m.mode);
+                    this.flow.startGame(m.mode);
                 });
 
             card.add(hitZone);
             uiRoot.add(card);
         });
 
-        // --- 6. BOTTOM BUTTONS ---
-        const bottomY = height - (isMobile ? scaleVal(40) : scaleVal(70)); // position above safe area
-        const bottomButtons = [
-            {
-                label: '🛒 SHOP',
-                color: 0x3d6cb9,
-                action: () => { this.scene.launch('ShopScene'); this.scene.pause(); }
-            },
-            {
-                label: '🏅 ACHIEV.',
-                color: 0xf59e0b,
-                action: () => { this.scene.launch('AchievementsScene'); this.scene.pause(); }
-            },
-            {
-                label: '🎨 SKINS',
-                color: 0x8e44ad,
-                action: () => { this.scene.start('CustomizeScene'); }
-            },
-            {
-                label: 'UPLOAD QUIZ',
-                color: 0x2980b9,
-                action: () => { this.openUploadOverlay(); }
-            }
-        ];
-        const spacing = scaleVal(180);
-        const bottomStartX = centerX - spacing * ((bottomButtons.length - 1) / 2);
+        // --- 7. BOTTOM BUTTONS ---
+        const buttonsStartX = centerX - (buttonsGridWidth / 2) + (buttonWidth / 2);
+        const buttonsStartY = buttonsTopY + (buttonHeight / 2);
         bottomButtons.forEach((btn, idx) => {
-            this.createStylishButton(uiRoot, bottomStartX + idx * spacing, bottomY, btn.label, btn.color, btn.action);
+            const row = Math.floor(idx / buttonsCols);
+            const col = idx % buttonsCols;
+            const x = buttonsStartX + col * (buttonWidth + buttonGapX);
+            const y = buttonsStartY + row * (buttonHeight + buttonGapY);
+            this.createStylishButton(uiRoot, x, y, btn.label, btn.color, btn.action);
         });
 
-        // --- 6. TOP RIGHT BUTTONS ---
+        // --- 8. TOP RIGHT BUTTONS ---
         this.createPixelButton(uiRoot, width - 60, 40, 'EXIT', 0xe74c3c, () => {
             const username = localStorage.getItem('username');
             (async () => {
@@ -314,8 +411,20 @@ export class MainMenu extends Scene {
              this.scene.launch('HowToPlayScene');
              this.scene.pause('MainMenu');
         });
+        this.createPixelButton(uiRoot, width - 220, 40, 'SET', 0x38bdf8, () => {
+            this.scene.launch('SettingsScene');
+            this.scene.pause('MainMenu');
+        });
+
+           // Ensure the stats bar stays above mode card hit zones.
+           uiRoot.bringToTop(statsContainer);
 
         this.add.existing(uiRoot);
+        
+        // Listen for network errors returning from Game scene (NetworkManager)
+        this.events.on('network:error', (data) => {
+            this.flow.showNetworkErrorModal(data.message);
+        });
     }
 
     createStylishButton(container, x, y, text, color, callback) {
@@ -392,210 +501,97 @@ export class MainMenu extends Scene {
     }
 
     startGame(mode) {
-        const isBlocked = overlayBlocker.isBlocked();
-        if (isBlocked) {
-            Logger.warn('MainMenu', 'Start blocked because overlay is active');
-            return;
-        }
-        if (mode === 'custom_quiz') {
-            this.startCustomQuizFlow();
-            return;
-        }
-        if (mode === 'quiz') {
-            // Immediate join system quiz arena (no category selection)
-            Logger.info('MainMenu', 'Starting Quiz Arena (system questions)');
-            this.cameras.main.fadeOut(300);
-            this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-                this.scene.start('Game', { mode: 'math', quizSource: 'SYSTEM' });
-            });
-            return;
-        }
-        if (mode === 'shooting') {
-            this.openCategorySelect(mode);
-            return;
-        }
-
-        Logger.info('MainMenu', `Starting: ${mode}`);
-        this.cameras.main.fadeOut(300);
-        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-            this.scene.start('Game', { mode: mode });
-        });
+        this.flow.startGame(mode);
     }
 
     async startCustomQuizFlow() {
-        if (overlayBlocker.isBlocked()) return;
-        if (!this.customOverlay) {
-            this.customOverlay = new CustomRoomOverlay({
-                onJoin: (code) => {
-                    this.customOverlay?.close();
-                    this.startCustomRoomJoin(code);
-                },
-                onCreate: () => {
-                    this.customOverlay?.close();
-                    this.openCategorySelect('custom_create');
-                },
-                onClose: () => {
-                    this.input.enabled = true;
-                }
-            });
-        }
-        this.input.enabled = false;
-        await this.customOverlay.open();
+        return this.flow.startCustomQuizFlow();
     }
 
     startCustomRoomJoin(code) {
-        (async () => {
-            try {
-                const meta = await roomService.getRoomMeta(code);
-                if (meta.players >= meta.capacity) {
-                    alert('Phòng đã đầy.');
-                    return;
-                }
-                Logger.info('MainMenu', `Join custom room ${code}`);
-                const namespace = `/custom/${code}`;
-                this.cameras.main.fadeOut(300);
-                this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-                    this.scene.start('Game', {
-                        mode: 'quiz',
-                        quizSource: 'USER',
-                        customNamespace: namespace,
-                        roomMeta: meta
-                    });
-                });
-            } catch (err) {
-                alert(err.message || 'Không tìm thấy phòng');
-            }
-        })();
+        this.flow.startCustomRoomJoin(code);
     }
 
     async setGlobalQuizSource(src) {
-        if (src === 'USER') {
-            // Require at least one valid quiz in any category; deeper check when selecting category
-            try {
-                const [mathStatus, engStatus] = this.userQuizStatus
-                    ? [this.userQuizStatus.math, this.userQuizStatus.english]
-                    : await Promise.all([
-                          userQuizApi.getStatus('math').catch(() => null),
-                          userQuizApi.getStatus('english').catch(() => null),
-                      ]);
-                const hasValid = (mathStatus && mathStatus.isValid) || (engStatus && engStatus.isValid);
-                if (!hasValid) {
-                    alert('Bạn chưa có đề hợp lệ cho Math hoặc English. Tiếp tục dùng Đề hệ thống.');
-                    this.refreshSourceChips();
-                    return;
-                }
-                this.userQuizStatus = { math: mathStatus, english: engStatus };
-            } catch (e) {
-                alert('Không kiểm tra được đề của bạn. Tiếp tục dùng Đề hệ thống.');
-                this.refreshSourceChips();
-                return;
-            }
-            globalQuizPrefs.setQuizSource('USER');
-        } else {
-            globalQuizPrefs.setQuizSource('SYSTEM');
-        }
-        this.refreshSourceChips();
+        return this.flow.setGlobalQuizSource(src);
     }
 
     refreshSourceChips() {
-        const src = globalQuizPrefs.getQuizSource();
-        if (this.chipSystem) this.chipSystem.setAlpha(src === 'SYSTEM' ? 1 : 0.5);
-        if (this.chipUser) {
-            this.chipUser.setAlpha(src === 'USER' ? 1 : 0.5);
-            if (this.userQuizStatus) {
-                const allValid = this.userQuizStatus.math?.isValid || this.userQuizStatus.english?.isValid;
-                this.chipUser.setTint(allValid ? 0xffffff : 0xffaa00);
-            }
-        }
+        this.flow.refreshSourceChips();
     }
 
     async preloadUserQuizStatus() {
-        if (!localStorage.getItem('token')) return;
-        try {
-            const [mathStatus, engStatus] = await Promise.all([
-                userQuizApi.getStatus('math').catch(() => null),
-                userQuizApi.getStatus('english').catch(() => null),
-            ]);
-            this.userQuizStatus = { math: mathStatus, english: engStatus };
-            this.refreshSourceChips();
-        } catch (e) {
-            // ignore
-        }
+        return this.flow.preloadUserQuizStatus();
     }
 
     openUploadOverlay() {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            alert('Vui lòng đăng nhập để upload đề của bạn.');
-            return;
-        }
-        const overlay = new QuizSetupOverlay({
-            defaultCategory: 'math',
-            onClose: () => {
-                this.input.enabled = true;
-            },
-            disablePlay: true,
-        });
-        this.input.enabled = false;
-        overlay.open();
+        this.flow.openUploadOverlay();
     }
 
     openCategorySelect(mode) {
-        const overlay = new CategorySelectOverlay({
-            onSelect: (category) => {
-                this.input.enabled = true;
-                const source = (mode === 'custom_create') ? 'USER' : globalQuizPrefs.getQuizSource();
-                // Validate user quiz for category if USER selected
-                const proceed = async () => {
-                    let finalSource = source;
-                    if (source === 'USER') {
-                        if (mode === 'custom_create') {
-                            try {
-                                const { namespace } = await roomService.createCustomRoom(category);
-                                Logger.info('MainMenu', `Created custom room ${namespace}`);
-                                this.cameras.main.fadeOut(300);
-                                this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-                                    this.scene.start('Game', { mode: 'quiz', quizSource: 'USER', customNamespace: namespace });
-                                });
-                                return;
-                            } catch (err) {
-                                alert(err.message || 'Tạo phòng custom thất bại');
-                                return;
-                            }
-                        } else {
-                            try {
-                                const status = await userQuizApi.getStatus(category);
-                                if (!status?.isValid) {
-                                    finalSource = 'SYSTEM';
-                                    alert('Bạn chưa có đề cho category này. Tạm dùng đề hệ thống.');
-                                }
-                            } catch (e) {
-                                finalSource = 'SYSTEM';
-                                alert('Không kiểm tra được đề của bạn. Tạm dùng đề hệ thống.');
-                            }
-                        }
-                    }
-                    if (mode === 'quiz') {
-                        Logger.info('MainMenu', `Starting Quiz ${category} source=${finalSource}`);
-                        this.cameras.main.fadeOut(300);
-                        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-                            this.scene.start('Game', { mode: category, quizSource: finalSource });
-                        });
-                    } else if (mode === 'shooting') {
-                        Logger.info('MainMenu', `Starting Shooting ${category} source=${finalSource}`);
-                        this.cameras.main.fadeOut(300);
-                        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-                            this.scene.start('ShootingScene', { category, quizSource: finalSource });
-                        });
-                    }
-                };
-                proceed();
-            },
-            onCancel: () => {
-                this.input.enabled = true;
-            },
+        this.flow.openCategorySelect(mode);
+    }
+
+    _handleCategoryChoice(category, mode, overlay) {
+        this.flow.handleCategoryChoice(category, mode, overlay);
+    }
+
+    showNetworkErrorModal(message) {
+        this.flow.showNetworkErrorModal(message);
+    }
+
+    openProfileOverlay() {
+        if (overlayBlocker.isBlocked()) return;
+        if (this._profileModal) return;
+
+        const { width, height } = this.scale;
+        this._profileModal = new ProfileModal(this, width / 2, height / 2, {
+            onClose: () => {
+                this._profileModal = null;
+            }
         });
-        this.input.enabled = false;
-        overlay.open();
+    }
+
+    openInventoryOverlay() {
+        if (overlayBlocker.isBlocked()) return;
+        if (this._inventoryModal) return;
+
+        const { width, height } = this.scale;
+        this._inventoryModal = new RewardsInventoryModal(this, width / 2, height / 2, {
+            onClose: () => {
+                this._inventoryModal = null;
+            }
+        });
+    }
+
+    showToast(message, color = '#2ecc71') {
+        const { width, height } = this.scale;
+        const toastBg = this.add.rectangle(width / 2, height - Math.min(200, height * 0.2), 200, 40, 0x000000, 0.8).setDepth(999).setAlpha(0);
+        toastBg.setStrokeStyle(2, Phaser.Display.Color.HexStringToColor(color).color);
+        
+        const toastMsg = this.add.text(width / 2, height - Math.min(200, height * 0.2), message, {
+            fontFamily: '"Press Start 2P", monospace', 
+            fontSize: '12px', 
+            color: '#ffffff',
+            align: 'center'
+        }).setOrigin(0.5).setDepth(1000).setAlpha(0);
+
+        this.tweens.add({
+            targets: [toastBg, toastMsg],
+            alpha: 1,
+            y: '-=20',
+            duration: 300,
+            ease: 'Cubic.easeOut',
+            onComplete: () => {
+                this.time.delayedCall(2000, () => {
+                    this.tweens.add({
+                        targets: [toastBg, toastMsg],
+                        alpha: 0,
+                        duration: 300,
+                        onComplete: () => { toastBg.destroy(); toastMsg.destroy(); }
+                    });
+                });
+            }
+        });
     }
 }

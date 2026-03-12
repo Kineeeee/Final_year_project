@@ -103,6 +103,12 @@ customIO.on('connection', (socket) => {
         return;
     }
 
+    if (!RoomRegistry.canAcceptJoin(code)) {
+        socket.emit('room_already_started');
+        socket.disconnect(true);
+        return;
+    }
+
     // Create GameServer per room lazily
     let isNewServer = false;
     if (!room.gameServer) {
@@ -119,7 +125,12 @@ customIO.on('connection', (socket) => {
         isNewServer = true;
     }
 
-    RoomRegistry.addSocket(code, socket.id);
+    const added = RoomRegistry.addSocket(code, socket.id);
+    if (!added) {
+        socket.emit('room_already_started');
+        socket.disconnect(true);
+        return;
+    }
 
     socket.emit('room_meta', RoomRegistry.getMeta(code));
 
@@ -133,11 +144,6 @@ customIO.on('connection', (socket) => {
     // Push initial waiting snapshot
     if (room.gameServer?.broadcastWaiting) {
         room.gameServer.broadcastWaiting();
-    }
-
-    // If match already started, immediately notify the new socket so it skips waiting
-    if (room.gameServer?.matchStarted) {
-        socket.emit('room_started');
     }
 
     socket.on('disconnect', () => {

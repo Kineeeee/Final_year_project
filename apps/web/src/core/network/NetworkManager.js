@@ -2,6 +2,7 @@ import { socketService } from '../../core/services/SocketService';
 import parser from 'socket.io-msgpack-parser';
 import { Logger } from '../../utils/Logger';
 import { CONFIG } from '../../config/constants';
+import { achievementManager } from '../../modules/achievements/AchievementManager';
 
 export class NetworkManager {
     constructor(scene, gameState = null) {
@@ -11,6 +12,7 @@ export class NetworkManager {
         this.pingTimer = null;
         this.lastPingTime = 0;
         this._didEmitLocalDied = false;
+        this._inResultPhase = false;
     }
 
     sendPlayerInput(angle, isBoosting) {
@@ -45,11 +47,17 @@ export class NetworkManager {
         });
 
         this.socket.on('room_full', () => {
-            alert('Phòng hiện đã đủ 30 người chơi. Vui lòng thử lại sau.');
+            this.scene.events.emit('network:error', { message: 'Phòng hiện đã đủ 30 người chơi. Vui lòng thử lại sau.' });
             this.disconnect({ disconnectSocket: true });
         });
+        
+        this.socket.on('room_already_started', () => {
+            this.scene.events.emit('network:error', { message: 'Trận đấu trong phòng này đã bắt đầu. Không thể tham gia.' });
+            this.disconnect({ disconnectSocket: true });
+        });
+        
         this.socket.on('room_closed', () => {
-            alert('Phòng đã kết thúc. Vui lòng tạo hoặc tham gia phòng khác.');
+            this.scene.events.emit('network:error', { message: 'Phòng đã kết thúc. Vui lòng tạo hoặc tham gia phòng khác.' });
             this.scene.events.emit('room:closed');
             this.disconnect({ disconnectSocket: true });
         });
@@ -68,7 +76,10 @@ export class NetworkManager {
         this.socket.on('room_started', () => this.scene.events.emit('room:started'));
         this.socket.on('room_left', () => this.scene.events.emit('room_left'));
         this.socket.on('kicked', () => this.scene.events.emit('room:kicked'));
-        this.socket.on('result', (payload) => this.scene.events.emit('match:result', payload));
+        this.socket.on('result', (payload) => {
+            this._inResultPhase = true;
+            this.scene.events.emit('match:result', payload);
+        });
 
         this.setupConnectionEvents(playerDetails);
         this.setupGameplayEvents();
@@ -111,6 +122,7 @@ export class NetworkManager {
                 name: playerDetails.name,
                 token: localStorage.getItem('token'), // SECURITY: Send Token
                 quizSource: this.quizSource,
+                cosmetics: achievementManager.getSnapshot().activeCosmetics || {},
             };
 
             const savedInventory = localStorage.getItem('inventory');
@@ -137,6 +149,14 @@ export class NetworkManager {
             if (state.inventory) {
                 localStorage.setItem('inventory', JSON.stringify(state.inventory));
                 this.scene.events.emit('updateInventory', state.inventory);
+            }
+            
+            // Sync achievements & rewards natively
+            if (state.unlockedRewards) {
+                achievementManager.syncServerUnlocks(state.unlockedRewards);
+            }
+            if (state.cosmetics) {
+                achievementManager.syncServerCosmetics(state.cosmetics);
             }
         });
     }
@@ -191,7 +211,10 @@ export class NetworkManager {
 
         // Quiz
         this.socket.on('newQuestion', (data) => this.scene.events.emit('updateQuestion', data));
-        this.socket.on('roundStart', (data) => this.scene.events.emit('roundStart', data));
+        this.socket.on('roundStart', (data) => {
+            this._inResultPhase = false;
+            this.scene.events.emit('roundStart', data);
+        });
         this.socket.on('roundEnd', (data) => this.scene.events.emit('roundEnd', data));
         this.socket.on('clearQuizFood', (foodIds) => this.handleClearQuizFood(foodIds));
         this.socket.on('answerResult', (data) => this.handleAnswerResult(data));
@@ -410,6 +433,8 @@ export class NetworkManager {
     handlePlayerDeath(playerId) {
         const localId = this.gameState?.localPlayerId || this.socket?.id;
         if (playerId === localId) {
+            // In RESULT phase we keep UI on results screen and ignore death transitions.
+            if (this._inResultPhase) return;
             this._didEmitLocalDied = true;
             const score = this.gameState?.players.get(localId)?.score ?? this.scene.player?.score ?? 0;
             const coins = this.gameState?.coinsCollected ?? this.scene.coinsCollected ?? 0;

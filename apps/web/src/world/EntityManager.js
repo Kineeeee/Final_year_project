@@ -86,6 +86,10 @@ export class EntityManager {
             });
         }
 
+        if (playerInfo.cosmetics) {
+            applyActiveCosmeticsToSnake(this.scene, otherPlayer, playerInfo.cosmetics);
+        }
+
         this.otherSnakes.set(playerInfo.playerId, otherPlayer);
         this.snakes.push(otherPlayer);
         return otherPlayer;
@@ -278,9 +282,12 @@ export class EntityManager {
             snake.speed = snake.slowSpeed;
         }
 
-        // Name/color live updates
+        // Name/color/cosmetics live updates
         if (data.name && snake.name !== data.name) snake.setName(data.name);
         if (data.color && snake.color !== data.color && snake.setColor) snake.setColor(data.color);
+        if (data.cosmetics) {
+            applyActiveCosmeticsToSnake(this.scene, snake, data.cosmetics);
+        }
     }
 
     // --- Foods ---

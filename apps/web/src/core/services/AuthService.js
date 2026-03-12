@@ -10,6 +10,10 @@ export class AuthService {
         return this._authRequest('login', { username, password });
     }
 
+    async socialLogin(provider, token) {
+        return this._authRequest('social-login', { provider, token });
+    }
+
     async register(username, password) {
         return this._authRequest('register', { username, password });
     }

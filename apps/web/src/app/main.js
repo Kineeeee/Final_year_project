@@ -10,6 +10,7 @@ import { ShootingScene } from '../modules/combat/ShootingScene';
 import { HowToPlayScene } from '../scenes/HowToPlayScene';
 import { AuthManager } from '../modules/auth/AuthManager';
 import { AchievementsScene } from '../modules/achievements/AchievementsScene';
+import { SettingsScene } from '../scenes/SettingsScene';
 
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
@@ -56,6 +57,7 @@ const config = {
         ShopScene,
         ShootingScene,
         AchievementsScene,
+        SettingsScene,
         HowToPlayScene,
         GameOver
     ]

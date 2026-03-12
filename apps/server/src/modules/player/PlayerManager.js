@@ -95,6 +95,7 @@ class PlayerManager {
             boostTimer: 0, // Deterministic shrink counter
             correctAnswers: 0,
             wrongAnswers: 0,
+            cosmetics: {}, // Achievement visual loadout
         };
 
         // Register in Redis
@@ -250,6 +251,9 @@ class PlayerManager {
             if (data.name) {
                 this.players[id].name = data.name;
             }
+            if (data.cosmetics) {
+                this.players[id].cosmetics = data.cosmetics;
+            }
 
             // SECURITY: Use verified username if passed from NetworkSystem
             if (data.username) {
@@ -294,6 +298,28 @@ class PlayerManager {
                                     this.players[id].inventory[item.itemId] = item.quantity;
                                 });
                             }
+                            
+                            // Load Authoritative Reward Inventory
+                            if (user.unlockedRewards && Array.isArray(user.unlockedRewards)) {
+                                this.players[id].unlockedRewards = user.unlockedRewards;
+                            } else {
+                                this.players[id].unlockedRewards = [];
+                            }
+                            
+                            // Client-Authority Cosmetic Sync
+                            if (this.players[id].cosmetics && Object.keys(this.players[id].cosmetics).length > 0) {
+                                const validCosmetics = {};
+                                for (const category in this.players[id].cosmetics) {
+                                    const rewardId = this.players[id].cosmetics[category];
+                                    if (rewardId && (this.players[id].unlockedRewards.includes(rewardId) || rewardId.endsWith('_default'))) {
+                                        validCosmetics[category] = rewardId;
+                                    }
+                                }
+                                this.players[id].cosmetics = validCosmetics;
+                                UserRepository.updateEquippedCosmetics(this.players[id].username, validCosmetics).catch(err => Logger.error('PlayerManager', `Cosmetics DB save error:`, err));
+                            } else if (user.equippedCosmetics) {
+                                this.players[id].cosmetics = user.equippedCosmetics;
+                            }
 
                             // Emit updates
                             const bus = this.container.get('eventBus');
@@ -309,6 +335,8 @@ class PlayerManager {
                                     color: this.players[id].color,
                                     name: this.players[id].name,
                                     highScore: user.highScore,
+                                    unlockedRewards: this.players[id].unlockedRewards,
+                                    cosmetics: this.players[id].cosmetics,
                                 }
                             });
 
@@ -316,6 +344,13 @@ class PlayerManager {
                             if (this.shopManager) {
                                 bus.emit('shopItems', { socketId: id, items: this.shopManager.getShopItems() });
                             }
+                            // Broadcast the updated properties to everyone so they see the new color/cosmetics
+                            this.container.get('eventBus').emit('playerProperties', {
+                                id: id,
+                                color: this.players[id].color,
+                                name: this.players[id].name,
+                                cosmetics: this.players[id].cosmetics,
+                            });
                         } else {
                             Logger.warn(
                                 'PlayerManager',
@@ -333,14 +368,15 @@ class PlayerManager {
                     const parsed = parseInt(data.coins);
                     this.players[id].coins = isNaN(parsed) ? 0 : Math.max(0, parsed);
                 }
+                
+                // Broadcast the updated properties for guests immediately
+                this.container.get('eventBus').emit('playerProperties', {
+                    id: id,
+                    color: this.players[id].color,
+                    name: this.players[id].name,
+                    cosmetics: this.players[id].cosmetics,
+                });
             }
-
-            // Broadcast the updated properties to everyone so they see the new color
-            this.container.get('eventBus').emit('playerProperties', {
-                id: id,
-                color: this.players[id].color,
-                name: this.players[id].name,
-            });
         }
     }
 

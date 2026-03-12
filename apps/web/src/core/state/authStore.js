@@ -30,6 +30,13 @@ class AuthStore {
         return data;
     }
 
+    async socialLogin(provider, token) {
+        const data = await this.authService.socialLogin(provider, token);
+        playerState.updateFromAuthData(data);
+        this.notify();
+        return data;
+    }
+
     async logout() {
         const username = localStorage.getItem('username');
         try {

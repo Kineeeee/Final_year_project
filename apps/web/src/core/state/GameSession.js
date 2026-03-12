@@ -6,6 +6,7 @@ import { InputController } from '../../modules/controls/NetworkInput';
 import { CommandQueue } from '../../services/network/CommandQueue';
 import { createPlayerInputCommand, createUseItemCommand } from '../../services/network/commands';
 import { effectManager } from '../../core/effects/EffectManager';
+import { GAME_PHASE } from './GamePhases';
 
 export class GameSession {
     constructor(scene, { mode, quizSource, playerDetails, customNamespace, roomMeta } = {}) {
@@ -236,6 +237,7 @@ export class GameSession {
 
     startGameOverOnce(payload = {}) {
         if (this._didStartGameOver) return;
+        if (this.scene?.phase === GAME_PHASE.RESULT) return;
         this._didStartGameOver = true;
 
         // Prevent Game scene update from continuing mid-frame after teardown
@@ -367,9 +369,14 @@ export class GameSession {
         if (now - this._localMissingSinceMs < 500) return;
 
         const score = this.scene.player?.score ?? 0;
-        const coins = this.gameState?.coinsCollected ?? this.scene.coinsCollected ?? 0;
-
-        this.startGameOverOnce({ score, coins });
+        const coins = this.gameState?.coinsCollected ?? this.scene?.coinsCollected ?? 0;
+        this.startGameOverOnce({ 
+            score, 
+            coins,
+            mode: this.mode,
+            quizSource: this.quizSource,
+            customNamespace: this.customNamespace 
+        });
     }
 
     _startMinimapLoop() {

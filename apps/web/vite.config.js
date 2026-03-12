@@ -20,8 +20,12 @@ export default defineConfig(({ mode }) => {
             assetsDir: 'assets',
             rollupOptions: {
                 output: {
-                    manualChunks: {
-                        phaser: ['phaser'],
+                    manualChunks(id) {
+                        if (id.includes('node_modules/phaser')) return 'phaser';
+                        if (id.includes('/src/modules/achievements/')) return 'achievements';
+                        if (id.includes('/src/ui/')) return 'ui-kit';
+                        if (id.includes('node_modules')) return 'vendor';
+                        return null;
                     },
                 },
             },
