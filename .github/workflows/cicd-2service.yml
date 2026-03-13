@@ -183,7 +183,7 @@ jobs:
             set +a
 
             # Validate required runtime env values to avoid opaque compose warnings/failures
-            for v in CORS_ORIGINS MONGO_URI REDIS_URL JWT_SECRET REFRESH_SECRET; do
+            for v in CORS_ORIGINS MONGO_URI JWT_SECRET REFRESH_SECRET; do
               if [ -z "${!v:-}" ]; then
                 echo "ERROR: Missing required variable in DEPLOY_ENV_PROD: $v"
                 exit 1

@@ -3,6 +3,8 @@ name: phaser-snake-prod
 services:
   api:
     image: ghcr.io/${GHCR_OWNER}/phaser-snake-api:${IMAGE_TAG:-latest}
+    depends_on:
+      - redis
     env_file:
       - .env.prod
     environment:
@@ -10,7 +12,7 @@ services:
       - PORT=3000
       - CORS_ORIGINS=${CORS_ORIGINS}
       - MONGO_URI=${MONGO_URI}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - JWT_SECRET=${JWT_SECRET}
       - REFRESH_SECRET=${REFRESH_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-info}
@@ -24,6 +26,16 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   web:
     image: ghcr.io/${GHCR_OWNER}/phaser-snake-web:${IMAGE_TAG:-latest}
