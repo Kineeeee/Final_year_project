@@ -180,10 +180,25 @@ jobs:
             . deploy/.env.prod
             set +a
 
+            # Validate required runtime env values to avoid opaque compose warnings/failures
+            for v in CORS_ORIGINS MONGO_URI REDIS_URL JWT_SECRET REFRESH_SECRET; do
+              if [ -z "${!v:-}" ]; then
+                echo "ERROR: Missing required variable in DEPLOY_ENV_PROD: $v"
+                exit 1
+              fi
+            done
+
+            COMPOSE_FILE=deploy/docker-compose.prod.yml
+
             compose() {
               if docker compose version >/dev/null 2>&1; then
                 docker compose "$@"
               elif command -v docker-compose >/dev/null 2>&1; then
+                # Legacy docker-compose (v1) doesn't support top-level `name:` in compose spec.
+                if grep -qE '^name:[[:space:]]' deploy/docker-compose.prod.yml; then
+                  sed '1{/^name:[[:space:]].*$/d;}' deploy/docker-compose.prod.yml > deploy/docker-compose.v1.yml
+                  COMPOSE_FILE=deploy/docker-compose.v1.yml
+                fi
                 docker-compose "$@"
               else
                 echo "ERROR: Neither 'docker compose' nor 'docker-compose' is available"
@@ -191,11 +206,11 @@ jobs:
               fi
             }
 
-            compose -f deploy/docker-compose.prod.yml pull
-            compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
+            compose -f "$COMPOSE_FILE" pull
+            compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
             # 5) Print status so workflow log proves containers are running
-            compose -f deploy/docker-compose.prod.yml ps
+            compose -f "$COMPOSE_FILE" ps
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 
             # 6) Cleanup dangling images
