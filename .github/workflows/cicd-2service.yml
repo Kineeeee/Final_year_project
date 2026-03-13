@@ -138,13 +138,27 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            script: |
             set -e
+            # 1. Khởi tạo thư mục dự án
             sudo mkdir -p /opt/phaser-snake
             sudo chown -R $USER:$USER /opt/phaser-snake
             cd /opt/phaser-snake
+
+            # 2. Tải file cấu hình trực tiếp từ GitHub về máy chủ
+            # Thay 'Online-version' bằng tên nhánh của bạn nếu cần
+            curl -fLo docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/Online-version/deploy/docker-compose.prod.yml
+
+            # 3. Đăng nhập vào GHCR (Bản sửa lỗi bảo mật)
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # 4. Thiết lập biến môi trường
             export IMAGE_TAG=latest
             export GHCR_OWNER=${{ github.repository_owner }}
-            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GHCR_PAT }}
-            docker compose -f deploy/docker-compose.prod.yml pull
-            docker compose -f deploy/docker-compose.prod.yml up -d
+
+            # 5. Triển khai (Dùng dấu gạch ngang docker-compose)
+            docker-compose -f docker-compose.prod.yml pull
+            docker-compose -f docker-compose.prod.yml up -d
+            
+            # 6. Dọn dẹp rác Docker để tiết kiệm ổ cứng EC2
             docker image prune -f
