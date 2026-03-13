@@ -138,27 +138,34 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            script: |
-            set -e
-            # 1. Khởi tạo thư mục dự án
-            sudo mkdir -p /opt/phaser-snake
-            sudo chown -R $USER:$USER /opt/phaser-snake
+            set -euo pipefail
+
+            # 1) Create deploy directories
+            sudo mkdir -p /opt/phaser-snake/deploy
+            sudo chown -R "$USER:$USER" /opt/phaser-snake
             cd /opt/phaser-snake
 
-            # 2. Tải file cấu hình trực tiếp từ GitHub về máy chủ
-            # Thay 'Online-version' bằng tên nhánh của bạn nếu cần
-            curl -fLo docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/Online-version/deploy/docker-compose.prod.yml
+            # 2) Fetch compose file from repository
+            curl -fLo deploy/docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/Online-version/deploy/docker-compose.prod.yml
 
-            # 3. Đăng nhập vào GHCR (Bản sửa lỗi bảo mật)
+            # 3) Ensure runtime env exists on server
+            if [ ! -f deploy/.env.prod ]; then
+              echo "ERROR: Missing /opt/phaser-snake/deploy/.env.prod on server"
+              echo "Create it once from deploy/.env.prod.example with real production values"
+              exit 1
+            fi
+
+            # 4) Login and deploy
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # 4. Thiết lập biến môi trường
             export IMAGE_TAG=latest
             export GHCR_OWNER=${{ github.repository_owner }}
 
-            # 5. Triển khai (Dùng dấu gạch ngang docker-compose)
-            docker-compose -f docker-compose.prod.yml pull
-            docker-compose -f docker-compose.prod.yml up -d
-            
-            # 6. Dọn dẹp rác Docker để tiết kiệm ổ cứng EC2
+            docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml pull
+            docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml up -d --remove-orphans
+
+            # 5) Print status so workflow log proves containers are running
+            docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml ps
+            docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+
+            # 6) Cleanup dangling images
             docker image prune -f
