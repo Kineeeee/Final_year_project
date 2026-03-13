@@ -161,6 +161,9 @@ jobs:
               "https://api.github.com/repos/${{ github.repository }}/contents/deploy/docker-compose.prod.yml?ref=${{ github.ref_name }}" \
               -o deploy/docker-compose.prod.yml
 
+            # Create runtime-compatible compose file (legacy parsers reject top-level `name:`)
+            sed '/^name:[[:space:]].*$/d' deploy/docker-compose.prod.yml > deploy/docker-compose.runtime.yml
+
             # 3) Write runtime env from GitHub secret
             if [ -z "${DEPLOY_ENV_PROD:-}" ]; then
               echo "ERROR: DEPLOY_ENV_PROD is empty"
@@ -188,17 +191,12 @@ jobs:
               fi
             done
 
-            COMPOSE_FILE=deploy/docker-compose.prod.yml
+            COMPOSE_FILE=deploy/docker-compose.runtime.yml
 
             compose() {
               if docker compose version >/dev/null 2>&1; then
                 docker compose "$@"
               elif command -v docker-compose >/dev/null 2>&1; then
-                # Legacy docker-compose (v1) doesn't support top-level `name:` in compose spec.
-                if grep -qE '^name:[[:space:]]' deploy/docker-compose.prod.yml; then
-                  sed '1{/^name:[[:space:]].*$/d;}' deploy/docker-compose.prod.yml > deploy/docker-compose.v1.yml
-                  COMPOSE_FILE=deploy/docker-compose.v1.yml
-                fi
                 docker-compose "$@"
               else
                 echo "ERROR: Neither 'docker compose' nor 'docker-compose' is available"
