@@ -20,6 +20,8 @@ services:
       - LLM_BASE_URL=${LLM_BASE_URL}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_MODEL=${LLM_MODEL}
+    networks:
+      - phaser-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
@@ -30,6 +32,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    networks:
+      - phaser-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -44,6 +48,8 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - phaser-net
     ports:
       - "80:80"
     healthcheck:
@@ -52,3 +58,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+networks:
+  phaser-net:
+    driver: bridge

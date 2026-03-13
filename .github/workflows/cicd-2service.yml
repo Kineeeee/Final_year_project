@@ -182,6 +182,11 @@ jobs:
             . deploy/.env.prod
             set +a
 
+            # Prefer internal Redis service when REDIS_URL is empty/whitespace.
+            if [ -z "$(printf '%s' "${REDIS_URL:-}" | tr -d '[:space:]')" ]; then
+              export REDIS_URL="redis://redis:6379"
+            fi
+
             # Validate required runtime env values to avoid opaque compose warnings/failures
             for v in CORS_ORIGINS MONGO_URI JWT_SECRET REFRESH_SECRET; do
               if [ -z "${!v:-}" ]; then
@@ -220,9 +225,18 @@ jobs:
               compose -f "$COMPOSE_FILE" up -d --remove-orphans
             fi
 
-            # 5) Print status so workflow log proves containers are running
+            # 5) Smoke checks for container-to-container communication
+            compose -f "$COMPOSE_FILE" exec -T api node -e "const net=require('net');const s=net.createConnection({host:'redis',port:6379},()=>{console.log('OK api->redis');s.end();process.exit(0)});s.on('error',(e)=>{console.error(e);process.exit(1)});setTimeout(()=>{console.error('timeout api->redis');process.exit(1)},5000)"
+
+            if command -v curl >/dev/null 2>&1; then
+              curl -fsS http://127.0.0.1/api/ >/dev/null
+            else
+              wget -qO- http://127.0.0.1/api/ >/dev/null
+            fi
+
+            # 6) Print status so workflow log proves containers are running
             compose -f "$COMPOSE_FILE" ps
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 
-            # 6) Cleanup dangling images
+            # 7) Cleanup dangling images
             docker image prune -f

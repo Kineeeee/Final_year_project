@@ -20,8 +20,41 @@ const deriveFromLocation = () => {
     }
 };
 
+const isLocalBrowserHost = (host) => host === 'localhost' || host === '127.0.0.1';
+
+const isInternalContainerHost = (host) => {
+    const internalHosts = new Set(['api', 'server', 'redis', 'localhost', '127.0.0.1', '0.0.0.0']);
+    return internalHosts.has(host);
+};
+
+const resolveInjectedServerUrl = () => {
+    if (typeof __SERVER_URL__ === 'undefined' || !__SERVER_URL__) return null;
+
+    // Support relative values by resolving to current origin.
+    if (typeof __SERVER_URL__ === 'string' && __SERVER_URL__.startsWith('/')) {
+        return deriveFromLocation();
+    }
+
+    if (typeof window === 'undefined' || !window.location) return __SERVER_URL__;
+
+    try {
+        const injectedUrl = new URL(__SERVER_URL__);
+        const browserHost = window.location.hostname;
+
+        // When the game is served from a public host, ignore internal-only
+        // Docker hostnames accidentally injected at build time.
+        if (!isLocalBrowserHost(browserHost) && isInternalContainerHost(injectedUrl.hostname)) {
+            return null;
+        }
+    } catch {
+        return null;
+    }
+
+    return __SERVER_URL__;
+};
+
 const SERVER_URL =
-    (typeof __SERVER_URL__ !== 'undefined' ? __SERVER_URL__ : null) ||
+    resolveInjectedServerUrl() ||
     deriveFromLocation() ||
     'http://localhost:3000';
 
