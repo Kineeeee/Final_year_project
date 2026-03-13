@@ -3,6 +3,7 @@ import { Logger } from '../utils/Logger';
 import { Snake } from '../modules/snake/Snake';
 import { UIButton } from '../ui/UIButton';
 import { COLORS, TEXT_STYLES } from '../ui/UIConstants';
+import { CONFIG } from '../config/AppConfig';
 
 export class CustomizeScene extends Scene {
     constructor() {
@@ -187,7 +188,7 @@ export class CustomizeScene extends Scene {
 
         // Save to server
         if (username !== 'Guest' && !username.startsWith('Guest_')) {
-            const url = `${location.protocol}//${location.hostname}:3000/api/auth/update-color`;
+                const url = `${CONFIG.SERVER_URL}/api/auth/update-color`;
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
