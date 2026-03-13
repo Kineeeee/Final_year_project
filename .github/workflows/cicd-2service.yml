@@ -139,6 +139,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -e
+            mkdir -p /opt/phaser-snake
             cd /opt/phaser-snake
             export IMAGE_TAG=latest
             export GHCR_OWNER=${{ github.repository_owner }}
