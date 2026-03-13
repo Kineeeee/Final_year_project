@@ -175,11 +175,27 @@ jobs:
             export IMAGE_TAG=latest
             export GHCR_OWNER=${{ github.repository_owner }}
 
-            docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml pull
-            docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml up -d --remove-orphans
+            # Load runtime env for compose interpolation (portable across compose versions)
+            set -a
+            . deploy/.env.prod
+            set +a
+
+            compose() {
+              if docker compose version >/dev/null 2>&1; then
+                docker compose "$@"
+              elif command -v docker-compose >/dev/null 2>&1; then
+                docker-compose "$@"
+              else
+                echo "ERROR: Neither 'docker compose' nor 'docker-compose' is available"
+                exit 1
+              fi
+            }
+
+            compose -f deploy/docker-compose.prod.yml pull
+            compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
 
             # 5) Print status so workflow log proves containers are running
-            docker compose --env-file deploy/.env.prod -f deploy/docker-compose.prod.yml ps
+            compose -f deploy/docker-compose.prod.yml ps
             docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
 
             # 6) Cleanup dangling images
