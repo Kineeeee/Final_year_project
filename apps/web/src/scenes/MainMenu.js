@@ -1,9 +1,9 @@
 import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
-import { playerState } from '../core/services/PlayerState';
-import { AuthService } from '../core/services/AuthService';
-import { overlayBlocker } from '../core/services/OverlayBlocker';
-import { authStore } from '../core/state/AuthStore';
+import { playerState } from '../core/services/PlayerState.js';
+import { AuthService } from '../core/services/AuthService.js';
+import { overlayBlocker } from '../core/services/OverlayBlocker.js';
+import { authStore } from '../core/state/AuthStore.js';
 import { ProfileModal } from '../ui/ProfileModal';
 import { RewardsInventoryModal } from '../ui/RewardsInventoryModal';
 import { MainMenuFlowController } from './controllers/MainMenuFlowController';

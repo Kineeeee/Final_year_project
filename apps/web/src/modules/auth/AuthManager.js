@@ -1,6 +1,6 @@
-import { authStore } from '../../core/state/AuthStore';
-import { AuthService } from '../../core/services/AuthService';
-import { playerState } from '../../core/services/PlayerState';
+import { authStore } from '../../core/state/AuthStore.js';
+import { AuthService } from '../../core/services/AuthService.js';
+import { playerState } from '../../core/services/PlayerState.js';
 
 export class AuthManager {
     constructor(gameStartCallback) {
