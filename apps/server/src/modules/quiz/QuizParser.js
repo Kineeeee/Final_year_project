@@ -61,7 +61,7 @@ function splitBlocks(text) {
             return;
         }
 
-        const isQuestionHeader = /^\d+[\).\s-]/.test(trimmed);
+        const isQuestionHeader = /^\d+[).\s-]/.test(trimmed);
         if (isQuestionHeader && buffer.length) {
             flush();
         }
@@ -79,8 +79,8 @@ function parseAnswers(lines) {
         let isCorrect = false;
 
         // Remove bullet prefixes (A. , 1) , - , * etc.)
-        text = text.replace(/^[A-Da-d]\s*[\).\-\:]\s*/, '');
-        text = text.replace(/^\d+\s*[\).\-\:]\s*/, '');
+        text = text.replace(/^[A-Da-d]\s*[).\-:]\s*/, '');
+        text = text.replace(/^\d+\s*[).\-:]\s*/, '');
         text = text.replace(/^[-•]\s*/, '');
 
         // Detect correctness markers
@@ -121,7 +121,7 @@ function parseBlock(block) {
         return { error: 'Thiếu đáp án, cần 1 câu hỏi và ít nhất 2 đáp án' };
     }
 
-    const questionLine = lines[0].replace(/^\d+[\).\-\:]\s*/, '');
+    const questionLine = lines[0].replace(/^\d+[).\-:]\s*/, '');
     const answers = parseAnswers(lines.slice(1));
 
     return { question: questionLine.trim(), answers };

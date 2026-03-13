@@ -100,3 +100,5 @@ async function deleteQuestion(id) {
         alert('Failed to delete: ' + err.message);
     }
 }
+
+window.deleteQuestion = deleteQuestion;
