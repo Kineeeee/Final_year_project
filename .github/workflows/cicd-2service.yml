@@ -176,7 +176,6 @@ jobs:
             # 4) Login and deploy
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             export IMAGE_TAG=latest
-            export GHCR_OWNER=${{ github.repository_owner }}
 
             # Load runtime env for compose interpolation (portable across compose versions)
             set -a
@@ -190,6 +189,9 @@ jobs:
                 exit 1
               fi
             done
+
+            # GHCR repository path must be lowercase
+            export GHCR_OWNER="$(printf '%s' "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
 
             COMPOSE_FILE=deploy/docker-compose.runtime.yml
 
