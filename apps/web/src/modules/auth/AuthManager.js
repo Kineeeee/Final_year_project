@@ -1,4 +1,4 @@
-import { authStore } from '../../core/state/authStore.js';
+import { authStore } from '../../core/state/AuthStore.js';
 import { AuthService } from '../../core/services/AuthService.js';
 import { playerState } from '../../core/services/PlayerState.js';
 
