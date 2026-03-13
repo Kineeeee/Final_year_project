@@ -145,8 +145,12 @@ jobs:
             sudo chown -R "$USER:$USER" /opt/phaser-snake
             cd /opt/phaser-snake
 
-            # 2) Fetch compose file from repository
-            curl -fLo deploy/docker-compose.prod.yml https://raw.githubusercontent.com/${{ github.repository }}/Online-version/deploy/docker-compose.prod.yml
+            # 2) Fetch compose file from current workflow ref (works for private repos)
+            curl -fsSL \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/deploy/docker-compose.prod.yml?ref=${{ github.ref_name }}" \
+              -o deploy/docker-compose.prod.yml
 
             # 3) Ensure runtime env exists on server
             if [ ! -f deploy/.env.prod ]; then
