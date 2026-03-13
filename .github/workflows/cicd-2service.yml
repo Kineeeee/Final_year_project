@@ -194,11 +194,14 @@ jobs:
             export GHCR_OWNER="$(printf '%s' "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
 
             COMPOSE_FILE=deploy/docker-compose.runtime.yml
+            COMPOSE_IMPL=
 
             compose() {
               if docker compose version >/dev/null 2>&1; then
+                COMPOSE_IMPL=v2
                 docker compose "$@"
               elif command -v docker-compose >/dev/null 2>&1; then
+                COMPOSE_IMPL=v1
                 docker-compose "$@"
               else
                 echo "ERROR: Neither 'docker compose' nor 'docker-compose' is available"
@@ -207,7 +210,15 @@ jobs:
             }
 
             compose -f "$COMPOSE_FILE" pull
-            compose -f "$COMPOSE_FILE" up -d --remove-orphans
+
+            # docker-compose v1.29 can fail with KeyError: 'ContainerConfig' during recreate.
+            # Use a clean down/up flow for v1 to avoid that code path.
+            if [ "$COMPOSE_IMPL" = "v1" ]; then
+              compose -f "$COMPOSE_FILE" down --remove-orphans || true
+              compose -f "$COMPOSE_FILE" up -d
+            else
+              compose -f "$COMPOSE_FILE" up -d --remove-orphans
+            fi
 
             # 5) Print status so workflow log proves containers are running
             compose -f "$COMPOSE_FILE" ps
