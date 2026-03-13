@@ -1,6 +1,6 @@
-import { AuthService } from '../services/AuthService';
-import { playerState } from '../services/PlayerState';
-import { socketService } from '../services/SocketService';
+import { AuthService } from '../services/AuthService.js';
+import { playerState } from '../services/PlayerState.js';
+import { socketService } from '../services/SocketService.js';
 
 class AuthStore {
     constructor() {
