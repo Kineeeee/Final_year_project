@@ -8,7 +8,7 @@ const {
     PLAYER_SCALE_GROWTH,
     MAX_PLAYER_SCALE,
     COIN_CONFIG
-} = require('../../config/constants');
+} = require('../../config/ServerConstants');
 const Logger = require('../../utils/Logger');
 
 class CollisionSystem {

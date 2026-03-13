@@ -9,10 +9,11 @@ const connectDB = require('./src/infra/database/MongoConnection');
 const authRoutes = require('./src/modules/auth/http/AuthRoutes.js');
 const Logger = require('./src/utils/Logger');
 
-const { PORT } = require('./src/config/constants');
+const { PORT } = require('./src/config/ServerConstants');
 const GameServer = require('./src/GameServer');
 const userQuizRoutes = require('./src/modules/quiz/UserQuizRoutes');
 const roomRoutes = require('./src/modules/room/RoomRoutes');
+const chatbotRoutes = require('./src/modules/bot/ChatbotRoutes');
 const RoomRegistry = require('./src/modules/room/RoomRegistry');
 
 const app = express();
@@ -41,7 +42,7 @@ const cookieParser = require('cookie-parser');
 
 // 2.Middleware
 const rawOrigins =
-    process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://10.25.193.148:5173';
+    process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173';
 const allowedOrigins = rawOrigins.split(',').map((o) => o.trim()).filter(Boolean);
 
 // Allow wildcard in dev by setting CORS_ORIGINS="*"
@@ -65,6 +66,7 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/questions', require('./src/modules/quiz/QuestionRoutes'));
 app.use('/api/user-quiz', userQuizRoutes);
 app.use('/api/rooms', roomRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 app.get('/', function (req, res) {
     res.send('Server is running');

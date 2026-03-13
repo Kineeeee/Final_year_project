@@ -3,7 +3,7 @@ import { CameraManager } from '../core/camera/CameraManager';
 import { effectManager } from '../core/effects/EffectManager';
 import { Logger } from '../utils/Logger';
 
-import { CONFIG } from '../config/constants';
+import { CONFIG } from '../config/AppConfig';
 import { GameSession } from '../core/state/GameSession';
 import { achievementManager } from '../modules/achievements/AchievementManager';
 import { applyActiveTheme, applyActiveCosmeticsToSnake } from '../modules/achievements/CosmeticApplier';

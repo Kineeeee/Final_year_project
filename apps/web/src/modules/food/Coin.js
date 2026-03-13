@@ -1,5 +1,5 @@
 import { Math as PhaserMath } from 'phaser';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 export class Coin extends Phaser.GameObjects.Container {
     constructor(scene, x, y, id, value) {

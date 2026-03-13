@@ -2,12 +2,12 @@ const express = require('express');
 const multer = require('multer');
 const mammoth = require('mammoth');
 
-const requireAuth = require('../auth/http/requireAuth');
+const requireAuth = require('../auth/http/RequireAuthMiddleware');
 const UserQuiz = require('../../models/UserQuiz');
 const Logger = require('../../utils/Logger');
 const { parseTextToQuiz } = require('./QuizParser');
 const { validateQuiz, CATEGORY_ENUM } = require('./QuizValidator');
-const { callAiParser } = require('./aiParserAdapter');
+const { callAiParser } = require('./LlmClient');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });

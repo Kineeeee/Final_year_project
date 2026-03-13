@@ -3,7 +3,7 @@ import { Logger } from '../utils/Logger';
 import { playerState } from '../core/services/PlayerState';
 import { AuthService } from '../core/services/AuthService';
 import { overlayBlocker } from '../core/services/OverlayBlocker';
-import { authStore } from '../core/state/authStore';
+import { authStore } from '../core/state/AuthStore';
 import { ProfileModal } from '../ui/ProfileModal';
 import { RewardsInventoryModal } from '../ui/RewardsInventoryModal';
 import { MainMenuFlowController } from './controllers/MainMenuFlowController';
@@ -88,7 +88,7 @@ export class MainMenu extends Scene {
         }
 
         // C. TITLE TEXT (VẼ SAU CÙNG ĐỂ NỔI LÊN TRÊN)
-        const titleText = this.add.text(centerX, headerY, 'SNAKE ARENA', { // +10 để dịch chữ xuống dưới 1 chút, tránh Logo
+        const titleText = this.add.text(centerX, headerY, 'SNAKE STUDY', { // +10 để dịch chữ xuống dưới 1 chút, tránh Logo
             fontFamily: '"Press Start 2P", monospace',
             fontSize: `${scaleVal(isMobile ? 30 : 38)}px`,
             color: '#ffffff',
@@ -264,6 +264,14 @@ export class MainMenu extends Scene {
                 color: 0x8e44ad,
                 action: () => { this.scene.start('CustomizeScene'); }
             },
+                {
+                    label: 'CHATBOT',
+                    color: 0x16a085,
+                    action: () => {
+                        this.scene.launch('ChatbotScene');
+                        this.scene.pause('MainMenu');
+                    }
+                },
             {
                 label: 'UPLOAD QUIZ',
                 color: 0x2980b9,

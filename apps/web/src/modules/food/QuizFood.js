@@ -1,5 +1,5 @@
 import Phaser, { Math as PhaserMath } from 'phaser';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 export class QuizFood extends Phaser.GameObjects.Container {
     constructor(scene, x, y, data) {

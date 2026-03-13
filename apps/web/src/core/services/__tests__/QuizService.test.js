@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QuizService } from '../QuizService';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 // Mock Config and Logger
-vi.mock('../../config/constants', () => ({
+vi.mock('../../config/AppConfig', () => ({
     CONFIG: { SERVER_URL: 'http://localhost:3000' }
 }));
 

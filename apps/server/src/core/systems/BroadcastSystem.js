@@ -1,6 +1,6 @@
 const Logger = require('../../utils/Logger');
 const RedisClient = require('../../infra/database/RedisConnection');
-const { BROADCAST_FPS, LEADERBOARD_FPS, LEADERBOARD_TOP_N, INTEREST_VIEW_RADIUS } = require('../../config/constants');
+const { BROADCAST_FPS, LEADERBOARD_FPS, LEADERBOARD_TOP_N, INTEREST_VIEW_RADIUS } = require('../../config/ServerConstants');
 const { SOCKET_EVENT } = require('../../events/EventTypes');
 
 class BroadcastSystem {

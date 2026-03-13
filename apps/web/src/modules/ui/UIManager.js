@@ -3,7 +3,7 @@ import { Leaderboard } from '../leaderboard/Leaderboard';
 import { MobileControls } from '../controls/MobileControls';
 import { ItemSlots } from '../inventory/ItemSlots';
 import { Minimap } from '../minimap/Minimap';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 export class UIManager {
     constructor(scene, mode = 'normal', { onExit } = {}) {

@@ -8,7 +8,7 @@ const {
     MAX_PLAYER_SCALE,
     PLAYER_SCALE_BASE,
     PLAYER_SCALE_GROWTH
-} = require('../../config/constants');
+} = require('../../config/ServerConstants');
 const Logger = require('../../utils/Logger');
 
 class MovementSystem {

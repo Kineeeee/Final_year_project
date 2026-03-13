@@ -1,4 +1,4 @@
-import { authStore } from '../../core/state/authStore';
+import { authStore } from '../../core/state/AuthStore';
 import { AuthService } from '../../core/services/AuthService';
 import { playerState } from '../../core/services/PlayerState';
 
@@ -75,11 +75,7 @@ export class AuthManager {
 
         this.googleBtn?.addEventListener('click', () => this.handleGoogleClick());
         this.facebookBtn?.addEventListener('click', () => {
-            if (window.FB) {
-                window.FB.login(this.handleFacebookCallback.bind(this), { scope: 'public_profile,email' });
-            } else {
-                this.showMessage('Facebook SDK not loaded yet', true);
-            }
+            this.showMessage('Login via facebook is coming soon', false);
         });
 
         this.resetSubmit?.addEventListener('click', () => this.handleReset());

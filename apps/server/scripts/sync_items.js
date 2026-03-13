@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { ITEMS } = require('../src/config/constants');
+const { ITEMS } = require('../src/config/ServerConstants');
 const Item = require('../src/models/Item');
 const connectDB = require('./src/config/db');
 const Logger = require('../src/utils/Logger');

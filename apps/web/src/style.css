@@ -422,7 +422,7 @@ canvas {
     color: #0f172a;
     box-shadow: 0 12px 30px rgba(100, 169, 255, 0.35);
 }
-.primary-btn:hover { transform: translateY(-1px); }
+.primary-btn:hover { transform: translateY(-3px); }
 .primary-btn:active { transform: translateY(0); box-shadow: 0 8px 20px rgba(100, 169, 255, 0.28); }
 
 .ghost-btn {
@@ -431,7 +431,7 @@ canvas {
     border: 1px dashed #cbd5ff;
     margin-top: 8px;
 }
-.ghost-btn:hover { transform: translateY(-1px); }
+.ghost-btn:hover { transform: translateY(-3px); color: #08beeb; }
 
 .divider {
     text-align: center;
@@ -467,6 +467,8 @@ canvas {
     width: 24px;
     height: 24px;
 }
+.social-btn:hover { transform: translateY(-3px); }
+.social-btn:active { transform: translateY(0); box-shadow: 0 8px 20px rgba(100, 169, 255, 0.28); }
 
 .social-btn.google {
     background: #fff;

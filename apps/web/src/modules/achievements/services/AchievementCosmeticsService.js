@@ -1,4 +1,4 @@
-import { REWARDS } from '../rewardsCatalog';
+import { REWARDS } from '../RewardsCatalog';
 import { Logger } from '../../../utils/Logger';
 
 export function slotForRewardType(type) {

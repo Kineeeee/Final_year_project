@@ -1,4 +1,4 @@
-const { FPS, FOOD_REFILL_INTERVAL, BROADCAST_FPS, INTEREST_VIEW_RADIUS, LEADERBOARD_FPS, LEADERBOARD_TOP_N } = require('./config/constants');
+const { FPS, FOOD_REFILL_INTERVAL, BROADCAST_FPS, INTEREST_VIEW_RADIUS, LEADERBOARD_FPS, LEADERBOARD_TOP_N } = require('./config/ServerConstants');
 const { GAME_PHASE } = require('./core/GamePhases');
 const PlayerManager = require('./modules/player/PlayerManager');
 const FoodManager = require('./modules/food/FoodManager');
@@ -76,7 +76,7 @@ class GameServer {
         this.eventBus = new EventBus();
 
         // 1b. Initialize Spatial Grid (Before Managers use it)
-        const { WORLD_SIZE } = require('./config/constants');
+        const { WORLD_SIZE } = require('./config/ServerConstants');
         const SpatialGrid = require('./core/SpatialGrid');
         this.spatialGrid = new SpatialGrid(WORLD_SIZE, 500);
         this.container.register('spatialGrid', this.spatialGrid);
@@ -130,7 +130,7 @@ class GameServer {
     }
 
     shouldEnableBots() {
-        const { BOT_COUNT } = require('./config/constants');
+        const { BOT_COUNT } = require('./config/ServerConstants');
         return this.config.mode !== 'quiz' && BOT_COUNT > 0;
     }
 

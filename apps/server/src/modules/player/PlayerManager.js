@@ -15,7 +15,7 @@ const {
     PLAYER_SCALE_BASE,
     PLAYER_SCALE_GROWTH,
     COIN_CONFIG,
-} = require('../../config/constants');
+} = require('../../config/ServerConstants');
 const UserRepository = require('../../repositories/UserRepository');
 const Logger = require('../../utils/Logger');
 

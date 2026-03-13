@@ -3,8 +3,6 @@ import {
     ActivityIndicator,
     Animated,
     Linking,
-    PermissionsAndroid,
-    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -14,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
-import { CONFIG } from '../config/constants';
+import { CONFIG } from '../config/AppConfig';
 
 const STATUS = {
     CONNECTING: 'connecting',
@@ -30,6 +28,15 @@ export default function GameScreen() {
     const [hintVisible, setHintVisible] = useState(false);
 
     const chromeOpacity = useRef(new Animated.Value(1)).current;
+    const allowedOriginRef = useRef(null);
+
+    if (!allowedOriginRef.current) {
+        try {
+            allowedOriginRef.current = new URL(CONFIG.SERVER_URL).origin;
+        } catch {
+            allowedOriginRef.current = null;
+        }
+    }
 
     useEffect(() => {
         // Khóa màn hình ngang để bám sát gameplay
@@ -47,29 +54,6 @@ export default function GameScreen() {
                 ScreenOrientation.unlockAsync().catch(() => {});
             }
         };
-    }, []);
-
-    useEffect(() => {
-        // Chủ động xin quyền camera trên Android để popup hệ thống xuất hiện trước khi vào WebView (shooting mode).
-        const requestCamera = async () => {
-            if (Platform.OS !== 'android') return;
-            try {
-                const granted = await PermissionsAndroid.request(
-                    PermissionsAndroid.PERMISSIONS.CAMERA,
-                    {
-                        title: 'Cho phép dùng camera',
-                        message: 'Camera được dùng để tracking tay trong chế độ Shooting.',
-                        buttonPositive: 'OK',
-                    }
-                );
-                if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-                    console.warn('Camera permission denied');
-                }
-            } catch (e) {
-                console.warn('Camera permission request failed', e);
-            }
-        };
-        requestCamera();
     }, []);
 
     useEffect(() => {
@@ -133,6 +117,27 @@ export default function GameScreen() {
 
     const progressWidth = `${Math.max(progress, 0.05) * 100}%`;
 
+    const handleShouldStartLoad = (request) => {
+        const nextUrl = request?.url;
+        if (!nextUrl) return false;
+
+        if (nextUrl.startsWith('about:blank')) return true;
+
+        try {
+            const nextOrigin = new URL(nextUrl).origin;
+            if (!allowedOriginRef.current || nextOrigin === allowedOriginRef.current) {
+                return true;
+            }
+        } catch {
+            return false;
+        }
+
+        Linking.openURL(nextUrl).catch((e) => {
+            console.warn('Không mở được link ngoài WebView', e);
+        });
+        return false;
+    };
+
     return (
         <View style={styles.root}>
             <StatusBar style="light" hidden />
@@ -153,11 +158,12 @@ export default function GameScreen() {
                 domStorageEnabled
                 mediaPlaybackRequiresUserAction={false}
                 allowsInlineMediaPlayback
-                mediaCapturePermissionGrantType="grant"
+                mediaCapturePermissionGrantType="grantIfSameHostElsePrompt"
                 androidHardwareAccelerationDisabled={false}
                 overScrollMode="never"
                 scalesPageToFit={false}
                 contentInsetAdjustmentBehavior="never"
+                onShouldStartLoadWithRequest={handleShouldStartLoad}
                 onLoadStart={() => setStatus(STATUS.CONNECTING)}
                 onLoadProgress={({ nativeEvent }) => setProgress(nativeEvent.progress ?? 0)}
                 onLoadEnd={() => setStatus(STATUS.READY)}

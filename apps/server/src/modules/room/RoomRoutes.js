@@ -1,19 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const AuthService = require('../auth/AuthService');
+const requireAuth = require('../auth/http/RequireAuthMiddleware');
 const UserQuiz = require('../../models/UserQuiz');
 const RoomRegistry = require('./RoomRegistry');
 const { validateRoomCode } = require('../../utils/Validation');
-
-// Simple auth middleware: expects Bearer token or token in body
-function requireAuth(req, res, next) {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : req.body.token;
-    const decoded = AuthService.verifyToken(token);
-    if (!decoded) return res.status(401).json({ message: 'Unauthorized' });
-    req.user = decoded;
-    return next();
-}
 
 router.post('/custom', requireAuth, async (req, res) => {
     try {

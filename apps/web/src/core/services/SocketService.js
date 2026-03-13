@@ -1,6 +1,6 @@
 import io from 'socket.io-client';
 import parser from 'socket.io-msgpack-parser';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 import { Logger } from '../../utils/Logger';
 
 class SocketService {

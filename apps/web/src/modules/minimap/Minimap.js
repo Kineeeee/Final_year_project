@@ -1,5 +1,5 @@
 import { COLORS } from '../../ui/UIConstants';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 export class Minimap {
     constructor(scene) {

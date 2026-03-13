@@ -1,7 +1,7 @@
 const Item = require('../../models/Item');
 const User = require('../../models/User');
 const Logger = require('../../utils/Logger');
-const { ITEMS } = require('../../config/constants');
+const { ITEMS } = require('../../config/ServerConstants');
 
 const Container = require('../../core/ServiceContainer');
 

@@ -1,4 +1,4 @@
-const { MAX_FOOD, WORLD_SIZE, COIN_CONFIG, QUIZ_CONFIG } = require('../../config/constants');
+const { MAX_FOOD, WORLD_SIZE, COIN_CONFIG, QUIZ_CONFIG } = require('../../config/ServerConstants');
 
 class FoodManager {
     constructor(io, container) {

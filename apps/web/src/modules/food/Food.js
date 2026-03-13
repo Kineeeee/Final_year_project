@@ -1,6 +1,6 @@
 import Phaser, { Math as PhaserMath } from 'phaser';
 import { Logger } from '../../utils/Logger';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 export class Food extends Phaser.GameObjects.Container {
     constructor(scene, x, y, color) {

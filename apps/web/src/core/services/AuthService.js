@@ -1,4 +1,4 @@
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 import { Logger } from '../../utils/Logger';
 
 export class AuthService {

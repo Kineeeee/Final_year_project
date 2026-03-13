@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { achievementManager } from '../modules/achievements/AchievementManager';
-import { REWARDS, ensureSkinTextureForScene } from '../modules/achievements/rewardsCatalog';
+import { REWARDS, ensureSkinTextureForScene } from '../modules/achievements/RewardsCatalog';
 
 export class RewardsInventoryModal extends Phaser.GameObjects.Container {
     constructor(scene, x, y, options = {}) {

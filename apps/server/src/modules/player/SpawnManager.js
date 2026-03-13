@@ -1,4 +1,4 @@
-const { WORLD_SIZE, SAFE_SPAWN_RADIUS } = require('../../config/constants');
+const { WORLD_SIZE, SAFE_SPAWN_RADIUS } = require('../../config/ServerConstants');
 const Logger = require('../../utils/Logger');
 
 class SpawnManager {

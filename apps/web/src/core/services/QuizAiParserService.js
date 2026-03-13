@@ -2,10 +2,10 @@
  * Client-side helper to request AI parsing/normalization if backend supports it.
  * Falls back to server-side parse endpoint when AI unavailable.
  */
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 import { Logger } from '../../utils/Logger';
 
-export class AiQuizParser {
+export class QuizAiParserService {
     async parse({ rawText, category }) {
         try {
             const res = await fetch(`${CONFIG.SERVER_URL}/api/user-quiz/ai-parse`, {
@@ -21,7 +21,7 @@ export class AiQuizParser {
             if (!res.ok) throw new Error(data?.message || 'AI parse failed');
             return data;
         } catch (e) {
-            Logger.error('AiQuizParser', 'AI parse failed, falling back', e);
+            Logger.error('QuizAiParserService', 'AI parse failed, falling back', e);
             throw e;
         }
     }
@@ -32,4 +32,4 @@ export class AiQuizParser {
     }
 }
 
-export const aiQuizParser = new AiQuizParser();
+export const quizAiParserService = new QuizAiParserService();

@@ -2,7 +2,7 @@ import { Math as PhaserMath } from 'phaser';
 import { EyePair } from './EyePair';
 import { Shadow } from './Shadow';
 import { Logger } from '../../utils/Logger';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 export class Snake {
     constructor(scene, x, y, color, spriteKey = 'snake-circle', segmentPool = null) {

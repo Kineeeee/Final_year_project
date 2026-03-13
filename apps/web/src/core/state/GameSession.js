@@ -1,5 +1,5 @@
 import { NetworkManager } from '../network/NetworkManager';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 import { GameState } from './GameState';
 import { EntityManager } from '../../world/EntityManager';
 import { InputController } from '../../modules/controls/NetworkInput';

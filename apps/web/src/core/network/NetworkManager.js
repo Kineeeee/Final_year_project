@@ -1,7 +1,7 @@
 import { socketService } from '../../core/services/SocketService';
 import parser from 'socket.io-msgpack-parser';
 import { Logger } from '../../utils/Logger';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 import { achievementManager } from '../../modules/achievements/AchievementManager';
 
 export class NetworkManager {

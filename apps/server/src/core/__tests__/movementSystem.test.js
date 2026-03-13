@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const MovementSystem = require('../systems/MovementSystem');
-const { TURN_SPEED } = require('../../config/constants');
+const { TURN_SPEED } = require('../../config/ServerConstants');
 
 const dummyContainer = {
     get() {

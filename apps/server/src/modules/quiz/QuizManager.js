@@ -1,6 +1,6 @@
 const Question = require('../../models/Question');
 const Logger = require('../../utils/Logger');
-const { WORLD_SIZE } = require('../../config/constants');
+const { WORLD_SIZE } = require('../../config/ServerConstants');
 const { GAME_PHASE, ROOM_LIFECYCLE } = require('../../core/GamePhases');
 
 class QuizManager {

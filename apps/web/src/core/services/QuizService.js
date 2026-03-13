@@ -1,5 +1,5 @@
 import { Logger } from '../../utils/Logger';
-import { CONFIG } from '../../config/constants';
+import { CONFIG } from '../../config/AppConfig';
 
 export class QuizService {
     constructor() {

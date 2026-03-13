@@ -1,4 +1,4 @@
-const { BOT_COUNT, BOT_NAMES } = require('../../config/constants');
+const { BOT_COUNT, BOT_NAMES } = require('../../config/ServerConstants');
 const Logger = require('../../utils/Logger');
 
 class BotManager {

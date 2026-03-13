@@ -4,6 +4,7 @@ import { UIScene } from '../scenes/UIScene';
 import { GameOver } from '../scenes/GameOver';
 import { MainMenu } from '../scenes/MainMenu';
 import { Preloader } from '../scenes/Preloader';
+import { ChatbotScene } from '../scenes/ChatbotScene';
 import { CustomizeScene } from '../scenes/CustomizeScene';
 import { ShopScene } from '../modules/shop/ShopScene';
 import { ShootingScene } from '../modules/combat/ShootingScene';
@@ -47,10 +48,14 @@ const config = {
             debug: false
         }
     },
+    dom: {
+        createContainer: true
+    },
     scene: [
         Boot,
         Preloader,
         MainMenu,
+        ChatbotScene,
         CustomizeScene,
         Game,
         UIScene,

@@ -1,4 +1,4 @@
-import { ITEMS } from '../../config/items.js';
+import { ITEMS } from '../../config/ItemsConfig.js';
 import { COLORS, TEXT_STYLES } from '../../ui/UIConstants';
 
 export class ItemSlots {
