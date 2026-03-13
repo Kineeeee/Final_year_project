@@ -94,7 +94,7 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request'
     needs: build-and-push
-    runs-on: ubuntu
+    runs-on: ubuntu-latest
     steps:
       - name: Validate deploy secrets
         env:
