@@ -102,6 +102,7 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          DEPLOY_ENV_PROD: ${{ secrets.DEPLOY_ENV_PROD }}
         run: |
           set -e
           missing=0
@@ -126,6 +127,11 @@ jobs:
             missing=1
           fi
 
+          if [ -z "$DEPLOY_ENV_PROD" ]; then
+            echo "::error::Missing required secret: DEPLOY_ENV_PROD"
+            missing=1
+          fi
+
           if [ "$missing" -ne 0 ]; then
             echo "::error::Deployment secrets validation failed"
             exit 1
@@ -133,10 +139,13 @@ jobs:
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_ENV_PROD: ${{ secrets.DEPLOY_ENV_PROD }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: DEPLOY_ENV_PROD
           script: |
             set -euo pipefail
 
@@ -152,12 +161,14 @@ jobs:
               "https://api.github.com/repos/${{ github.repository }}/contents/deploy/docker-compose.prod.yml?ref=${{ github.ref_name }}" \
               -o deploy/docker-compose.prod.yml
 
-            # 3) Ensure runtime env exists on server
-            if [ ! -f deploy/.env.prod ]; then
-              echo "ERROR: Missing /opt/phaser-snake/deploy/.env.prod on server"
-              echo "Create it once from deploy/.env.prod.example with real production values"
+            # 3) Write runtime env from GitHub secret
+            if [ -z "${DEPLOY_ENV_PROD:-}" ]; then
+              echo "ERROR: DEPLOY_ENV_PROD is empty"
               exit 1
             fi
+
+            umask 077
+            printf '%s\n' "$DEPLOY_ENV_PROD" > deploy/.env.prod
 
             # 4) Login and deploy
             echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
