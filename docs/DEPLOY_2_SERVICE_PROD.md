@@ -23,6 +23,7 @@ Database and Redis are expected to be managed services (recommended for producti
 - MONGO_URI: managed MongoDB connection string
 - REDIS_URL: managed Redis URL
 - JWT_SECRET and REFRESH_SECRET: strong secrets
+- COOKIE_SECURE (optional): true for HTTPS, set false only if you temporarily serve plain HTTP by IP
 
 ## 3) Local production test before pushing
 

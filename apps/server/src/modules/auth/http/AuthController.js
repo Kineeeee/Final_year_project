@@ -12,6 +12,12 @@ const ensureEnv = (key) => {
 };
 const REFRESH_SECRET = ensureEnv('REFRESH_SECRET');
 
+const resolveCookieSecure = () => {
+    const raw = process.env.COOKIE_SECURE;
+    if (raw === undefined) return process.env.NODE_ENV === 'production';
+    return String(raw).toLowerCase() === 'true';
+};
+
 exports.register = async (req, res) => {
     Logger.info('Auth', 'Register Request:', req.body);
     try {
@@ -77,7 +83,7 @@ exports.login = async (req, res) => {
         // Send Refresh Token as HttpOnly Cookie
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: resolveCookieSecure(),
             sameSite: 'strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
@@ -175,7 +181,7 @@ exports.socialLogin = async (req, res) => {
 
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: resolveCookieSecure(),
             sameSite: 'strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
@@ -266,7 +272,7 @@ exports.logout = async (req, res) => {
         }
         res.clearCookie('refreshToken', {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: resolveCookieSecure(),
             sameSite: 'strict',
             path: '/',
         });
