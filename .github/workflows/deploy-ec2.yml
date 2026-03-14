@@ -22,6 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Normalize GHCR owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -39,8 +42,8 @@ jobs:
           file: apps/server/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.API_IMAGE }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.API_IMAGE }}:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.API_IMAGE }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.API_IMAGE }}:latest
 
       - name: Build and push Web image
         uses: docker/build-push-action@v6
@@ -51,8 +54,8 @@ jobs:
           build-args: |
             VITE_SERVER_URL=${{ secrets.VITE_SERVER_URL }}
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.WEB_IMAGE }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.WEB_IMAGE }}:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE }}:latest
 
   deploy-ec2:
     runs-on: ubuntu-latest
@@ -61,6 +64,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Normalize GHCR owner
+        run: echo "OWNER_LC=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
 
       - name: Ensure remote directory exists
         uses: appleboy/ssh-action@v1.2.0
@@ -91,7 +97,7 @@ jobs:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           APP_DIR: ${{ secrets.APP_DIR }}
-          GHCR_OWNER: ${{ github.repository_owner }}
+          GHCR_OWNER: ${{ env.OWNER_LC }}
           IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
