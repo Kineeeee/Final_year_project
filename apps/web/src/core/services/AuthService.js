@@ -2,8 +2,8 @@ import { CONFIG } from '../../config/AppConfig';
 import { Logger } from '../../utils/Logger';
 
 export class AuthService {
-    constructor() {
-        this.apiUrl = `${CONFIG.SERVER_URL}/api/auth`;
+    get apiUrl() {
+        return `${CONFIG.SERVER_URL}/api/auth`;
     }
 
     async login(username, password) {

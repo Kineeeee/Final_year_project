@@ -1,7 +1,9 @@
 import { CONFIG } from '../../config/AppConfig';
 import { Logger } from '../../utils/Logger';
 
-const BASE_URL = `${CONFIG.SERVER_URL}/api/user-quiz`;
+function getBaseUrl() {
+    return `${CONFIG.SERVER_URL}/api/user-quiz`;
+}
 
 function authHeaders() {
     const token = localStorage.getItem('token');
@@ -25,7 +27,7 @@ async function request(path, { method = 'GET', body, isForm = false } = {}) {
         options.body = body;
     }
 
-    const res = await fetch(`${BASE_URL}${path}`, options);
+    const res = await fetch(`${getBaseUrl()}${path}`, options);
     let data = null;
     try {
         data = await res.json();

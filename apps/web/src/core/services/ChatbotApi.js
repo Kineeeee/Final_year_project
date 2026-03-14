@@ -1,6 +1,8 @@
 import { CONFIG } from '../../config/AppConfig';
 
-const BASE_URL = `${CONFIG.SERVER_URL}/api/chatbot`;
+function getBaseUrl() {
+    return `${CONFIG.SERVER_URL}/api/chatbot`;
+}
 
 class ChatbotApi {
     async ask(message, history = []) {
@@ -13,7 +15,7 @@ class ChatbotApi {
             headers.Authorization = `Bearer ${token}`;
         }
 
-        const res = await fetch(`${BASE_URL}/ask`, {
+        const res = await fetch(`${getBaseUrl()}/ask`, {
             method: 'POST',
             credentials: 'include',
             headers,
