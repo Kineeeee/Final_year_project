@@ -3,7 +3,7 @@ import { Logger } from '../utils/Logger';
 import { playerState } from '../core/services/PlayerState';
 import { AuthService } from '../core/services/AuthService';
 import { overlayBlocker } from '../core/services/OverlayBlocker';
-import { authStore } from '../core/state/AuthStore';
+import { authStore } from '../core/state/authStore';
 import { ProfileModal } from '../ui/ProfileModal';
 import { RewardsInventoryModal } from '../ui/RewardsInventoryModal';
 import { MainMenuFlowController } from './controllers/MainMenuFlowController';

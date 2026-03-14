@@ -1,0 +1,32 @@
+name: phaser-snake
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - api
+
+  web:
+    image: ghcr.io/${GHCR_OWNER}/phaser3-snake-web:${IMAGE_TAG:-latest}
+    restart: always
+
+  api:
+    image: ghcr.io/${GHCR_OWNER}/phaser3-snake-api:${IMAGE_TAG:-latest}
+    restart: always
+    env_file:
+      - api.env
+
+volumes:
+  caddy_data:
+  caddy_config:

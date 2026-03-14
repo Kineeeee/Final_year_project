@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { achievementManager } from './AchievementManager';
-import { REWARDS, getGeneratedSkinTextureKey, getSkinTextureKey } from './RewardsCatalog';
+import { REWARDS, getGeneratedSkinTextureKey, getSkinTextureKey } from './rewardsCatalog';
 import { Logger } from '../../utils/Logger';
 
 const DEFAULT_BG = '#028af8';

@@ -5,25 +5,55 @@ class RedisClient {
     constructor() {
         this.client = null;
         this.isConnected = false;
+        this.isConnecting = false;
+        this.isDisabled = false;
+        this.hasLoggedUnavailable = false;
     }
 
     async connect() {
-        if (this.isConnected) return;
+        if (this.isDisabled || this.isConnected || this.isConnecting) return;
+
+        if ((process.env.REDIS_ENABLED || 'false').toLowerCase() !== 'true') {
+            this.isDisabled = true;
+            if (!this.hasLoggedUnavailable) {
+                Logger.info('Redis', 'Redis is disabled (set REDIS_ENABLED=true to enable).');
+                this.hasLoggedUnavailable = true;
+            }
+            return;
+        }
 
         const url = process.env.REDIS_URL || 'redis://localhost:6379';
+        this.isConnecting = true;
 
         try {
-            this.client = createClient({ url });
+            this.client = createClient({
+                url,
+                socket: {
+                    connectTimeout: 2000,
+                    reconnectStrategy: () => false,
+                },
+            });
 
-            this.client.on('error', (err) => Logger.error('Redis', 'Client Error', err));
+            this.client.on('error', (err) => {
+                if (!this.hasLoggedUnavailable) {
+                    Logger.warn('Redis', `Client unavailable: ${err?.code || err?.message || 'unknown error'}`);
+                    this.hasLoggedUnavailable = true;
+                }
+            });
             this.client.on('connect', () => Logger.info('Redis', 'Connected to Redis'));
 
             await this.client.connect();
             this.isConnected = true;
+            this.hasLoggedUnavailable = false;
         } catch (err) {
-            Logger.error('Redis', 'Failed to connect', err);
-            // Non-fatal? Game can run without Redis if we fallback, but for P3 we assume it's needed
-            // For now, let's just log error.
+            this.isDisabled = true;
+            this.client = null;
+            if (!this.hasLoggedUnavailable) {
+                Logger.warn('Redis', `Redis disabled after failed connect: ${err?.code || err?.message || 'unknown error'}`);
+                this.hasLoggedUnavailable = true;
+            }
+        } finally {
+            this.isConnecting = false;
         }
     }
 

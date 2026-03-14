@@ -3,8 +3,8 @@ import { UIPanel } from '../../ui/UIPanel';
 import { UIButton } from '../../ui/UIButton';
 import { COLORS, TEXT_STYLES } from '../../ui/UIConstants';
 import { achievementManager } from './AchievementManager';
-import { ACHIEVEMENTS } from './AchievementsCatalog';
-import { REWARDS } from './RewardsCatalog';
+import { ACHIEVEMENTS } from './achievementsCatalog';
+import { REWARDS } from './rewardsCatalog';
 
 export class AchievementsScene extends Scene {
     constructor() {

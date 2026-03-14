@@ -1,5 +1,5 @@
-import { ACHIEVEMENTS } from './AchievementsCatalog';
-import { REWARDS, REWARD_CHIPS_BY_RARITY } from './RewardsCatalog';
+import { ACHIEVEMENTS } from './achievementsCatalog';
+import { REWARDS, REWARD_CHIPS_BY_RARITY } from './rewardsCatalog';
 import { Logger } from '../../utils/Logger';
 import { CONFIG } from '../../config/AppConfig';
 import {

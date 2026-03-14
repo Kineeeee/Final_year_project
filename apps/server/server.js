@@ -42,13 +42,19 @@ const cookieParser = require('cookie-parser');
 
 // 2.Middleware
 const rawOrigins =
-    process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173';
+    process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174';
 const allowedOrigins = rawOrigins.split(',').map((o) => o.trim()).filter(Boolean);
 
 // Allow wildcard in dev by setting CORS_ORIGINS="*"
 const corsOrigin = (origin, callback) => {
     if (!origin) return callback(null, true); // mobile app / curl
     if (allowedOrigins.includes('*')) return callback(null, true);
+    if (
+        process.env.NODE_ENV !== 'production' &&
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+    ) {
+        return callback(null, true);
+    }
     if (allowedOrigins.includes(origin)) return callback(null, true);
     return callback(new Error(`Origin ${origin} not allowed by CORS`));
 };

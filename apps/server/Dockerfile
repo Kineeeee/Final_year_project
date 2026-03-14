@@ -1,20 +1,17 @@
-# Base image
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 FROM node:20-alpine
 
-# Set working directory
+ENV NODE_ENV=production
 WORKDIR /app
 
-# Copy package files first (better caching)
-COPY package*.json ./
-
-# Install dependencies (only production)
-RUN npm install --only=production
-
-# Copy source code
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Expose port
 EXPOSE 3000
 
-# Start command
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

@@ -2,7 +2,6 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../../../models/User');
 const Logger = require('../../../utils/Logger');
-const { OAuth2Client } = require('google-auth-library');
 const axios = require('axios');
 const ensureEnv = (key) => {
     if (!process.env[key]) {
@@ -103,6 +102,11 @@ exports.login = async (req, res) => {
 exports.socialLogin = async (req, res) => {
     try {
         const { provider, token } = req.body;
+
+        if (!provider || !token) {
+            return res.status(400).json({ message: 'provider and token are required' });
+        }
+
         let socialId, email, name;
 
         if (provider === 'google') {
@@ -193,8 +197,21 @@ exports.socialLogin = async (req, res) => {
         });
 
     } catch (error) {
-        Logger.error('Auth', `Social login error (${req.body.provider}):`, error);
-        res.status(500).json({ message: 'Authentication failed', error: error.message });
+        const provider = req.body?.provider || 'unknown';
+        const upstreamStatus = error?.response?.status;
+        const upstreamDetail = error?.response?.data?.error_description || error?.response?.data?.error || error?.message;
+
+        Logger.error('Auth', `Social login error (${provider}):`, upstreamDetail);
+
+        if (provider === 'google' && upstreamStatus === 401) {
+            return res.status(401).json({ message: 'Google token invalid or expired. Please sign in again.' });
+        }
+
+        if (provider === 'facebook' && upstreamStatus === 400) {
+            return res.status(401).json({ message: 'Facebook token invalid or expired. Please sign in again.' });
+        }
+
+        res.status(500).json({ message: 'Authentication failed', error: upstreamDetail });
     }
 };
 

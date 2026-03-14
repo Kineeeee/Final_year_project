@@ -1,4 +1,4 @@
-import { authStore } from '../../core/state/AuthStore';
+import { authStore } from '../../core/state/authStore';
 import { AuthService } from '../../core/services/AuthService';
 import { playerState } from '../../core/services/PlayerState';
 
@@ -37,6 +37,8 @@ export class AuthManager {
         this.resetSubmit = document.getElementById('reset-submit');
         this.resetMessage = document.getElementById('reset-message');
         this.resetClosers = document.querySelectorAll('[data-close-reset]');
+        this.googleClient = null;
+        this.googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
 
         this.initListeners();
         this.restoreRemembered();
@@ -336,8 +338,13 @@ export class AuthManager {
 
     initSocialLogins() {
         if (window.google) {
+            if (!this.googleClientId || this.googleClientId === 'PENDING_CLIENT_ID') {
+                this.showMessage('Google login is not configured. Missing VITE_GOOGLE_CLIENT_ID.', true);
+                return;
+            }
+
             this.googleClient = window.google.accounts.oauth2.initTokenClient({
-                client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || 'PENDING_CLIENT_ID',
+                client_id: this.googleClientId,
                 callback: this.handleGoogleCallback.bind(this),
                 scope: 'email profile openid',
             });
@@ -354,6 +361,11 @@ export class AuthManager {
     }
 
     handleGoogleClick() {
+        if (!this.googleClientId || this.googleClientId === 'PENDING_CLIENT_ID') {
+            this.showMessage('Google login is not configured. Set VITE_GOOGLE_CLIENT_ID in web env.', true);
+            return;
+        }
+
         if (this.googleClient) {
             this.googleClient.requestAccessToken();
         } else if (window.google) {
@@ -366,9 +378,16 @@ export class AuthManager {
 
     async handleGoogleCallback(response) {
         if (response.error) {
-            this.showMessage('Google login failed or cancelled', true);
+            const detail = response.error_description || response.error;
+            this.showMessage(`Google login failed: ${detail}`, true);
             return;
         }
+
+        if (!response.access_token) {
+            this.showMessage('Google login failed: Missing access token from Google.', true);
+            return;
+        }
+
         await this.processSocialLogin('google', response.access_token);
     }
 

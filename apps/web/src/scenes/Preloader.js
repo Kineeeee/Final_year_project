@@ -1,6 +1,6 @@
 import { Scene } from 'phaser';
 import { Logger } from '../utils/Logger';
-import { REWARDS, getGeneratedSkinTextureKey, getRewardPreloadEntries } from '../modules/achievements/RewardsCatalog';
+import { REWARDS, getGeneratedSkinTextureKey, getRewardPreloadEntries } from '../modules/achievements/rewardsCatalog';
 
 export class Preloader extends Scene {
     constructor() {
