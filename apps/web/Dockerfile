@@ -8,9 +8,14 @@ RUN npm ci --ignore-scripts
 
 COPY . .
 
-ARG VITE_SERVER_URL=https://api.example.com
+ARG VITE_SERVER_URL=https://api.snakestudy.duckdns.org
 ENV VITE_SERVER_URL=${VITE_SERVER_URL}
 
+ARG VITE_GOOGLE_CLIENT_ID=385616225550-1o4c17pl52v51sohguahuca2vrmjuhme.apps.googleusercontent.com
+
+ARG VITE_FACEBOOK_APP_ID=941293078316593
+ENV VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID}
+ENV VITE_FACEBOOK_APP_ID=${VITE_FACEBOOK_APP_ID}
 RUN npm run build
 
 FROM nginx:1.27-alpine

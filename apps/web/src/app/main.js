@@ -74,6 +74,16 @@ function startGame() {
     }
 }
 
+let authManager = null;
+
+function initializeAuth() {
+    if (authManager || typeof document === 'undefined') {
+        return;
+    }
+
+    authManager = new AuthManager(startGame);
+}
+
 // Match body/background color to game to mask letterboxing areas on extreme aspect ratios.
 if (typeof document !== 'undefined') {
     const container = document.getElementById('game-container');
@@ -81,9 +91,12 @@ if (typeof document !== 'undefined') {
         container.style.backgroundColor = '#028af8';
     }
     document.body.style.backgroundColor = '#028af8';
-}
 
-// Initialize Auth Manager (handles Login UI and calls startGame on success)
-new AuthManager(startGame);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeAuth, { once: true });
+    } else {
+        initializeAuth();
+    }
+}
 
 export { startGame };

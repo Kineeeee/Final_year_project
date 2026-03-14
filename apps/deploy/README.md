@@ -54,3 +54,4 @@ docker compose -f compose.prod.yml --env-file .env logs -f api
 - Caddy automatically provisions and renews TLS certificates.
 - Keep `.env` and `api.env` only on EC2. Do not commit them.
 - `IMAGE_TAG` can be set to a commit SHA for rollback/roll-forward.
+- Redis now runs inside the production compose stack. Set `REDIS_ENABLED=true` and `REDIS_URL=redis://redis:6379` in `api.env`.

@@ -53,6 +53,8 @@ jobs:
           push: true
           build-args: |
             VITE_SERVER_URL=${{ secrets.VITE_SERVER_URL }}
+            VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+            VITE_FACEBOOK_APP_ID=${{ secrets.VITE_FACEBOOK_APP_ID }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ env.WEB_IMAGE }}:latest

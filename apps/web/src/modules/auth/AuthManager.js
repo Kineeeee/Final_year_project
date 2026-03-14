@@ -39,6 +39,7 @@ export class AuthManager {
         this.resetClosers = document.querySelectorAll('[data-close-reset]');
         this.googleClient = null;
         this.googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+        this.facebookAppId = (import.meta.env.VITE_FACEBOOK_APP_ID || '').trim();
 
         this.initListeners();
         this.restoreRemembered();
@@ -337,22 +338,29 @@ export class AuthManager {
     }
 
     initSocialLogins() {
-        if (window.google) {
-            if (!this.googleClientId || this.googleClientId === 'PENDING_CLIENT_ID') {
-                this.showMessage('Google login is not configured. Missing VITE_GOOGLE_CLIENT_ID.', true);
-                return;
-            }
-
+        if (
+            window.google?.accounts?.oauth2 &&
+            this.googleClientId &&
+            this.googleClientId !== 'PENDING_CLIENT_ID'
+        ) {
             this.googleClient = window.google.accounts.oauth2.initTokenClient({
                 client_id: this.googleClientId,
                 callback: this.handleGoogleCallback.bind(this),
                 scope: 'email profile openid',
             });
         }
-        
-        window.fbAsyncInit = function() {
+
+        if (!this.facebookAppId || this.facebookAppId === 'PENDING_APP_ID') {
+            return;
+        }
+
+        window.fbAsyncInit = () => {
+            if (!window.FB) {
+                return;
+            }
+
             window.FB.init({
-                appId: import.meta.env.VITE_FACEBOOK_APP_ID || 'PENDING_APP_ID',
+                appId: this.facebookAppId,
                 cookie: true,
                 xfbml: true,
                 version: 'v18.0'
@@ -368,7 +376,7 @@ export class AuthManager {
 
         if (this.googleClient) {
             this.googleClient.requestAccessToken();
-        } else if (window.google) {
+        } else if (window.google?.accounts?.oauth2) {
             this.initSocialLogins();
             if (this.googleClient) this.googleClient.requestAccessToken();
         } else {
