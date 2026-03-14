@@ -185,6 +185,8 @@ class NetworkSystem {
             const requestedQuizSource = (safeData.quizSource || 'SYSTEM').toUpperCase();
             socket.data.quizSource = 'SYSTEM';
 
+            const existingAuth = socket.data?.user;
+
             if (safeData.token) {
                 const decoded = AuthService.verifyToken(safeData.token);
 
@@ -261,6 +263,11 @@ class NetworkSystem {
                         });
                     }
                 }
+            } else if (existingAuth && existingAuth.username) {
+                // Keep authenticated identity for this socket when client re-sends initPlayer
+                // from non-auth flows (e.g. ShopScene) without token.
+                finalData.name = existingAuth.username;
+                finalData.username = existingAuth.username;
             } else {
                 // No Token: Guest Mode
                 // Sanitize: If name looks like a real user, maybe prefix it?

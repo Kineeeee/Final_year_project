@@ -121,7 +121,11 @@ export class ShopScene extends Scene {
             this.maxScroll = Math.max(0, yOffset - scrollHeight);
         });
 
-        socketService.emit('initPlayer', { name: playerState.getUsername() });
+        const token = localStorage.getItem('token');
+        socketService.emit('initPlayer', {
+            name: playerState.getUsername(),
+            token,
+        });
     }
 
     update() {
