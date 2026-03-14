@@ -42,6 +42,11 @@ class ShopManager {
         return this.shopItems;
     }
 
+    toNonNegativeInt(value) {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isNaN(parsed) ? 0 : Math.max(0, parsed);
+    }
+
     async handleBuyItem(playerId, itemId) {
         Logger.info('ShopManager', `handleBuyItem called for player ${playerId}, item: ${itemId}`);
         const players = this.playerManager.getAllPlayers();
@@ -71,16 +76,36 @@ class ShopManager {
             return;
         }
 
+        const itemPrice = this.toNonNegativeInt(item.price);
+        if (itemPrice <= 0) {
+            Logger.warn('ShopManager', `Invalid item price for ${itemId}: ${item.price}`);
+            return;
+        }
+
+        // Authoritative sync for logged-in users to avoid stale runtime coins.
+        if (player.username && !player.username.startsWith('Guest_')) {
+            try {
+                const dbUser = await User.findOne({ username: player.username }).select('coins');
+                if (dbUser) {
+                    player.coins = this.toNonNegativeInt(dbUser.coins);
+                }
+            } catch (err) {
+                Logger.error('ShopManager', `Failed to sync DB coins for ${player.username}:`, err);
+            }
+        }
+
+        player.coins = this.toNonNegativeInt(player.coins);
+
         // Re-check player existence after async operation
         if (!players[playerId]) {
             Logger.info('ShopManager', `Player ${playerId} disconnected during purchase.`);
             return;
         }
 
-        Logger.info('ShopManager', `Price: ${item.price}`);
+        Logger.info('ShopManager', `Price: ${itemPrice}, Player coins: ${player.coins}`);
 
-        if (player.coins >= item.price) {
-            player.coins -= item.price;
+        if (player.coins >= itemPrice) {
+            player.coins -= itemPrice;
             // Update Runtime State (Object)
             player.inventory[itemId] = (player.inventory[itemId] || 0) + 1;
             Logger.info('ShopManager', `Purchased. New Coins: ${player.coins}`);
