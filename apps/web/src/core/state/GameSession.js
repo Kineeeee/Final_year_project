@@ -36,6 +36,11 @@ export class GameSession {
         // Interpolation buffers (worldDelta)
         this._lastServerTickBuffered = 0;
         this._playerSamples = new Map(); // playerId -> [{t,x,y,r}]
+        this._lastServerTimeBuffered = 0;
+        this._avgServerIntervalMs = 0;
+        this._interArrivalJitterMs = 0;
+        this._smoothedRttMs = 0;
+        this._adaptiveInterpolationDelayMs = CONFIG.NETWORK.INTERPOLATION_DELAY_MS ?? 60;
 
         this.minimapTimer = null;
     }
@@ -88,6 +93,9 @@ export class GameSession {
         this._bind(this.scene.events, 'state:foodEaten', (payload) => this.entityManager.onFoodEatenVisual(payload));
         this._bind(this.scene.events, 'state:localDied', (payload) => {
             this.startGameOverOnce(payload);
+        });
+        this._bind(this.scene.events, 'updatePing', (latencyMs) => {
+            this._updateNetworkLatency(latencyMs);
         });
 
         // Effect Events
@@ -233,6 +241,11 @@ export class GameSession {
 
         this._lastServerTickBuffered = 0;
         this._playerSamples.clear();
+        this._lastServerTimeBuffered = 0;
+        this._avgServerIntervalMs = 0;
+        this._interArrivalJitterMs = 0;
+        this._smoothedRttMs = 0;
+        this._adaptiveInterpolationDelayMs = CONFIG.NETWORK.INTERPOLATION_DELAY_MS ?? 60;
     }
 
     startGameOverOnce(payload = {}) {
@@ -268,6 +281,7 @@ export class GameSession {
         // Buffer new samples only when we receive a new authoritative tick
         if (serverTick !== this._lastServerTickBuffered) {
             this._lastServerTickBuffered = serverTick;
+            this._updateAdaptiveInterpolationDelay(serverTime);
 
             for (const [id, p] of this.gameState.players.entries()) {
                 if (!p) continue;
@@ -293,11 +307,20 @@ export class GameSession {
         }
 
         // Compute render timestamp on server clock
-        const delayMs = CONFIG.NETWORK.INTERPOLATION_DELAY_MS ?? 100;
+        const delayMs = this._adaptiveInterpolationDelayMs;
         const estimatedServerNow = Date.now() + (this.gameState.serverTimeOffsetMs || 0);
         const renderT = estimatedServerNow - delayMs;
+        const localId = this.gameState.localPlayerId;
 
         for (const [id, p] of this.gameState.players.entries()) {
+            // Keep local player responsive: do not render-delayed interpolate self.
+            if (id === localId) {
+                p.renderX = p.x;
+                p.renderY = p.y;
+                p.renderRotation = p.rotation;
+                continue;
+            }
+
             const samples = this._playerSamples.get(id);
             if (!samples || samples.length === 0) continue;
 
@@ -324,10 +347,73 @@ export class GameSession {
             const t = span > 0 ? (renderT - a.t) / span : 0;
             const clampedT = t < 0 ? 0 : (t > 1 ? 1 : t);
 
-            p.renderX = a.x + (b.x - a.x) * clampedT;
-            p.renderY = a.y + (b.y - a.y) * clampedT;
-            p.renderRotation = this._lerpAngle(a.r, b.r, clampedT);
+            // Interpolate between two authoritative snapshots.
+            let renderX = a.x + (b.x - a.x) * clampedT;
+            let renderY = a.y + (b.y - a.y) * clampedT;
+            let renderRotation = this._lerpAngle(a.r, b.r, clampedT);
+
+            // If render time is ahead of newest sample, do a tiny extrapolation window
+            // to reduce visible hitching on bursty networks.
+            if (renderT > b.t && samples.length >= 2) {
+                const prev = samples[samples.length - 2];
+                const latest = samples[samples.length - 1];
+                const dt = latest.t - prev.t;
+                if (dt > 0) {
+                    const vx = (latest.x - prev.x) / dt;
+                    const vy = (latest.y - prev.y) / dt;
+                    const extraMs = Math.min(80, renderT - latest.t);
+                    renderX = latest.x + vx * extraMs;
+                    renderY = latest.y + vy * extraMs;
+                    renderRotation = latest.r;
+                }
+            }
+
+            p.renderX = renderX;
+            p.renderY = renderY;
+            p.renderRotation = renderRotation;
         }
+    }
+
+    _updateNetworkLatency(latencyMs) {
+        if (!Number.isFinite(latencyMs) || latencyMs < 0) return;
+
+        if (this._smoothedRttMs <= 0) {
+            this._smoothedRttMs = latencyMs;
+            return;
+        }
+
+        // Smooth RTT spikes but still react quickly enough for mobile networks.
+        this._smoothedRttMs = this._smoothedRttMs * 0.85 + latencyMs * 0.15;
+    }
+
+    _updateAdaptiveInterpolationDelay(serverTime) {
+        if (!Number.isFinite(serverTime) || serverTime <= 0) return;
+
+        if (this._lastServerTimeBuffered > 0) {
+            const interval = serverTime - this._lastServerTimeBuffered;
+
+            if (interval > 0 && interval < 1000) {
+                if (this._avgServerIntervalMs <= 0) {
+                    this._avgServerIntervalMs = interval;
+                } else {
+                    this._avgServerIntervalMs = this._avgServerIntervalMs * 0.9 + interval * 0.1;
+                }
+
+                const jitterSample = Math.abs(interval - this._avgServerIntervalMs);
+                this._interArrivalJitterMs = this._interArrivalJitterMs * 0.9 + jitterSample * 0.1;
+            }
+        }
+
+        this._lastServerTimeBuffered = serverTime;
+
+        const baseDelay = CONFIG.NETWORK.INTERPOLATION_DELAY_MS ?? 60;
+        const oneWayLatency = Math.max(0, Math.min(140, this._smoothedRttMs * 0.5));
+        const jitterBuffer = Math.max(0, Math.min(120, this._interArrivalJitterMs * 2));
+        const targetDelay = Math.max(baseDelay, Math.min(280, baseDelay + oneWayLatency + jitterBuffer));
+
+        // Smooth delay changes to avoid "rubber" oscillation.
+        this._adaptiveInterpolationDelayMs =
+            this._adaptiveInterpolationDelayMs * 0.9 + targetDelay * 0.1;
     }
 
     _lerpAngle(a, b, t) {
