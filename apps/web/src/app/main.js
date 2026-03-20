@@ -1,3 +1,4 @@
+import '../style.css';
 import { Boot } from '../scenes/Boot';
 import { Game } from '../scenes/Game';
 import { UIScene } from '../scenes/UIScene';
