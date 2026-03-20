@@ -1,10 +1,62 @@
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Logger = require('../../utils/Logger');
 const { QUIZ_PARSE_PROMPT } = require('./QuizParser');
 
-// Naming made provider-agnostic; still accept legacy OPENAI_* envs
-const LLM_MODEL = process.env.LLM_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
-const LLM_BASE_URL = (process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-const LLM_API_KEY = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || process.env.LLM_MODEL || 'gemini-2.0-flash-lite';
+
+let geminiClient;
+
+function getGeminiModel() {
+    if (!GEMINI_API_KEY) {
+        throw new Error('GEMINI_API_KEY is not set');
+    }
+
+    if (!geminiClient) {
+        geminiClient = new GoogleGenerativeAI(GEMINI_API_KEY);
+    }
+
+    return geminiClient.getGenerativeModel({ model: GEMINI_MODEL });
+}
+
+function normalizeMessageContent(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content
+            .map((part) => {
+                if (typeof part === 'string') return part;
+                if (part && typeof part.text === 'string') return part.text;
+                return '';
+            })
+            .filter(Boolean)
+            .join('\n');
+    }
+    return '';
+}
+
+function messagesToPrompt(messages = []) {
+    return (messages || [])
+        .map((msg) => {
+            const role = msg?.role === 'assistant' ? 'ASSISTANT' : msg?.role === 'system' ? 'SYSTEM' : 'USER';
+            const text = normalizeMessageContent(msg?.content);
+            return `${role}: ${text}`.trim();
+        })
+        .filter(Boolean)
+        .join('\n\n');
+}
+
+function withTimeout(promise, timeoutMs) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+        return promise;
+    }
+
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`Gemini request timed out after ${timeoutMs}ms`)), timeoutMs);
+        }),
+    ]);
+}
 
 async function callLlmChat(messages, options = {}) {
     const {
@@ -14,43 +66,32 @@ async function callLlmChat(messages, options = {}) {
         timeoutMs = 20000,
     } = options;
 
-    if (!LLM_API_KEY) {
-        throw new Error('LLM_API_KEY/OPENAI_API_KEY not set');
-    }
-    if (typeof fetch !== 'function') {
-        throw new Error('fetch is not available in this runtime');
+    const model = getGeminiModel();
+    const basePrompt = messagesToPrompt(messages);
+    let prompt = basePrompt;
+
+    if (responseFormat?.type === 'json_schema') {
+        // Gemini may return markdown fences; force plain JSON response in prompt.
+        prompt = `${basePrompt}\n\nReturn ONLY valid JSON. Do not include markdown fences or explanation text.`;
     }
 
-    const body = {
-        model: LLM_MODEL,
-        messages,
+    const generationConfig = {
         temperature,
     };
 
-    if (responseFormat) {
-        body.response_format = responseFormat;
-    }
     if (typeof maxTokens === 'number' && Number.isFinite(maxTokens)) {
-        body.max_tokens = maxTokens;
+        generationConfig.maxOutputTokens = maxTokens;
     }
 
-    const response = await fetch(`${LLM_BASE_URL}/chat/completions`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${LLM_API_KEY}`,
-        },
-        body: JSON.stringify(body),
-    });
+    const payload = await withTimeout(
+        model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig,
+        }),
+        timeoutMs
+    );
 
-    if (!response.ok) {
-        const errorText = await safeReadText(response);
-        throw new Error(`LLM request failed: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
-    }
-
-    const payload = await response.json();
-    const content = payload?.choices?.[0]?.message?.content;
+    const content = payload?.response?.text?.();
     if (!content) {
         throw new Error('Empty AI response');
     }
@@ -132,14 +173,6 @@ async function callAiParser(rawText, category) {
     }
 
     throw new Error('AI response malformed');
-}
-
-async function safeReadText(response) {
-    try {
-        return await response.text();
-    } catch {
-        return '';
-    }
 }
 
 module.exports = { callAiParser, callLlmChat };

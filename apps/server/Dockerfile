@@ -7,7 +7,7 @@ RUN npm ci --omit=dev
 FROM node:20-alpine
 
 ENV NODE_ENV=production
-ARG BOT_COUNT=20
+ARG BOT_COUNT=200
 ENV BOT_COUNT=${BOT_COUNT}
 WORKDIR /app
 
