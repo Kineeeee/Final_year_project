@@ -1,0 +1,47 @@
+{
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://snakestudy.duckdns.org"
+      }
+    },
+    "ipa": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://snakestudy.duckdns.org"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "image": "latest",
+        "buildType": "apk"
+      },
+
+      "developmentClient": false,
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://snakestudy.duckdns.org"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://snakestudy.duckdns.org"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

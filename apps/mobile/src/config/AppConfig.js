@@ -33,10 +33,10 @@ const rawExtraUrl = Constants?.expoConfig?.extra?.serverUrl;
 const envUrl = process.env.EXPO_PUBLIC_SERVER_URL || process.env.SERVER_URL;
 const lanUrl = inferLanUrl();
 
-// Priority: explicit config (if valid) -> env -> inferred LAN (Expo dev on device) -> localhost (sim)
+// Priority: env (build-time override) -> app config -> inferred LAN (Expo dev on device) -> localhost (sim)
 const SERVER_URL =
-    normalize(rawExtraUrl) ||
     normalize(envUrl) ||
+    normalize(rawExtraUrl) ||
     lanUrl ||
     'http://localhost:5173';
 

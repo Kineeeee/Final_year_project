@@ -24,10 +24,12 @@ export class AuthManager {
         this.signupMessage = document.getElementById('signup-message');
         this.strengthBar = document.getElementById('strength-bar');
         this.strengthLabel = document.getElementById('strength-label');
-        this.requirementItems = document.querySelectorAll('.requirements [data-rule]');
+        this.requirementItems = document.querySelectorAll('[data-password-rule]');
         this.tabButtons = document.querySelectorAll('[data-auth-tab]');
-        this.forms = document.querySelectorAll('.auth-form');
+        this.forms = document.querySelectorAll('[data-auth-form]');
+        this.screens = document.querySelectorAll('[data-auth-screen]');
         this.authSubtitle = document.getElementById('auth-toggle-text');
+        this.authSubtitleMobile = document.getElementById('auth-toggle-text-mobile');
         this.rememberCheckbox = document.getElementById('remember-me');
         this.forgotLink = document.getElementById('forgot-password');
         this.googleBtn = document.getElementById('btn-google');
@@ -78,7 +80,7 @@ export class AuthManager {
 
         this.googleBtn?.addEventListener('click', () => this.handleGoogleClick());
         this.facebookBtn?.addEventListener('click', () => {
-            this.showMessage('Login via facebook is coming soon', false);
+            this.showMessage('Tính năng đăng nhập Facebook sẽ sớm ra mắt', false);
         });
 
         this.resetSubmit?.addEventListener('click', () => this.handleReset());
@@ -120,9 +122,9 @@ export class AuthManager {
     async handleLogin() {
         const { username, password } = this.getCredentials();
         if (!username || !password) {
-            if (!username) this.showFieldError(this.usernameInput, 'Please enter your email or username');
-            if (!password) this.showFieldError(this.passwordInput, 'Please enter your password');
-            this.showMessage('Please fill in all fields');
+            if (!username) this.showFieldError(this.usernameInput, 'Vui lòng nhập tên đăng nhập hoặc email');
+            if (!password) this.showFieldError(this.passwordInput, 'Vui lòng nhập mật khẩu');
+            this.showMessage('Vui lòng điền đầy đủ thông tin');
             return;
         }
 
@@ -140,7 +142,7 @@ export class AuthManager {
             }
         } catch (error) {
             console.error('[Auth] login failed', error);
-            this.showMessage(error.message || 'Login failed. Check username/password and server.');
+            this.showMessage(error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra tài khoản/mật khẩu.');
         }
     }
 
@@ -153,12 +155,12 @@ export class AuthManager {
 
         try {
             await this.authService.register(username, password);
-            this.showSignupMessage('Registration successful! Please login.', false);
+            this.showSignupMessage('Đăng ký thành công! Vui lòng đăng nhập.', false);
             if (this.usernameInput) this.usernameInput.value = username;
             if (this.passwordInput) this.passwordInput.value = '';
             this.switchMode('login');
         } catch (error) {
-            this.showSignupMessage(error.message || 'Registration failed');
+            this.showSignupMessage(error.message || 'Đăng ký thất bại');
         }
     }
 
@@ -179,20 +181,41 @@ export class AuthManager {
     switchMode(mode) {
         this.tabButtons.forEach((btn) => {
             const isActive = btn.dataset.authTab === mode;
-            btn.classList.toggle('active', isActive);
+            const activeClasses = (btn.dataset.activeClasses || '').split(' ').filter(Boolean);
+            const inactiveClasses = (btn.dataset.inactiveClasses || '').split(' ').filter(Boolean);
+
+            if (activeClasses.length > 0 || inactiveClasses.length > 0) {
+                btn.classList.remove(...activeClasses, ...inactiveClasses);
+                btn.classList.add(...(isActive ? activeClasses : inactiveClasses));
+            }
+
             btn.setAttribute('aria-selected', String(isActive));
+            btn.setAttribute('aria-current', isActive ? 'page' : 'false');
         });
 
         this.forms.forEach((form) => {
             const targetId = `${mode}-form`;
-            form.classList.toggle('active', form.id === targetId);
+            const isTarget = form.id === targetId;
+            form.classList.toggle('hidden', !isTarget);
+        });
+
+        this.screens.forEach((screen) => {
+            const isTarget = screen.dataset.authScreen === mode;
+            screen.classList.toggle('hidden', !isTarget);
         });
 
         if (this.authSubtitle) {
             this.authSubtitle.textContent =
                 mode === 'signup'
-                    ? 'Create a parent account to guide your young learner.'
-                    : 'Log in to continue your adventure.';
+                    ? 'Tao tai khoan phu huynh de dong hanh cung be.'
+                    : 'Dang nhap de tiep tuc cuoc phieu luu.';
+        }
+
+        if (this.authSubtitleMobile) {
+            this.authSubtitleMobile.textContent =
+                mode === 'signup'
+                    ? 'Tao tai khoan phu huynh de dong hanh cung be.'
+                    : 'Dang nhap de tiep tuc cuoc phieu luu.';
         }
 
         this.showMessage('', false);
@@ -201,12 +224,20 @@ export class AuthManager {
 
     showFieldError(input, message) {
         if (!input) return;
-        const field = input.closest('.auth-field');
+        const field = input.closest('[data-auth-field]');
         if (!field) return;
-        const feedback = field.querySelector('.auth-field__feedback');
+        const feedback = field.querySelector('[data-feedback]');
 
-        field.classList.toggle('has-error', Boolean(message));
-        field.classList.toggle('valid', !message && input.value.trim().length > 0);
+        const hasError = Boolean(message);
+        const hasValue = input.value.trim().length > 0;
+
+        input.classList.toggle('border-[#f95630]', hasError);
+        input.classList.toggle('bg-[#fff1ed]', hasError);
+        input.classList.toggle('border-[#006b1b]', !hasError && hasValue);
+        input.classList.toggle('bg-[#f5fff1]', !hasError && hasValue);
+        input.classList.toggle('border-transparent', !hasError && !hasValue);
+        input.classList.toggle('bg-[#e2ebda]', !hasError && !hasValue);
+
         if (feedback) feedback.textContent = message || '';
     }
 
@@ -241,20 +272,24 @@ export class AuthManager {
 
         if (this.strengthLabel) {
             const labels = [
-                'Start typing to see strength',
-                'Too short',
-                'Add more variety',
-                'Getting stronger',
-                'Great password',
-                'Ready to launch'
+                'Bắt đầu nhập để xem độ mạnh',
+                'Quá ngắn',
+                'Thêm ký tự đa dạng hơn',
+                'Đang mạnh dần',
+                'Mật khẩu rất tốt',
+                'Sẵn sàng sử dụng'
             ];
             this.strengthLabel.textContent = labels[meterIndex];
         }
 
         this.requirementItems.forEach((item) => {
-            const rule = item.dataset.rule;
+            const rule = item.dataset.passwordRule;
             const met = rules[rule];
-            item.classList.toggle('met', Boolean(met));
+            const icon = item.querySelector('[data-rule-icon]');
+
+            item.classList.toggle('text-[#16a34a]', Boolean(met));
+            item.classList.toggle('text-[#64748b]', !met);
+            if (icon) icon.textContent = met ? '✓' : '○';
         });
 
         return rules;
@@ -266,7 +301,7 @@ export class AuthManager {
         const matches = password === confirm && confirm.length > 0;
         if (!this.signupConfirmInput) return true;
         if (!matches && showError) {
-            this.showFieldError(this.signupConfirmInput, 'Passwords must match');
+            this.showFieldError(this.signupConfirmInput, 'Mật khẩu xác nhận chưa khớp');
         } else if (matches) {
             this.showFieldError(this.signupConfirmInput, '');
         }
@@ -279,19 +314,19 @@ export class AuthManager {
         const email = this.signupEmailInput?.value.trim() || '';
 
         if (!name) {
-            this.showFieldError(this.signupNameInput, 'Please add a name');
+            this.showFieldError(this.signupNameInput, 'Vui lòng nhập biệt danh');
             isValid = false;
         }
 
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            this.showFieldError(this.signupEmailInput, 'Enter a valid email');
+            this.showFieldError(this.signupEmailInput, 'Vui lòng nhập email hợp lệ');
             isValid = false;
         }
 
         const rules = this.updateStrength();
         const unmet = Object.keys(rules).filter((key) => !rules[key]);
         if (unmet.length > 0) {
-            this.showFieldError(this.signupPasswordInput, 'Please meet all password requirements');
+            this.showFieldError(this.signupPasswordInput, 'Vui lòng đáp ứng đầy đủ yêu cầu mật khẩu');
             isValid = false;
         }
 
@@ -308,30 +343,36 @@ export class AuthManager {
             this.resetEmailInput.value = this.usernameInput?.value || '';
             this.clearFieldError(this.resetEmailInput);
         }
-        this.resetModal?.classList.add('open');
+        if (this.resetModal) {
+            this.resetModal.classList.remove('hidden');
+            this.resetModal.setAttribute('aria-hidden', 'false');
+        }
     }
 
     closeResetModal() {
-        this.resetModal?.classList.remove('open');
+        if (this.resetModal) {
+            this.resetModal.classList.add('hidden');
+            this.resetModal.setAttribute('aria-hidden', 'true');
+        }
     }
 
     async handleReset() {
         const email = this.resetEmailInput?.value.trim() || '';
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            this.showFieldError(this.resetEmailInput, 'Enter a valid email');
+            this.showFieldError(this.resetEmailInput, 'Vui lòng nhập email hợp lệ');
             return;
         }
 
         try {
             await this.authService.forgotPassword(email);
             if (this.resetMessage) {
-                this.resetMessage.textContent = 'Reset link sent! Check your inbox.';
+                this.resetMessage.textContent = 'Đã gửi liên kết đặt lại. Vui lòng kiểm tra hộp thư.';
                 this.resetMessage.style.color = '#16a34a';
             }
             setTimeout(() => this.closeResetModal(), 1200);
         } catch (error) {
             if (this.resetMessage) {
-                this.resetMessage.textContent = error.message || 'Could not send reset link.';
+                this.resetMessage.textContent = error.message || 'Không thể gửi liên kết đặt lại.';
                 this.resetMessage.style.color = '#e36464';
             }
         }
@@ -370,7 +411,7 @@ export class AuthManager {
 
     handleGoogleClick() {
         if (!this.googleClientId || this.googleClientId === 'PENDING_CLIENT_ID') {
-            this.showMessage('Google login is not configured. Set VITE_GOOGLE_CLIENT_ID in web env.', true);
+            this.showMessage('Google login chưa được cấu hình. Hãy đặt VITE_GOOGLE_CLIENT_ID trong web env.', true);
             return;
         }
 
@@ -387,12 +428,12 @@ export class AuthManager {
     async handleGoogleCallback(response) {
         if (response.error) {
             const detail = response.error_description || response.error;
-            this.showMessage(`Google login failed: ${detail}`, true);
+            this.showMessage(`Đăng nhập Google thất bại: ${detail}`, true);
             return;
         }
 
         if (!response.access_token) {
-            this.showMessage('Google login failed: Missing access token from Google.', true);
+            this.showMessage('Đăng nhập Google thất bại: Thiếu access token từ Google.', true);
             return;
         }
 
@@ -403,7 +444,7 @@ export class AuthManager {
         if (response.status === 'connected') {
             await this.processSocialLogin('facebook', response.authResponse.accessToken);
         } else {
-            this.showMessage('Facebook login failed or cancelled', true);
+            this.showMessage('Đăng nhập Facebook thất bại hoặc đã bị hủy', true);
         }
     }
 
@@ -416,7 +457,7 @@ export class AuthManager {
             }
         } catch (error) {
             console.error(`[Auth] ${provider} login failed`, error);
-            this.showMessage(error.message || `${provider} login failed.`);
+            this.showMessage(error.message || `Đăng nhập ${provider} thất bại.`);
         }
     }
 
@@ -472,9 +513,9 @@ export class AuthManager {
             window.game = null;
         }
         // Show login overlay again
-        if (this.loginOverlay) this.loginOverlay.style.display = 'flex';
+        if (this.loginOverlay) this.loginOverlay.style.display = 'block';
         if (this.usernameInput) this.usernameInput.value = '';
         if (this.passwordInput) this.passwordInput.value = '';
-        this.showMessage('Logged out', false);
+        this.showMessage('Đã đăng xuất', false);
     }
 }

@@ -1,204 +1,455 @@
 <!doctype html>
-<html lang="en">
+<html class="light" lang="vi">
 
 <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/assets/file.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snake Study</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap"
-        rel="stylesheet" />
-    <link rel="stylesheet" href="./src/style.css" />
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Snake Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'on-primary': '#d1ffc8',
+                        'on-primary-fixed-variant': '#00691a',
+                        tertiary: '#874e00',
+                        surface: '#f2f9ea',
+                        'on-tertiary-fixed': '#271300',
+                        'on-tertiary': '#fff0e5',
+                        'on-secondary-fixed': '#00365e',
+                        'on-secondary-fixed-variant': '#00538d',
+                        'surface-container-high': '#dce6d4',
+                        'surface-container-lowest': '#ffffff',
+                        'secondary-fixed-dim': '#99c7ff',
+                        'surface-dim': '#ccd8c4',
+                        'inverse-primary': '#91f78e',
+                        'primary-fixed': '#91f78e',
+                        'on-tertiary-container': '#4a2800',
+                        'tertiary-dim': '#764400',
+                        'tertiary-fixed-dim': '#ec8c00',
+                        'surface-container': '#e2ebda',
+                        background: '#f2f9ea',
+                        'on-surface': '#2a3127',
+                        'on-primary-container': '#005e17',
+                        error: '#b02500',
+                        'inverse-surface': '#0a1008',
+                        'surface-variant': '#d6e0cd',
+                        'primary-fixed-dim': '#83e881',
+                        'primary-dim': '#005d16',
+                        'surface-tint': '#006b1b',
+                        'secondary-fixed': '#b3d4ff',
+                        primary: '#006b1b',
+                        secondary: '#005e9f',
+                        'on-background': '#2a3127',
+                        outline: '#72796d',
+                        'on-surface-variant': '#575e52',
+                        'on-error': '#ffefec',
+                        'inverse-on-surface': '#989f92',
+                        'tertiary-container': '#ff9800',
+                        'on-primary-fixed': '#00480f',
+                        'tertiary-fixed': '#ff9800',
+                        'secondary-dim': '#00528b',
+                        'error-dim': '#b92902',
+                        'error-container': '#f95630',
+                        'surface-bright': '#f2f9ea',
+                        'surface-container-low': '#ebf3e3',
+                        'on-error-container': '#520c00',
+                        'primary-container': '#91f78e',
+                        'surface-container-highest': '#d6e0cd',
+                        'on-secondary-container': '#004a7e',
+                        'on-secondary': '#edf3ff',
+                        'on-tertiary-fixed-variant': '#563000',
+                        'secondary-container': '#b3d4ff',
+                        'outline-variant': '#a8afa2'
+                    },
+                    fontFamily: {
+                        headline: ['Plus Jakarta Sans'],
+                        body: ['Be Vietnam Pro'],
+                        label: ['Be Vietnam Pro']
+                    },
+                    borderRadius: {
+                        DEFAULT: '1rem',
+                        lg: '2rem',
+                        xl: '3rem',
+                        full: '9999px'
+                    }
+                }
+            }
+        };
+    </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            background-color: #028af8;
+        }
+
+        #game-container {
+            height: 100vh;
+            width: 100vw;
+            background-color: #028af8;
+        }
+    </style>
 </head>
 
-<body>
+<body class="m-0 overflow-hidden bg-[#028af8] font-body text-on-surface">
     <div id="game-container"></div>
 
-    <!-- AUTH OVERLAY -->
-    <div id="login-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-        <div class="overlay-decor">
-            <div class="blob blob-1"></div>
-            <div class="blob blob-2"></div>
-            <div class="blob blob-3"></div>
-            <div class="stars">
-                <span></span><span></span><span></span><span></span><span></span>
-            </div>
-        </div>
-
-        <div class="auth-shell">
-            <div class="auth-card">
-                <div class="auth-illustration" aria-hidden="true">
-                    <div class="bubble planet"></div>
-                    <div class="bubble comet"></div>
-                    <div class="bubble book"></div>
-                    <div class="floating-tags">
-                        <span class="tag tag-green">Math</span>
-                        <span class="tag tag-yellow">Science</span>
-                        <span class="tag tag-purple">Stories</span>
+    <div id="login-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title" class="fixed inset-0 z-50 overflow-y-auto bg-surface">
+        <section id="login-screen" data-auth-screen="login" class="min-h-screen bg-surface text-on-surface">
+            <header class="fixed left-0 right-0 top-0 z-50 bg-[#f2f9ea]/80 px-6 py-4 shadow-[0_8px_32px_rgba(42,49,39,0.06)] backdrop-blur-xl dark:bg-[#1a1c18]/80">
+                <div class="mx-auto flex w-full max-w-7xl items-center justify-between">
+                    <div class="text-2xl font-black tracking-tighter text-[#2a3127] font-headline dark:text-[#e2e3dd]">Snake Study</div>
+                    <div class="flex items-center gap-4">
+                        <span class="material-symbols-outlined text-3xl text-[#4CAF50]">school</span>
                     </div>
-                    <svg class="hero-graphic" viewBox="0 0 360 280" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                            <linearGradient id="grad1" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stop-color="#8fd3ff" />
-                                <stop offset="50%" stop-color="#c0b5ff" />
-                                <stop offset="100%" stop-color="#ffe7a3" />
-                            </linearGradient>
-                            <linearGradient id="grad2" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stop-color="#7dd3fc" />
-                                <stop offset="100%" stop-color="#6ee7b7" />
-                            </linearGradient>
-                        </defs>
-                        <rect x="32" y="70" width="140" height="110" rx="16" fill="url(#grad1)" opacity="0.9" />
-                        <rect x="48" y="88" width="108" height="74" rx="12" fill="#ffffff" opacity="0.9" />
-                        <path d="M200 60c22-14 58-10 72 14 12 21 8 50-6 72l24 12-52 6c-32-2-54-22-54-52 0-22 10-40 16-52Z" fill="#dbeafe" stroke="#8b5cf6" stroke-width="3" />
-                        <circle cx="238" cy="112" r="12" fill="#8b5cf6" opacity="0.35" />
-                        <path d="M115 208 196 188" stroke="#22c55e" stroke-width="10" stroke-linecap="round" />
-                        <path d="M90 200c14 22 46 36 74 24 18-8 28-22 32-36" stroke="#38bdf8" stroke-width="10" stroke-linecap="round" />
-                        <g>
-                            <path d="M64 140c-6-16 4-34 22-40l92-30c18-6 36 2 40 18" fill="#fffaf0" stroke="#ffd166" stroke-width="4" />
-                            <path d="M64 140 86 196l22-8-22-56Z" fill="#ffb4b4" />
-                            <path d="m86 196 22-8 8 22-22 8Z" fill="#fb7185" />
-                            <path d="M196 112c10-6 14-16 10-24-4-10-16-14-30-10-16 4-26 16-22 28 4 10 18 14 32 6Z" fill="#e0f2fe" stroke="#60a5fa" stroke-width="3" />
-                        </g>
-                    </svg>
-                    <p class="illustration-copy">Learn, play, and launch new skills into orbit.</p>
                 </div>
+            </header>
 
-                <div class="auth-content">
-                    <div class="auth-header">
-                        <div>
-                            <p class="eyebrow">BrightLearn Portal</p>
-                            <h1 id="auth-title">Welcome to Snake Study!</h1>
-                            <p class="subtitle" id="auth-toggle-text">Log in to continue your adventure.</p>
+            <main class="flex min-h-screen items-center justify-center px-4 pb-12 pt-24">
+                <div class="grid w-full max-w-6xl grid-cols-1 items-center gap-12 lg:grid-cols-2">
+                    <div class="hidden flex-col items-center space-y-8 text-center lg:flex">
+                        <div class="relative w-full max-w-md">
+                            <div class="absolute -left-12 -top-12 h-48 w-48 rounded-full bg-primary-container opacity-30 mix-blend-multiply blur-3xl filter"></div>
+                            <div class="absolute -bottom-12 -right-12 h-64 w-64 rounded-full bg-secondary-container opacity-30 mix-blend-multiply blur-3xl filter"></div>
+                            <div class="relative rotate-2 rounded-xl border border-outline-variant/10 bg-surface-container p-8 shadow-sm">
+                                <img alt="Snake Mascot" class="h-auto w-full -rotate-2 rounded-lg shadow-xl transition-transform duration-500 hover:rotate-0"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzYnSk6jWBX3v24nejQ86CMqaAQT7IPN3xGyImkr4jjxo3Kq5E9nPGBEC7DZN22F36giufn9ojAxbsZqE7vcuWCmh4T-axWaunzEbk0sZw1Iol6Ev5yezJBszK6FMVtmUrprQsI4cgq5JVAW2vybAMZiypXcrDAdwP6bgzVFN2omaEiBnfY4Y65vy7gZsGDAa_QJ1hFU-AYywkz8YhkCfpO6bvdjGl6bUUSfV-mpeN690S6sL9zTWFCB5KCpU6TeXpg9f-uomUdjn-" />
+                            </div>
                         </div>
-                        <span class="badge">Kid Safe</span>
+                        <div class="space-y-4 px-6">
+                            <h1 id="auth-title" class="font-headline text-5xl font-extrabold leading-tight tracking-tight text-on-surface">
+                                Chao mung ban den voi <span class="text-primary">Snake Study!</span>
+                            </h1>
+                            <p id="auth-toggle-text" class="text-xl font-medium text-on-surface-variant">Kham pha the gioi tri thuc cung nguoi ban ran nho thong thai.</p>
+                        </div>
                     </div>
 
-                    <div class="tab-row" role="tablist" aria-label="Authentication modes">
-                        <button class="tab active" data-auth-tab="login" aria-selected="true" role="tab">Login</button>
-                        <button class="tab" data-auth-tab="signup" aria-selected="false" role="tab">Create Account</button>
-                    </div>
-
-                    <form id="login-form" class="auth-form active" novalidate aria-label="Login form">
-                        <div class="auth-field">
-                            <input type="text" id="username" name="username" autocomplete="username" placeholder=" " required />
-                            <label for="username">Email or Username</label>
-                            <small class="auth-field__feedback"></small>
+                    <div class="rounded-xl border border-outline-variant/5 bg-surface-container-lowest p-8 shadow-[0_24px_48px_rgba(42,49,39,0.06)] md:p-12">
+                        <div class="mb-8 text-center lg:hidden">
+                            <h1 id="auth-title-mobile" class="font-headline text-3xl font-extrabold tracking-tight text-on-surface">Chao mung tro lai!</h1>
+                            <p id="auth-toggle-text-mobile" class="mt-1 text-sm font-medium text-on-surface-variant">Dang nhap de tiep tuc cuoc phieu luu.</p>
                         </div>
 
-                        <div class="auth-field">
-                            <input type="password" id="password" name="password" autocomplete="current-password" placeholder=" "
-                                required />
-                            <label for="password">Password</label>
-                            <small class="auth-field__feedback"></small>
+                        <form id="login-form" data-auth-form class="space-y-6" novalidate aria-label="Login form">
+                            <div data-auth-field class="space-y-2">
+                                <label for="username" class="ml-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Ten dang nhap</label>
+                                <div class="group relative">
+                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                                        <span class="material-symbols-outlined text-outline transition-colors group-focus-within:text-primary">person</span>
+                                    </div>
+                                    <input type="text" id="username" name="username" autocomplete="username" placeholder="Nhap ten cua ban..."
+                                        class="block w-full rounded-lg border-none bg-surface-container py-4 pl-12 pr-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:bg-white focus:ring-4 focus:ring-primary/10" required />
+                                </div>
+                                <small data-feedback class="min-h-4 text-xs text-error"></small>
+                            </div>
+
+                            <div data-auth-field class="space-y-2">
+                                <label for="password" class="ml-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Mat khau</label>
+                                <div class="group relative">
+                                    <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                                        <span class="material-symbols-outlined text-outline transition-colors group-focus-within:text-primary">key</span>
+                                    </div>
+                                    <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••"
+                                        class="block w-full rounded-lg border-none bg-surface-container py-4 pl-12 pr-12 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:bg-white focus:ring-4 focus:ring-primary/10" required />
+                                    <button class="absolute inset-y-0 right-0 flex items-center pr-4 text-outline transition-colors hover:text-on-surface" type="button">
+                                        <span class="material-symbols-outlined">visibility</span>
+                                    </button>
+                                </div>
+                                <small data-feedback class="min-h-4 text-xs text-error"></small>
+                            </div>
+
+                            <div class="flex flex-wrap items-center justify-between gap-4 py-2">
+                                <label class="group flex cursor-pointer items-center gap-3">
+                                    <div class="relative">
+                                        <input type="checkbox" id="remember-me" class="peer hidden" />
+                                        <div class="flex h-6 w-6 items-center justify-center rounded-md border-2 border-outline-variant transition-all peer-checked:border-primary peer-checked:bg-primary">
+                                            <span class="material-symbols-outlined scale-0 text-sm text-white transition-transform peer-checked:scale-100">check</span>
+                                        </div>
+                                    </div>
+                                    <span class="select-none font-medium text-on-surface-variant group-hover:text-on-surface">Ghi nho minh nhe!</span>
+                                </label>
+                                <a href="#" id="forgot-password" class="font-bold text-secondary decoration-2 underline-offset-4 hover:underline">Quen mat khau roi a?</a>
+                            </div>
+
+                            <button type="button" id="btn-login"
+                                class="flex w-full items-center justify-center gap-3 rounded-full bg-primary px-8 py-5 font-headline text-xl font-extrabold text-white shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
+                                Dang nhap
+                                <span class="material-symbols-outlined text-2xl" data-weight="fill">play_arrow</span>
+                            </button>
+
+                            <p id="login-message" class="min-h-5 text-sm font-semibold" role="status" aria-live="polite"></p>
+                        </form>
+
+                        <div class="relative my-10">
+                            <div class="absolute inset-0 flex items-center">
+                                <div class="w-full border-t border-outline-variant/30"></div>
+                            </div>
+                            <div class="relative flex justify-center text-sm">
+                                <span class="bg-surface-container-lowest px-4 text-outline font-bold uppercase tracking-widest">Hoac dang nhap bang</span>
+                            </div>
                         </div>
 
-                        <div class="auth-row">
-                            <label class="remember">
-                                <input type="checkbox" id="remember-me" />
-                                <span>Remember me</span>
-                            </label>
-                            <a href="#" id="forgot-password" class="link">Forgot password?</a>
-                        </div>
-
-                        <button type="button" id="btn-login" class="primary-btn">Login</button>
-
-                        <p class="divider"><span>or continue with</span></p>
-                        <div class="social-row">
-                            <button type="button" class="social-btn google" id="btn-google">
-                                <span class="icon">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                        <div class="grid grid-cols-2 gap-4">
+                            <button type="button" id="btn-google"
+                                class="flex items-center justify-center gap-3 rounded-lg border-2 border-outline-variant/20 py-4 font-bold text-on-surface transition-colors hover:bg-surface-container">
+                                <span class="inline-flex h-6 w-6 items-center justify-center" aria-hidden="true">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                                         <path fill="#EA4335"
                                             d="M12 10.2v3.84h5.44C17.1 16.98 14.84 18.6 12 18.6c-3.66 0-6.64-2.98-6.64-6.64S8.34 5.32 12 5.32c1.66 0 3.16.6 4.32 1.58l2.92-2.92C17.34 2.52 14.84 1.4 12 1.4 5.84 1.4.88 6.36.88 12.52S5.84 23.64 12 23.64c5.52 0 10.12-4 10.12-11.64 0-.76-.08-1.5-.2-2.2H12Z" />
                                     </svg>
                                 </span>
-                                Continue with Google
+                                Google
                             </button>
-                            <button type="button" class="social-btn facebook" id="btn-facebook">
-                                <span class="icon">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path fill="#fff"
-                                            d="M15 4h2.4V0H13a5 5 0 0 0-5 5v3H5v4h3v12h4.2V12h3.5l.5-4H12V5c0-.9.7-1 1.4-1H15Z" />
+                            <button type="button" id="btn-facebook"
+                                class="flex items-center justify-center gap-3 rounded-lg border-2 border-outline-variant/20 py-4 font-bold text-on-surface transition-colors hover:bg-surface-container">
+                                <span class="inline-flex h-6 w-6 items-center justify-center" aria-hidden="true">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <path fill="#1877F2"
+                                            d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.03 1.79-4.71 4.54-4.71 1.32 0 2.7.24 2.7.24v2.97h-1.52c-1.5 0-1.97.94-1.97 1.9v2.28h3.35l-.54 3.49h-2.81V24C19.61 23.1 24 18.1 24 12.07Z" />
                                     </svg>
                                 </span>
-                                Continue with Facebook
+                                Facebook
                             </button>
                         </div>
 
-                        <button type="button" id="btn-guest" class="ghost-btn">Play as Guest</button>
-                        <p id="login-message" role="status" aria-live="polite"></p>
-                    </form>
-
-                    <form id="signup-form" class="auth-form" novalidate aria-label="Create account form">
-                        <div class="auth-field">
-                            <input type="text" id="signup-name" name="signup-name" autocomplete="name" placeholder=" "
-                                required />
-                            <label for="signup-name">Child's first name</label>
-                            <small class="auth-field__feedback"></small>
+                        <div class="mt-12 space-y-4 rounded-xl border border-outline-variant/10 bg-surface-container-low p-8 text-center">
+                            <p class="font-semibold text-on-surface-variant">Chua co tai khoan? Tham gia ngay!</p>
+                            <button type="button" id="to-signup" data-auth-tab="signup"
+                                data-active-classes="text-[#4CAF50] font-extrabold border-b-4 border-[#4CAF50] pb-1"
+                                data-inactive-classes="font-medium text-[#2a3127] dark:text-[#c4c8ba]"
+                                class="w-full rounded-full bg-tertiary-container px-8 py-4 font-headline text-lg font-extrabold text-on-tertiary-container shadow-md transition-all hover:scale-[1.02] active:scale-95">
+                                Dang ky tai khoan moi
+                            </button>
+                            <button type="button" id="btn-guest"
+                                class="w-full rounded-full border-2 border-outline-variant bg-surface px-8 py-4 text-sm font-bold text-on-surface transition-all hover:scale-[1.02] active:scale-95">
+                                Choi voi tai khoan khach
+                            </button>
                         </div>
-
-                        <div class="auth-field">
-                            <input type="email" id="signup-email" name="signup-email" autocomplete="email" placeholder=" "
-                                required />
-                            <label for="signup-email">Parent email</label>
-                            <small class="auth-field__feedback"></small>
-                        </div>
-
-                        <div class="auth-field auth-field--stacked">
-                            <input type="password" id="signup-password" name="signup-password" autocomplete="new-password"
-                                minlength="8" maxlength="12" placeholder=" " required />
-                            <label for="signup-password">Create a password</label>
-                            <div class="password-meter" aria-hidden="true">
-                                <span id="strength-bar"></span>
-                            </div>
-                            <div class="strength-label" id="strength-label">Start typing to see strength</div>
-                            <ul class="requirements" aria-live="polite">
-                                <li data-rule="length">8–12 characters</li>
-                                <li data-rule="upper">At least 1 uppercase</li>
-                                <li data-rule="lower">At least 1 lowercase</li>
-                                <li data-rule="number">At least 1 number</li>
-                                <li data-rule="special">At least 1 special character</li>
-                            </ul>
-                            <small class="auth-field__feedback"></small>
-                        </div>
-
-                        <div class="auth-field">
-                            <input type="password" id="signup-confirm" name="signup-confirm" autocomplete="new-password"
-                                placeholder=" " required />
-                            <label for="signup-confirm">Confirm password</label>
-                            <small class="auth-field__feedback"></small>
-                        </div>
-
-                        <button type="button" id="btn-register" class="primary-btn">Create account</button>
-                        <p id="signup-message" class="inline-message" role="status" aria-live="polite"></p>
-                    </form>
+                    </div>
                 </div>
-            </div>
+            </main>
 
-            <!-- Password reset modal -->
-            <div id="reset-modal" class="modal" aria-hidden="true">
-                <div class="modal__backdrop" data-close-reset></div>
-                <div class="modal__dialog" role="dialog" aria-labelledby="reset-title" aria-modal="true">
-                    <button class="modal__close" type="button" data-close-reset aria-label="Close reset dialog">×</button>
-                    <p class="eyebrow">Forgot password</p>
-                    <h3 id="reset-title">Send a reset link</h3>
-                    <p class="subtitle">Enter the parent email you use to sign in.</p>
+            <footer class="mt-12 w-full rounded-t-[3rem] bg-[#e2ebda] px-8 py-12 tonal-depth-change dark:bg-[#3d4935]">
+                <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 md:flex-row">
+                    <div class="text-lg font-bold text-[#2a3127] font-headline">Snake Study</div>
+                    <div class="flex gap-8">
+                        <a class="text-sm font-label text-[#2a3127]/70 decoration-2 underline-offset-4 hover:underline dark:text-[#e2e3dd]/70" href="#">Contact Us</a>
+                        <a class="text-sm font-label text-[#2a3127]/70 decoration-2 underline-offset-4 hover:underline dark:text-[#e2e3dd]/70" href="#">Privacy Policy</a>
+                        <a class="text-sm font-label text-[#2a3127]/70 decoration-2 underline-offset-4 hover:underline dark:text-[#e2e3dd]/70" href="#">Child Safety</a>
+                    </div>
+                    <p class="text-center text-sm text-on-surface-variant">© 2024 Snake Study. Crafted for little explorers.</p>
+                </div>
+            </footer>
+        </section>
 
-                    <div class="auth-field">
-                        <input type="email" id="reset-email" name="reset-email" autocomplete="email" placeholder=" " required />
-                        <label for="reset-email">Parent email</label>
-                        <small class="auth-field__feedback"></small>
+        <section id="signup-screen" data-auth-screen="signup" class="hidden min-h-screen bg-background text-on-surface">
+            <header class="fixed left-0 right-0 top-0 z-50 bg-[#f2f9ea]/80 shadow-[0_8px_32px_rgba(42,49,39,0.06)] backdrop-blur-xl dark:bg-[#1a1c18]/80">
+                <div class="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl font-black tracking-tighter text-[#2a3127] font-headline dark:text-[#e2e3dd]">Snake Study</span>
+                    </div>
+                    <nav class="hidden items-center gap-8 md:flex">
+                        <button type="button" data-auth-tab="login"
+                            data-active-classes="text-[#4CAF50] font-extrabold border-b-4 border-[#4CAF50] pb-1"
+                            data-inactive-classes="font-medium text-[#2a3127] dark:text-[#c4c8ba]"
+                            class="font-medium text-[#2a3127] transition-all duration-300 hover:scale-105 hover:text-[#4CAF50] dark:text-[#c4c8ba]">
+                            Login
+                        </button>
+                        <button type="button" data-auth-tab="signup"
+                            data-active-classes="text-[#4CAF50] font-extrabold border-b-4 border-[#4CAF50] pb-1"
+                            data-inactive-classes="font-medium text-[#2a3127] dark:text-[#c4c8ba]"
+                            class="text-[#4CAF50] pb-1 font-extrabold border-b-4 border-[#4CAF50] transition-all duration-300 hover:scale-105">
+                            Sign Up
+                        </button>
+                    </nav>
+                    <div class="flex items-center">
+                        <span class="material-symbols-outlined text-2xl text-[#4CAF50]" data-icon="school">school</span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex flex-grow items-center justify-center px-4 pb-12 pt-24">
+                <div class="grid w-full max-w-6xl grid-cols-1 items-center gap-12 lg:grid-cols-2">
+                    <div class="flex flex-col items-center space-y-8 text-center lg:items-start lg:text-left">
+                        <div class="group relative">
+                            <div class="absolute -left-10 -top-10 h-64 w-64 rounded-full bg-primary-container opacity-20 blur-3xl"></div>
+                            <div class="relative flex h-72 w-72 items-center justify-center overflow-visible rounded-xl md:h-96 md:w-96">
+                                <img alt="Friendly snake mascot waving and holding a diploma"
+                                    class="h-full w-full object-contain drop-shadow-2xl transition-transform duration-500 group-hover:scale-105"
+                                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC07vWLxDI-sm1SbzcVv9WxsD_Lp6swWFstk-WsVMmQc4EIEDngJVPuNcSRn3jGQdH3Byf8Git4gb6vPM6GZt8fo6-9-lPMvJ-sxW6FK8Ait1TOsnG-tyIUOYTQWPj-c5XS0RRLZqMPuKuxsAmLpCQE_-LNSAt-sjTLqRhXS19tuAtvlC_qTKF55UsQYgvQpSS90S3vfmdh2vNx4gxeGy9GMS71vZmUsdHHugbcg3gPVB77KCK5F6-nUZXqsgJNLJUjn6NeRliwfHpP" />
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <h1 class="font-headline text-4xl font-extrabold leading-tight tracking-tight text-on-surface md:text-5xl lg:text-6xl">
+                                Bat dau chuyen <span class="italic text-primary">phieu luu</span> hoc tap cung Snake Study!
+                            </h1>
+                            <p class="max-w-md text-lg font-medium text-on-surface-variant">
+                                Kham pha the gioi tri thuc ky thu qua tung bai hoc sinh dong va phan thuong hap dan.
+                            </p>
+                        </div>
                     </div>
 
-                    <button type="button" id="reset-submit" class="primary-btn">Send reset link</button>
-                    <p id="reset-message" class="inline-message" role="status" aria-live="polite"></p>
+                    <div class="mx-auto w-full max-w-md">
+                        <div class="relative overflow-hidden rounded-xl bg-surface-container-lowest p-8 shadow-[0_24px_48px_rgba(42,49,39,0.06)] md:p-10">
+                            <div class="absolute -mr-12 -mt-12 right-0 top-0 h-32 w-32 rounded-bl-full bg-secondary-container/20"></div>
+
+                            <form id="signup-form" data-auth-form class="relative z-10 space-y-6 hidden" novalidate aria-label="Sign up form">
+                                <div data-auth-field class="space-y-2">
+                                    <label for="signup-name" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
+                                        <span class="material-symbols-outlined text-sm" data-icon="face">face</span>
+                                        BIET DANH
+                                    </label>
+                                    <input type="text" id="signup-name" name="signup-name" autocomplete="name" placeholder="Ten cua be la gi nhi?"
+                                        class="w-full rounded-lg border-none bg-surface-container px-5 py-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:scale-[1.02] focus:ring-2 focus:ring-primary/20" required />
+                                    <small data-feedback class="min-h-4 text-xs text-error"></small>
+                                </div>
+
+                                <div data-auth-field class="space-y-2">
+                                    <label for="signup-email" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
+                                        <span class="material-symbols-outlined text-sm" data-icon="mail">mail</span>
+                                        EMAIL (Danh cho phu huynh)
+                                    </label>
+                                    <input type="email" id="signup-email" name="signup-email" autocomplete="email" placeholder="email@phuhuynh.com"
+                                        class="w-full rounded-lg border-none bg-surface-container px-5 py-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:scale-[1.02] focus:ring-2 focus:ring-primary/20" required />
+                                    <small data-feedback class="min-h-4 text-xs text-error"></small>
+                                </div>
+
+                                <div data-auth-field class="space-y-2">
+                                    <label for="signup-password" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
+                                        <span class="material-symbols-outlined text-sm" data-icon="lock">lock</span>
+                                        MAT KHAU
+                                    </label>
+                                    <div class="relative">
+                                        <input type="password" id="signup-password" name="signup-password" autocomplete="new-password" minlength="8" maxlength="12" placeholder="••••••••"
+                                            class="w-full rounded-lg border-none bg-surface-container px-5 py-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:scale-[1.02] focus:ring-2 focus:ring-primary/20" required />
+                                        <button class="absolute right-4 top-1/2 -translate-y-1/2 text-outline" type="button">
+                                            <span class="material-symbols-outlined" data-icon="visibility_off">visibility_off</span>
+                                        </button>
+                                    </div>
+                                    <div class="h-2 overflow-hidden rounded-full bg-surface-container" aria-hidden="true">
+                                        <span id="strength-bar" class="block h-full w-0 rounded-full bg-[#e5e7eb] transition-all duration-300"></span>
+                                    </div>
+                                    <div class="text-xs font-semibold text-on-surface-variant" id="strength-label">Bat dau nhap de xem do manh</div>
+                                    <ul class="space-y-1 text-xs text-on-surface-variant" aria-live="polite">
+                                        <li data-password-rule="length" class="flex items-center gap-2 font-medium">
+                                            <span data-rule-icon class="inline-block w-4">○</span>
+                                            <span>8-12 ky tu</span>
+                                        </li>
+                                        <li data-password-rule="upper" class="flex items-center gap-2 font-medium">
+                                            <span data-rule-icon class="inline-block w-4">○</span>
+                                            <span>It nhat 1 chu hoa</span>
+                                        </li>
+                                        <li data-password-rule="lower" class="flex items-center gap-2 font-medium">
+                                            <span data-rule-icon class="inline-block w-4">○</span>
+                                            <span>It nhat 1 chu thuong</span>
+                                        </li>
+                                        <li data-password-rule="number" class="flex items-center gap-2 font-medium">
+                                            <span data-rule-icon class="inline-block w-4">○</span>
+                                            <span>It nhat 1 so</span>
+                                        </li>
+                                        <li data-password-rule="special" class="flex items-center gap-2 font-medium">
+                                            <span data-rule-icon class="inline-block w-4">○</span>
+                                            <span>It nhat 1 ky tu dac biet</span>
+                                        </li>
+                                    </ul>
+                                    <small data-feedback class="min-h-4 text-xs text-error"></small>
+                                </div>
+
+                                <div data-auth-field class="space-y-2">
+                                    <label for="signup-confirm" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
+                                        <span class="material-symbols-outlined text-sm" data-icon="verified">verified</span>
+                                        XAC NHAN MAT KHAU
+                                    </label>
+                                    <input type="password" id="signup-confirm" name="signup-confirm" autocomplete="new-password" placeholder="Nhap lai mat khau"
+                                        class="w-full rounded-lg border-none bg-surface-container px-5 py-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:scale-[1.02] focus:ring-2 focus:ring-primary/20" required />
+                                    <small data-feedback class="min-h-4 text-xs text-error"></small>
+                                </div>
+
+                                <div class="pt-4">
+                                    <button type="button" id="btn-register"
+                                        class="flex w-full items-center justify-center gap-3 rounded-full bg-tertiary-container py-5 font-headline text-xl font-black text-on-tertiary-container shadow-lg shadow-tertiary-container/30 transition-all duration-300 hover:scale-105 active:scale-95">
+                                        Tham gia ngay!
+                                        <span class="material-symbols-outlined font-bold" data-icon="rocket_launch" style="font-variation-settings: 'FILL' 1;">rocket_launch</span>
+                                    </button>
+                                </div>
+
+                                <p id="signup-message" class="min-h-5 text-sm font-semibold" role="status" aria-live="polite"></p>
+
+                                <div class="pt-2 text-center">
+                                    <p class="text-sm font-medium text-on-surface-variant">
+                                        Da co tai khoan?
+                                        <button type="button" data-auth-tab="login"
+                                            data-active-classes="text-[#4CAF50] font-extrabold border-b-4 border-[#4CAF50] pb-1"
+                                            data-inactive-classes="text-primary font-bold underline underline-offset-4"
+                                            class="font-bold text-primary underline-offset-4 hover:underline">
+                                            Dang nhap tai day
+                                        </button>
+                                    </p>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="mt-8 flex items-center justify-center gap-6 opacity-60">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-lg" data-icon="verified_user">verified_user</span>
+                                <span class="text-xs font-bold uppercase tracking-wider">An toan tuyet doi</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-lg" data-icon="kid_star">kid_star</span>
+                                <span class="text-xs font-bold uppercase tracking-wider">Cho tre 4-12 tuoi</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+            </main>
+
+            <footer class="mt-auto w-full rounded-t-[3rem] bg-[#e2ebda] px-8 py-12 tonal-depth-change dark:bg-[#3d4935]">
+                <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 md:flex-row">
+                    <div class="flex flex-col gap-2">
+                        <span class="text-lg font-bold text-[#2a3127] font-headline">Snake Study</span>
+                        <p class="text-sm text-on-surface-variant">© 2024 Snake Study. Crafted for little explorers.</p>
+                    </div>
+                    <div class="flex gap-8">
+                        <a class="font-medium text-[#2a3127]/70 decoration-2 underline-offset-4 transition-all hover:underline dark:text-[#e2e3dd]/70" href="#">Contact Us</a>
+                        <a class="font-medium text-[#2a3127]/70 decoration-2 underline-offset-4 transition-all hover:underline dark:text-[#e2e3dd]/70" href="#">Privacy Policy</a>
+                        <a class="font-medium text-[#2a3127]/70 decoration-2 underline-offset-4 transition-all hover:underline dark:text-[#e2e3dd]/70" href="#">Child Safety</a>
+                    </div>
+                </div>
+            </footer>
+        </section>
+
+        <div id="reset-modal" class="fixed inset-0 hidden flex items-center justify-center px-4" aria-hidden="true">
+            <div class="absolute inset-0 bg-black/35" data-close-reset></div>
+            <div class="relative z-10 w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-7" role="dialog" aria-labelledby="reset-title" aria-modal="true">
+                <button class="absolute right-4 top-4 h-9 w-9 rounded-full bg-[#eef3e8] text-lg font-bold text-[#2a3127]" type="button" data-close-reset aria-label="Close reset dialog">×</button>
+                <p class="text-xs font-extrabold uppercase tracking-[0.14em] text-[#005e9f]">Forgot password</p>
+                <h3 id="reset-title" class="mt-2 font-headline text-2xl font-extrabold text-[#2a3127]">Send a reset link</h3>
+                <p class="mt-1 text-sm text-[#575e52]">Enter the parent email you use to sign in.</p>
+
+                <div data-auth-field class="mt-5 flex flex-col gap-2">
+                    <label for="reset-email" class="text-xs font-extrabold uppercase tracking-[0.12em] text-[#575e52]">Parent email</label>
+                    <input type="email" id="reset-email" name="reset-email" autocomplete="email" placeholder="parent@email.com"
+                        class="w-full rounded-2xl border-2 border-transparent bg-[#e2ebda] px-4 py-3 text-[15px] font-semibold text-[#2a3127] placeholder:text-[#7d8677] focus:border-[#006b1b] focus:bg-white focus:ring-4 focus:ring-[#006b1b26]"
+                        required />
+                    <small data-feedback class="min-h-4 text-xs text-[#b02500]"></small>
+                </div>
+
+                <button type="button" id="reset-submit"
+                    class="mt-4 inline-flex w-full items-center justify-center rounded-full bg-[#006b1b] px-6 py-3.5 font-headline text-base font-extrabold text-white shadow-[0_14px_28px_rgba(0,107,27,0.28)] transition hover:-translate-y-0.5">
+                    Send reset link
+                </button>
+                <p id="reset-message" class="mt-3 min-h-5 text-sm font-semibold" role="status" aria-live="polite"></p>
             </div>
         </div>
     </div>
