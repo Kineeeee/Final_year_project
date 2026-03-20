@@ -1,21 +1,17 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Logger = require('../../utils/Logger');
 const { QUIZ_PARSE_PROMPT } = require('./QuizParser');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || process.env.LLM_MODEL || 'models/gemini-3-flash-preview';
+const GEMINI_API_VERSION = process.env.GEMINI_API_VERSION || 'v1beta';
+const GEMINI_API_BASE = (process.env.GEMINI_API_BASE || process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
 
-let geminiClient;
-
-function getGeminiModel() {
-    if (!GEMINI_API_KEY) {
-        throw new Error('GEMINI_API_KEY is not set');
+function getGeminiModelPath() {
+    const model = (GEMINI_MODEL || '').trim();
+    if (!model) {
+        throw new Error('GEMINI_MODEL is not set');
     }
-
-    if (!geminiClient) {
-        geminiClient = new GoogleGenerativeAI(GEMINI_API_KEY);
-    }
-
-    return geminiClient.getGenerativeModel({ model: GEMINI_MODEL });
+    return model.startsWith('models/') ? model : `models/${model}`;
 }
 
 function normalizeMessageContent(content) {
@@ -65,37 +61,67 @@ async function callLlmChat(messages, options = {}) {
         timeoutMs = 20000,
     } = options;
 
-    const model = getGeminiModel();
+    if (!GEMINI_API_KEY) {
+        throw new Error('GEMINI_API_KEY is not set');
+    }
+
+    const modelPath = getGeminiModelPath();
     const basePrompt = messagesToPrompt(messages);
     let prompt = basePrompt;
 
-    if (responseFormat?.type === 'json_schema') {
-        // Gemini may return markdown fences; force plain JSON response in prompt.
-        prompt = `${basePrompt}\n\nReturn ONLY valid JSON. Do not include markdown fences or explanation text.`;
-    }
 
     const generationConfig = {
         temperature,
     };
 
+        // Keep JSON-shape control in prompt text for maximum compatibility across v1 models.
+        if (responseFormat?.type === 'json_schema') {
+            // Gemini may return markdown fences; force plain JSON response in prompt.
+            prompt = `${basePrompt}\n\nReturn ONLY valid JSON. Do not include markdown fences or explanation text.`;
+        }
+
     if (typeof maxTokens === 'number' && Number.isFinite(maxTokens)) {
         generationConfig.maxOutputTokens = maxTokens;
     }
 
-    const payload = await withTimeout(
-        model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig,
+    const query = new URLSearchParams({ key: GEMINI_API_KEY }).toString();
+    const url = `${GEMINI_API_BASE}/${GEMINI_API_VERSION}/${modelPath}:generateContent?${query}`;
+
+    const response = await withTimeout(
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig,
+            }),
+            signal: AbortSignal.timeout(timeoutMs),
         }),
         timeoutMs
     );
 
-    const content = payload?.response?.text?.();
+    if (!response.ok) {
+        const errorText = await safeReadText(response);
+        throw new Error(`Gemini request failed: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
+    }
+
+    const payload = await response.json();
+    const content = payload?.candidates?.[0]?.content?.parts?.map((p) => p?.text || '').join('') || '';
     if (!content) {
         throw new Error('Empty AI response');
     }
 
     return { content, payload };
+}
+
+async function safeReadText(response) {
+    try {
+        return await response.text();
+    } catch {
+        return '';
+    }
 }
 
 function buildPrompt(rawText, category) {
