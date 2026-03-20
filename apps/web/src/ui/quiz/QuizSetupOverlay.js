@@ -9,11 +9,12 @@ const CATEGORY_LABELS = {
 };
 
 export class QuizSetupOverlay {
-    constructor({ defaultCategory = 'math', onStart, onClose, disablePlay = false } = {}) {
+    constructor({ defaultCategory = 'math', onStart, onClose, disablePlay = false, mountNode = null } = {}) {
         this.category = defaultCategory;
         this.onStart = onStart;
         this.onClose = onClose;
         this.disablePlay = disablePlay;
+        this.mountNode = mountNode;
         this.selectedQuizSource = globalQuizPrefs.getQuizSource() || 'SYSTEM';
         this.status = null;
         this.previewQuestions = [];
@@ -41,9 +42,34 @@ export class QuizSetupOverlay {
         this.root = document.createElement('div');
         this.root.className = 'quiz-overlay';
         this.root.innerHTML = this.renderSkeleton();
-        document.body.appendChild(this.root);
+        const host = this.mountNode || document.getElementById('game-container') || document.body;
+        host.appendChild(this.root);
+
+        // Inline fail-safe styles so the overlay still appears if external CSS conflicts.
+        this.root.style.setProperty('position', 'fixed', 'important');
+        this.root.style.setProperty('inset', '0', 'important');
+        this.root.style.setProperty('z-index', '1200', 'important');
+        this.root.style.setProperty('display', 'block', 'important');
+        this.root.style.setProperty('pointer-events', 'auto', 'important');
+
+        const backdrop = this.root.querySelector('.quiz-overlay__backdrop');
+        if (backdrop) {
+            backdrop.style.setProperty('position', 'absolute', 'important');
+            backdrop.style.setProperty('inset', '0', 'important');
+            backdrop.style.setProperty('pointer-events', 'auto', 'important');
+        }
+
+        const panel = this.root.querySelector('.quiz-overlay__panel');
+        if (panel) {
+            panel.style.setProperty('position', 'absolute', 'important');
+            panel.style.setProperty('left', '50%', 'important');
+            panel.style.setProperty('top', '50%', 'important');
+            panel.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+            panel.style.setProperty('display', 'flex', 'important');
+            panel.style.setProperty('pointer-events', 'auto', 'important');
+        }
+
         // Ensure overlay is interactable and sits above canvas
-        this.root.style.pointerEvents = 'auto';
         console.log('[QuizOverlay] opened, pointerEvents=', this.root.style.pointerEvents);
         this.root.addEventListener('pointerdown', (e) => {
             console.log('[QuizOverlay] pointerdown target=', e.target?.className || e.target?.tagName);

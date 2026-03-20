@@ -159,15 +159,23 @@ export class MainMenuFlowController {
             this.showNetworkErrorModal('Vui lòng đăng nhập để upload đề của bạn.');
             return;
         }
+        const mountNode = document.getElementById('game-container') || document.body;
         const overlay = new QuizSetupOverlay({
             defaultCategory: 'math',
+            mountNode,
             onClose: () => {
                 s.input.enabled = true;
             },
             disablePlay: true,
         });
-        s.input.enabled = false;
-        overlay.open();
+        try {
+            // Do not hard-disable scene input here; if overlay rendering fails,
+            // MainMenu must remain usable instead of looking frozen.
+            overlay.open();
+        } catch (err) {
+            s.input.enabled = true;
+            this.showNetworkErrorModal(err?.message || 'Không mở được màn hình Upload');
+        }
     }
 
     openCategorySelect(mode) {
