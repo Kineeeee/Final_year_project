@@ -15,26 +15,53 @@ function extractReply(content = '') {
     const raw = (content || '').toString().trim();
     if (!raw) return '';
 
-    try {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed.reply === 'string') {
-            return parsed.reply.trim();
-        }
-    } catch {
-        const match = raw.match(/(\{[\s\S]*\})/);
-        if (match) {
-            try {
-                const parsed = JSON.parse(match[0]);
-                if (parsed && typeof parsed.reply === 'string') {
-                    return parsed.reply.trim();
-                }
-            } catch {
-                // fall through to raw text
-            }
-        }
+    const unwrapped = unwrapJsonLike(raw);
+    if (unwrapped) {
+        return unwrapped;
     }
 
     return raw;
+}
+
+function unwrapJsonLike(raw) {
+    const direct = parseKnownReplyShape(raw);
+    if (direct) return direct;
+
+    const match = raw.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (!match) return '';
+
+    return parseKnownReplyShape(match[0]);
+}
+
+function parseKnownReplyShape(text) {
+    try {
+        const parsed = JSON.parse(text);
+        return pickReplyText(parsed);
+    } catch {
+        return '';
+    }
+}
+
+function pickReplyText(parsed, depth = 0) {
+    if (depth > 2 || parsed == null) return '';
+
+    if (typeof parsed === 'string') {
+        const str = parsed.trim();
+        if (!str) return '';
+        // Handle nested JSON string payloads.
+        const nested = parseKnownReplyShape(str);
+        return nested || str;
+    }
+
+    if (typeof parsed !== 'object') return '';
+
+    const candidates = [parsed.reply, parsed.response, parsed.message, parsed.text];
+    for (const candidate of candidates) {
+        const value = pickReplyText(candidate, depth + 1);
+        if (value) return value;
+    }
+
+    return '';
 }
 
 function sanitizeHistory(history) {
