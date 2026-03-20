@@ -3,7 +3,6 @@ const Logger = require('../../utils/Logger');
 const { QUIZ_PARSE_PROMPT } = require('./QuizParser');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.LLM_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || process.env.LLM_MODEL || 'gemini-2.0-flash-lite';
 
 let geminiClient;
 
