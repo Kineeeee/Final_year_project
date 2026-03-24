@@ -71,9 +71,9 @@ class NetworkSystem {
             return;
         }
 
-        // Capacity guard: max 30 players per server instance
+        // Capacity guard: max 200 players + bots per server instance
         const currentPlayers = Object.keys(this.playerManager.getAllPlayers() || {}).length;
-        if (currentPlayers >= 30) {
+        if (currentPlayers >= 200) {
             socket.emit('room_full');
             socket.disconnect(true);
             return;

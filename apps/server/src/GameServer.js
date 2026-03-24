@@ -61,6 +61,7 @@ class GameServer {
         this.container.register('broadcastSystem', this.broadcastSystem);
 
         this.networkSystem.initialize();
+        this.broadcastSystem.initialize();
     }
 
     /**

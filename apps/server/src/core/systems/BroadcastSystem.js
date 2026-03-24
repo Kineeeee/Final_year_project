@@ -11,11 +11,25 @@ class BroadcastSystem {
 
         // Tick state
         this.serverTick = 0;
+        
+        // Cache for rank calculation (update every 5 ticks = ~6 FPS)
+        this.cachedPlayerRanks = {};
+        this.rankCacheTickInterval = 5;
     }
 
     get playerManager() { return this.container.get('playerManager'); }
     get foodManager() { return this.container.get('foodManager'); }
     get spatialGrid() { return this.container.get('spatialGrid'); }
+
+    initialize() {
+        // Listen to player disconnect events to clear rank cache
+        const eventBus = this.container.get('eventBus');
+        if (eventBus) {
+            eventBus.on('playerDisconnected', (playerId) => {
+                delete this.cachedPlayerRanks[playerId];
+            });
+        }
+    }
 
     broadcastGameUpdate() {
         this.serverTick++;
@@ -80,11 +94,23 @@ class BroadcastSystem {
     broadcastWorldDelta({ serverTime }) {
         const players = this.playerManager.getAllPlayers();
 
-        // Calculate Ranks
+        // Calculate Ranks (cache every N ticks to reduce CPU)
+        if (this.serverTick % this.rankCacheTickInterval === 0) {
+            const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
+            sortedPlayers.forEach((p, i) => {
+                p.rank = i + 1;
+                this.cachedPlayerRanks[p.id] = i + 1;
+            });
+        } else {
+            // Use cached ranks
+            Object.keys(players).forEach((id) => {
+                if (this.cachedPlayerRanks[id]) {
+                    players[id].rank = this.cachedPlayerRanks[id];
+                }
+            });
+        }
+        
         const sortedPlayers = Object.values(players).sort((a, b) => b.score - a.score);
-        sortedPlayers.forEach((p, i) => {
-            p.rank = i + 1;
-        });
 
         const r = INTEREST_VIEW_RADIUS;
         const r2 = r * r;

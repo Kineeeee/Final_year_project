@@ -77,24 +77,47 @@ class BotManager {
     }
 
     updateBotAI(bot) {
-        // Simple AI: Find nearest food
+        // Optimized AI: Use Spatial Grid to find nearest food (O(1) instead of O(n))
         let nearestDist = Infinity;
         let targetX = bot.x;
         let targetY = bot.y;
+        let nearestFood = null;
 
-        // Search for food
-        const allFood = this.foodManager.getAllFood();
-        Object.keys(allFood).forEach((fid) => {
-            const f = allFood[fid];
-            const dx = f.x - bot.x;
-            const dy = f.y - bot.y;
-            const d = dx * dx + dy * dy;
-            if (d < nearestDist) {
-                nearestDist = d;
-                targetX = f.x;
-                targetY = f.y;
+        // Query nearby food using spatial grid (500 unit radius reasonable for search)
+        const spatialGrid = this.container.get('spatialGrid');
+        if (spatialGrid) {
+            const searchRadius = 800; // Tune based on world density
+            const nearbyEntities = spatialGrid.query(bot.x, bot.y, searchRadius);
+            
+            for (const entity of nearbyEntities) {
+                // Filter to only foods
+                if (!entity.playerId && entity.type) {
+                    const dx = entity.x - bot.x;
+                    const dy = entity.y - bot.y;
+                    const d = dx * dx + dy * dy;
+                    if (d < nearestDist) {
+                        nearestDist = d;
+                        targetX = entity.x;
+                        targetY = entity.y;
+                        nearestFood = entity;
+                    }
+                }
             }
-        });
+        } else {
+            // Fallback: simple search if spatial grid not available
+            const allFood = this.foodManager.getAllFood();
+            Object.keys(allFood).forEach((fid) => {
+                const f = allFood[fid];
+                const dx = f.x - bot.x;
+                const dy = f.y - bot.y;
+                const d = dx * dx + dy * dy;
+                if (d < nearestDist) {
+                    nearestDist = d;
+                    targetX = f.x;
+                    targetY = f.y;
+                }
+            });
+        }
 
         // Calculate target angle
         bot.targetRotation = Math.atan2(targetY - bot.y, targetX - bot.x);
