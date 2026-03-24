@@ -215,6 +215,56 @@ export class MainMenu extends Scene {
 
         uiRoot.add(statsContainer);
 
+        // --- 4A. GLOBAL LEADERBOARD (REDIS) ---
+        const globalPanelW = Math.min(scaleVal(isMobile ? 310 : 350), width - padding * 2);
+        const globalPanelH = scaleVal(isMobile ? 106 : 128);
+        const globalPanelX = width - padding - globalPanelW / 2;
+        const globalPanelY = headerY + scaleVal(isMobile ? 56 : 62);
+
+        const globalPanel = this.add.container(globalPanelX, globalPanelY).setDepth(40);
+        const globalBg = this.add.graphics();
+        globalBg.fillStyle(0x000000, 0.75);
+        globalBg.fillRoundedRect(-globalPanelW / 2, -globalPanelH / 2, globalPanelW, globalPanelH, 10);
+        globalBg.lineStyle(2, 0xf4d03f, 0.9);
+        globalBg.strokeRoundedRect(-globalPanelW / 2, -globalPanelH / 2, globalPanelW, globalPanelH, 10);
+
+        const globalTitle = this.add.text(-globalPanelW / 2 + scaleVal(10), -globalPanelH / 2 + scaleVal(12), 'GLOBAL TOP 5', {
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: `${scaleVal(isMobile ? 9 : 10)}px`,
+            color: '#f7dc6f',
+            stroke: '#000000',
+            strokeThickness: 2,
+        }).setOrigin(0, 0);
+
+        const refreshLabel = this.add.text(globalPanelW / 2 - scaleVal(10), -globalPanelH / 2 + scaleVal(12), 'REFRESH', {
+            fontFamily: '"Press Start 2P", monospace',
+            fontSize: `${scaleVal(isMobile ? 8 : 9)}px`,
+            color: '#7fffd4',
+            stroke: '#000000',
+            strokeThickness: 2,
+        }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+
+        refreshLabel.on('pointerdown', () => {
+            this.refreshGlobalLeaderboard();
+        });
+        refreshLabel.on('pointerover', () => refreshLabel.setTint(0xc8fff1));
+        refreshLabel.on('pointerout', () => refreshLabel.clearTint());
+
+        this.globalLeaderboardText = this.add.text(
+            -globalPanelW / 2 + scaleVal(10),
+            -globalPanelH / 2 + scaleVal(34),
+            'Dang tai Global leaderboard...',
+            {
+                fontFamily: '"Press Start 2P", monospace',
+                fontSize: `${scaleVal(isMobile ? 8 : 9)}px`,
+                color: '#ffffff',
+                lineSpacing: scaleVal(5),
+            }
+        ).setOrigin(0, 0);
+
+        globalPanel.add([globalBg, globalTitle, refreshLabel, this.globalLeaderboardText]);
+        uiRoot.add(globalPanel);
+
         // --- 4. GLOBAL QUIZ SOURCE + UPLOAD ---
         const sourceY = statsY + (statsH / 2) + scaleVal(isMobile ? 30 : 34);
         const sourceLabel = this.add.text(centerX - 240, sourceY, 'Quiz Source:', {
@@ -246,6 +296,7 @@ export class MainMenu extends Scene {
         uiRoot.add([sourceLabel, this.chipSystem, this.chipUser]);
         this.flow.refreshSourceChips();
         this.flow.preloadUserQuizStatus();
+        this.refreshGlobalLeaderboard();
 
         // --- 5. BOTTOM BUTTONS LAYOUT PLAN (used to avoid overlap with mode cards) ---
         const bottomButtons = [
@@ -433,6 +484,13 @@ export class MainMenu extends Scene {
         this.events.on('network:error', (data) => {
             this.flow.showNetworkErrorModal(data.message);
         });
+
+        this.events.once('shutdown', () => {
+            if (this._globalLeaderboardCleanup) {
+                this._globalLeaderboardCleanup();
+                this._globalLeaderboardCleanup = null;
+            }
+        });
     }
 
     createStylishButton(container, x, y, text, color, callback) {
@@ -601,5 +659,42 @@ export class MainMenu extends Scene {
                 });
             }
         });
+    }
+
+    refreshGlobalLeaderboard() {
+        if (!this.globalLeaderboardText || !this.flow) return;
+
+        if (this._globalLeaderboardCleanup) {
+            this._globalLeaderboardCleanup();
+            this._globalLeaderboardCleanup = null;
+        }
+
+        this.globalLeaderboardText.setText('Dang tai Global leaderboard...');
+        this._globalLeaderboardCleanup = this.flow.requestGlobalLeaderboard({
+            limit: 5,
+            onSuccess: (payload) => this.renderGlobalLeaderboard(payload),
+            onError: () => {
+                if (this.globalLeaderboardText) {
+                    this.globalLeaderboardText.setText('Khong the tai leaderboard\nVui long thu lai sau');
+                }
+            },
+        });
+    }
+
+    renderGlobalLeaderboard(payload) {
+        if (!this.globalLeaderboardText) return;
+
+        const top = payload && Array.isArray(payload.top) ? payload.top : [];
+        if (top.length === 0) {
+            this.globalLeaderboardText.setText('Chua co du lieu\nHay choi va leo top!');
+            return;
+        }
+
+        const lines = top.slice(0, 5).map((entry, index) => {
+            const name = entry?.name || 'Unknown';
+            const score = Number(entry?.score || 0);
+            return `${index + 1}. ${name}: ${score}`;
+        });
+        this.globalLeaderboardText.setText(lines.join('\n'));
     }
 }

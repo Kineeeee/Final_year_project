@@ -55,19 +55,50 @@ class PlayerManager {
         return this.container.get('spatialGrid');
     }
 
+    getLeaderboardKeys() {
+        const gameServer = this.container.get('gameServer');
+        const cfg = gameServer?.config || {};
+        const modeScope = cfg.roomCode || cfg.topic || cfg.mode || 'default';
+        const instanceScope = gameServer?.instanceId || 'local';
+        const matchScope = `${modeScope}:${instanceScope}`;
+
+        return {
+            matchLbKey: `leaderboard:match:${matchScope}`,
+            matchMetaKey: `leaderboard:match:meta:${matchScope}`,
+            globalLbKey: 'leaderboard:global',
+            globalMetaKey: 'leaderboard:global:meta',
+        };
+    }
+
+    isAuthenticatedPlayer(player) {
+        return !!(player && !player.isBot && player.username && !player.username.startsWith('Guest_'));
+    }
+
+    getGlobalMemberId(player) {
+        if (!this.isAuthenticatedPlayer(player)) return null;
+        return `u:${String(player.username).toLowerCase()}`;
+    }
+
     async updatePlayerScore(player, delta) {
         player.score += delta;
         if (player.score < 0) player.score = 0;
 
-        // Atomic update to Redis ZSET
-        const lbKey = 'leaderboard:' + (this.container.get('gameServer').config.topic || this.container.get('gameServer').config.mode);
+        const { matchLbKey, globalLbKey } = this.getLeaderboardKeys();
         const redisId = player.isBot ? `b:${player.id}` : `p:${player.id}`;
+        const globalMemberId = this.getGlobalMemberId(player);
 
         try {
-            // Optimistic: Fire and forget or quick await
-            RedisClient.zIncrBy(lbKey, delta, redisId).catch(err => {
-                Logger.warn('PlayerManager', `Redis Score Update Error for ${redisId}`, err.message);
+            // Match leaderboard tracks active entities for this server instance.
+            RedisClient.zIncrBy(matchLbKey, delta, redisId).catch(err => {
+                Logger.warn('PlayerManager', `Redis Match Score Update Error for ${redisId}`, err.message);
             });
+
+            // Global leaderboard keeps only authenticated users and persists across sessions.
+            if (globalMemberId) {
+                RedisClient.zIncrBy(globalLbKey, delta, globalMemberId).catch(err => {
+                    Logger.warn('PlayerManager', `Redis Global Score Update Error for ${globalMemberId}`, err.message);
+                });
+            }
         } catch (err) {
             // Sync error check
         }
@@ -98,12 +129,11 @@ class PlayerManager {
             cosmetics: {}, // Achievement visual loadout
         };
 
-        // Register in Redis
-        const gameConfig = this.container.get('gameServer').config;
-        const metaKey = 'leaderboard:meta:' + (gameConfig.topic || gameConfig.mode);
+        // Register match display name immediately. Global meta is set after auth/init.
+        const { matchMetaKey } = this.getLeaderboardKeys();
         const redisId = `p:${socket.id}`;
-        RedisClient.hSet(metaKey, redisId, this.players[socket.id].name).catch(err =>
-            Logger.error('PlayerManager', `Meta Register Error for ${redisId}`, err)
+        RedisClient.hSet(matchMetaKey, redisId, this.players[socket.id].name).catch(err =>
+            Logger.error('PlayerManager', `Match Meta Register Error for ${redisId}`, err)
         );
 
         // SPATIAL GRID: Add
@@ -125,18 +155,16 @@ class PlayerManager {
         const id = botData.id;
         this.players[id] = botData;
 
-        // Register in Redis (Bot)
-        const gameConfig = this.container.get('gameServer').config;
-        const lbKey = 'leaderboard:' + (gameConfig.topic || gameConfig.mode);
-        const metaKey = 'leaderboard:meta:' + (gameConfig.topic || gameConfig.mode);
+        // Register bot in match leaderboard only (avoid polluting global board).
+        const { matchLbKey, matchMetaKey } = this.getLeaderboardKeys();
         const redisId = `b:${id}`;
 
-        RedisClient.hSet(metaKey, redisId, botData.name).catch(err =>
-            Logger.error('PlayerManager', `Bot Meta Register Error for ${redisId}`, err)
+        RedisClient.hSet(matchMetaKey, redisId, botData.name).catch(err =>
+            Logger.error('PlayerManager', `Bot Match Meta Register Error for ${redisId}`, err)
         );
         // Initial Score for Bot
-        RedisClient.zAdd(lbKey, botData.score, redisId).catch(err =>
-            Logger.error('PlayerManager', `Bot ZSET Register Error for ${redisId}`, err)
+        RedisClient.zAdd(matchLbKey, botData.score, redisId).catch(err =>
+            Logger.error('PlayerManager', `Bot Match ZSET Register Error for ${redisId}`, err)
         );
 
         // SPATIAL GRID: Add
@@ -178,6 +206,16 @@ class PlayerManager {
     removePlayer(playerId) {
         const player = this.players[playerId];
         if (!player) return;
+
+        // Remove from match leaderboard metadata to avoid stale entries.
+        const { matchLbKey, matchMetaKey } = this.getLeaderboardKeys();
+        const redisId = player.isBot ? `b:${playerId}` : `p:${playerId}`;
+        RedisClient.zRem(matchLbKey, redisId).catch(err =>
+            Logger.warn('PlayerManager', `Match ZREM Error for ${redisId}`, err?.message || err)
+        );
+        RedisClient.hDel(matchMetaKey, redisId).catch(err =>
+            Logger.warn('PlayerManager', `Match HDEL Error for ${redisId}`, err?.message || err)
+        );
 
         if (!player.isBot) {
             Logger.info('PlayerManager', `Player died: ${playerId}`);
@@ -263,14 +301,20 @@ class PlayerManager {
                 this.players[id].username = data.name;
             }
 
-            // Update Name in Redis
+            // Update name in Redis metadata (match always, global only for authenticated users)
             if (this.players[id].username) {
-                const gameConfig = this.container.get('gameServer').config;
-                const metaKey = 'leaderboard:meta:' + (gameConfig.topic || gameConfig.mode);
+                const { matchMetaKey, globalMetaKey } = this.getLeaderboardKeys();
                 const redisId = this.players[id].isBot ? `b:${id}` : `p:${id}`;
-                RedisClient.hSet(metaKey, redisId, this.players[id].name).catch(err =>
-                    Logger.error('PlayerManager', `Meta Update Error for ${redisId}`, err)
+                RedisClient.hSet(matchMetaKey, redisId, this.players[id].name).catch(err =>
+                    Logger.error('PlayerManager', `Match Meta Update Error for ${redisId}`, err)
                 );
+
+                const globalMemberId = this.getGlobalMemberId(this.players[id]);
+                if (globalMemberId) {
+                    RedisClient.hSet(globalMetaKey, globalMemberId, this.players[id].name).catch(err =>
+                        Logger.error('PlayerManager', `Global Meta Update Error for ${globalMemberId}`, err)
+                    );
+                }
             }
             // Inventory Logic: Priority to DB for logged-in users
             const isGuest =

@@ -146,6 +146,11 @@ class NetworkSystem {
         // Ping/Pong
         socket.on(SOCKET_EVENT.PING, () => socket.emit(SOCKET_EVENT.PONG));
 
+        // Global leaderboard (cross-session, Redis-backed)
+        socket.on(SOCKET_EVENT.REQUEST_GLOBAL_LEADERBOARD, async (payload) => {
+            await this.emitGlobalLeaderboard(socket, payload);
+        });
+
         // Gameplay
         socket.on(SOCKET_EVENT.PLAYER_INPUT, (inputData) => {
             const gameServer = this.container.get('gameServer');
@@ -403,6 +408,39 @@ class NetworkSystem {
 
     update() {
         // Reserved for any input polling logic
+    }
+
+    async emitGlobalLeaderboard(socket, payload = {}) {
+        const limitRaw = Number(payload?.limit);
+        const limit = Number.isFinite(limitRaw)
+            ? Math.max(1, Math.min(20, Math.floor(limitRaw)))
+            : 5;
+
+        const lbKey = 'leaderboard:global';
+        const metaKey = 'leaderboard:global:meta';
+
+        try {
+            const topWithScores = await RedisClient.zRevRangeWithScores(lbKey, 0, limit - 1);
+            const redisIds = topWithScores.map((entry) => entry.value);
+            const names = redisIds.length > 0 ? await RedisClient.hmGet(metaKey, redisIds) : [];
+
+            const top = topWithScores.map((entry, index) => ({
+                id: entry.value,
+                name: names[index] || entry.value,
+                score: entry.score || 0,
+            }));
+
+            socket.emit(SOCKET_EVENT.GLOBAL_LEADERBOARD, {
+                serverTime: Date.now(),
+                top,
+            });
+        } catch (err) {
+            Logger.error('NetworkSystem', 'Global leaderboard fetch error', err);
+            socket.emit(SOCKET_EVENT.GLOBAL_LEADERBOARD, {
+                serverTime: Date.now(),
+                top: [],
+            });
+        }
     }
 }
 

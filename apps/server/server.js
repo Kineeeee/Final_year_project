@@ -15,6 +15,7 @@ const userQuizRoutes = require('./src/modules/quiz/UserQuizRoutes');
 const roomRoutes = require('./src/modules/room/RoomRoutes');
 const chatbotRoutes = require('./src/modules/bot/ChatbotRoutes');
 const RoomRegistry = require('./src/modules/room/RoomRegistry');
+const RedisClient = require('./src/infra/database/RedisConnection');
 
 const app = express();
 
@@ -73,6 +74,41 @@ app.use('/api/questions', require('./src/modules/quiz/QuestionRoutes'));
 app.use('/api/user-quiz', userQuizRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+
+app.get('/api/leaderboard/global', async (req, res) => {
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw)
+        ? Math.max(1, Math.min(20, Math.floor(limitRaw)))
+        : 5;
+
+    const lbKey = 'leaderboard:global';
+    const metaKey = 'leaderboard:global:meta';
+
+    try {
+        await RedisClient.connect();
+        const topWithScores = await RedisClient.zRevRangeWithScores(lbKey, 0, limit - 1);
+        const redisIds = topWithScores.map((entry) => entry.value);
+        const names = redisIds.length > 0 ? await RedisClient.hmGet(metaKey, redisIds) : [];
+
+        const top = topWithScores.map((entry, index) => ({
+            id: entry.value,
+            name: names[index] || entry.value,
+            score: entry.score || 0,
+        }));
+
+        res.json({
+            serverTime: Date.now(),
+            top,
+        });
+    } catch (err) {
+        Logger.error('Server', 'Global leaderboard HTTP fallback error', err);
+        res.status(500).json({
+            serverTime: Date.now(),
+            top: [],
+            error: 'leaderboard_unavailable',
+        });
+    }
+});
 
 app.get('/', function (req, res) {
     res.send('Server is running');

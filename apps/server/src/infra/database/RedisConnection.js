@@ -67,6 +67,11 @@ class RedisClient {
         return this.client.zIncrBy(key, increment, member);
     }
 
+    async zRem(key, member) {
+        if (!this.isConnected) return;
+        return this.client.zRem(key, member);
+    }
+
     async zAddBatch(key, members) {
         if (!this.isConnected) return;
         // members = [{ score: 10, value: 'name' }, ...]

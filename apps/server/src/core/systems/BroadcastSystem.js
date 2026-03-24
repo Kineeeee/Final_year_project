@@ -1,5 +1,4 @@
 const Logger = require('../../utils/Logger');
-const RedisClient = require('../../infra/database/RedisConnection');
 const { BROADCAST_FPS, LEADERBOARD_FPS, LEADERBOARD_TOP_N, INTEREST_VIEW_RADIUS } = require('../../config/ServerConstants');
 const { SOCKET_EVENT } = require('../../events/EventTypes');
 
@@ -44,42 +43,19 @@ class BroadcastSystem {
     }
 
     async broadcastLeaderboard() {
-        const lbKey = 'leaderboard:' + (this.config.topic || this.config.mode);
-        const metaKey = 'leaderboard:meta:' + (this.config.topic || this.config.mode);
-
-        // 1. Sync current players to Redis (Metadata Only)
-        // CRITICAL FIX: Removed ZADD loop to prevent race conditions with Game Logic (ZINCRBY).
-        // The Game Logic (PlayerManager) is the Single Source of Truth for scores.
-        // We only ensure metadata (names) is up to date here, though ideally this should also be event-driven.
         try {
-            const players = this.playerManager.getAllPlayers();
-            // We can still sync metadata if needed, but for high performance we should move this to 'initPlayer' or 'changeName' events.
-            // However, to be safe and ensure names appear, we keep HSET for now or remove it if PlayerManager handles it.
-            // PlayerManager ALREADY handles HSET on init and name change. So we can remove this loop entirely?
-            // "Analyze RedisConnection.js" showed PlayerManager does HSET.
-            // Let's comment this out to reduce loop overhead and rely on PlayerManager's event-based updates.
+            const players = Object.values(this.playerManager.getAllPlayers() || {});
+            if (players.length === 0) return;
 
-            // If we really need to sync something, do it here, but definitely NO ZADD.
-        } catch (err) {
-            Logger.warn('BroadcastSystem', 'Redis Sync Error', err.message);
-        }
-
-        // 2. Fetch Top N from Redis
-        try {
-            const topWithScores = await RedisClient.zRevRangeWithScores(lbKey, 0, LEADERBOARD_TOP_N - 1);
-
-            if (topWithScores.length === 0) return;
-
-            // 3. Fetch metadata for Top N
-            const redisIds = topWithScores.map(entry => entry.value);
-            const names = await RedisClient.hmGet(metaKey, redisIds);
-
-            // Map Redis format to internal format
-            const top = topWithScores.map((entry, index) => ({
-                id: entry.value,
-                name: names[index] || entry.value,
-                score: entry.score
-            }));
+            // Match-local leaderboard: always reflect active players in this game instance.
+            const top = players
+                .map((p) => ({
+                    id: p.id,
+                    name: p.name || 'Unknown',
+                    score: p.score || 0,
+                }))
+                .sort((a, b) => b.score - a.score)
+                .slice(0, LEADERBOARD_TOP_N);
 
             this.io.emit(SOCKET_EVENT.LEADERBOARD, {
                 serverTick: this.serverTick,
@@ -87,7 +63,7 @@ class BroadcastSystem {
                 top
             });
         } catch (err) {
-            Logger.error('BroadcastSystem', 'Leaderboard Redis Error', err);
+            Logger.error('BroadcastSystem', 'Leaderboard Broadcast Error', err);
         }
     }
 

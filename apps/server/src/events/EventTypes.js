@@ -16,7 +16,9 @@ const SOCKET_EVENT = {
     SHOP_ITEMS: 'shopItems',
     NEW_QUESTION: 'newQuestion',
     ROUND_START: 'roundStart',
-    LEADERBOARD: 'leaderboard'
+    LEADERBOARD: 'leaderboard',
+    REQUEST_GLOBAL_LEADERBOARD: 'requestGlobalLeaderboard',
+    GLOBAL_LEADERBOARD: 'globalLeaderboard'
 };
 
 module.exports = { SOCKET_EVENT };

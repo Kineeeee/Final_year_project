@@ -5,6 +5,9 @@ import { CustomRoomModal } from '../../ui/quiz/CustomRoomModal';
 import { userQuizApi } from '../../core/services/UserQuizApi';
 import { overlayBlocker } from '../../core/services/OverlayBlocker';
 import { roomService } from '../../core/services/RoomService';
+import io from 'socket.io-client';
+import parser from 'socket.io-msgpack-parser';
+import { CONFIG } from '../../config/AppConfig';
 
 export class MainMenuFlowController {
     constructor(scene) {
@@ -375,5 +378,82 @@ export class MainMenuFlowController {
         });
 
         s._errorModal = overlay;
+    }
+
+    requestGlobalLeaderboard({ limit = 5, onSuccess, onError } = {}) {
+        const socket = io(CONFIG.SERVER_URL, {
+            forceNew: true,
+            parser,
+            reconnection: false,
+            timeout: 5000,
+        });
+
+        let settled = false;
+        let fallbackTimer = null;
+
+        const emitSuccess = (payload) => {
+            if (settled) return;
+            settled = true;
+            if (onSuccess) onSuccess(payload);
+        };
+
+        const emitError = (err) => {
+            if (settled) return;
+            settled = true;
+            if (onError) onError(err);
+        };
+
+        const cleanup = () => {
+            if (fallbackTimer) {
+                clearTimeout(fallbackTimer);
+                fallbackTimer = null;
+            }
+            socket.removeAllListeners();
+            socket.disconnect();
+        };
+
+        const requestViaHttp = async () => {
+            try {
+                const endpoint = `${CONFIG.SERVER_URL}/api/leaderboard/global?limit=${encodeURIComponent(limit)}`;
+                const res = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        Accept: 'application/json',
+                    },
+                });
+
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+
+                const payload = await res.json();
+                emitSuccess(payload);
+            } catch (err) {
+                emitError(err);
+            } finally {
+                cleanup();
+            }
+        };
+
+        socket.on('connect', () => {
+            socket.emit('requestGlobalLeaderboard', { limit });
+            fallbackTimer = setTimeout(() => {
+                requestViaHttp();
+            }, 2500);
+        });
+
+        socket.on('globalLeaderboard', (payload) => {
+            emitSuccess(payload);
+            cleanup();
+        });
+
+        socket.on('connect_error', (err) => {
+            requestViaHttp().catch(() => {
+                emitError(err);
+                cleanup();
+            });
+        });
+
+        return cleanup;
     }
 }

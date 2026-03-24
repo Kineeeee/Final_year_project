@@ -38,6 +38,7 @@ class GameServer {
         this.closed = false;
         this.intervals = [];
         this.matchStarted = false;
+        this.instanceId = `${process.pid}-${Date.now().toString(36)}-${Math.floor(Math.random() * 100000).toString(36)}`;
         this.phase = this.config.isCustom ? GAME_PHASE.WAITING_ROOM : GAME_PHASE.PLAYING;
 
         // Server-authoritative tick counter for snapshots/deltas

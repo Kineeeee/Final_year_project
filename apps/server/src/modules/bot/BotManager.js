@@ -5,6 +5,7 @@ class BotManager {
     constructor(io, container) {
         this.io = io;
         this.container = container;
+        this.botNameCounts = new Map();
         // Dependencies resolved via Container
     }
 
@@ -16,6 +17,14 @@ class BotManager {
     }
     get spawnManager() {
         return this.container.get('spawnManager');
+    }
+
+    generateBotName() {
+        const baseName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+        const currentCount = this.botNameCounts.get(baseName) || 0;
+        const nextCount = currentCount + 1;
+        this.botNameCounts.set(baseName, nextCount);
+        return `${baseName} #${nextCount}`;
     }
 
     createBot() {
@@ -40,7 +49,7 @@ class BotManager {
             path: [],
             isBot: true,
             color: Math.floor(Math.random() * 0xffffff),
-            name: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
+            name: this.generateBotName(),
             totalDistance: 0,
             isBoosting: false,
             wantsToBoost: false,
