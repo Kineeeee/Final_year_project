@@ -90,9 +90,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: |
-            apps/deploy/compose.prod.yml
-            apps/deploy/Caddyfile
+          source: "apps/deploy"
           target: ${{ secrets.APP_DIR }}
           strip_components: 2
           overwrite: true
