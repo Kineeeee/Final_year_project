@@ -114,7 +114,7 @@ export class ShootingScene extends Scene {
         if (!questions || questions.length === 0) {
             this.isPlaying = false;
             if (this.spawnTimer) this.spawnTimer.remove();
-            this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, 'Chưa có câu hỏi cho chế độ này', {
+            this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, 'No questions available for this mode', {
                 fontFamily: '"Monospace"',
                 fontSize: '24px',
                 color: '#ff5555'

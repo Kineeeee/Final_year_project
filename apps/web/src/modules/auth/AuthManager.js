@@ -80,7 +80,7 @@ export class AuthManager {
 
         this.googleBtn?.addEventListener('click', () => this.handleGoogleClick());
         this.facebookBtn?.addEventListener('click', () => {
-            this.showMessage('Tính năng đăng nhập Facebook sẽ sớm ra mắt', false);
+            this.showMessage('Facebook login feature coming soon', false);
         });
 
         this.resetSubmit?.addEventListener('click', () => this.handleReset());
@@ -122,9 +122,9 @@ export class AuthManager {
     async handleLogin() {
         const { username, password } = this.getCredentials();
         if (!username || !password) {
-            if (!username) this.showFieldError(this.usernameInput, 'Vui lòng nhập tên đăng nhập hoặc email');
-            if (!password) this.showFieldError(this.passwordInput, 'Vui lòng nhập mật khẩu');
-            this.showMessage('Vui lòng điền đầy đủ thông tin');
+            if (!username) this.showFieldError(this.usernameInput, 'Please enter username or email');
+            if (!password) this.showFieldError(this.passwordInput, 'Please enter password');
+            this.showMessage('Please fill in all fields');
             return;
         }
 
@@ -142,7 +142,7 @@ export class AuthManager {
             }
         } catch (error) {
             console.error('[Auth] login failed', error);
-            this.showMessage(error.message || 'Đăng nhập thất bại. Vui lòng kiểm tra tài khoản/mật khẩu.');
+            this.showMessage(error.message || 'Login failed. Please check your credentials.');
         }
     }
 
@@ -155,12 +155,12 @@ export class AuthManager {
 
         try {
             await this.authService.register(username, password);
-            this.showSignupMessage('Đăng ký thành công! Vui lòng đăng nhập.', false);
+            this.showSignupMessage('Registration successful! Please login.', false);
             if (this.usernameInput) this.usernameInput.value = username;
             if (this.passwordInput) this.passwordInput.value = '';
             this.switchMode('login');
         } catch (error) {
-            this.showSignupMessage(error.message || 'Đăng ký thất bại');
+            this.showSignupMessage(error.message || 'Registration failed');
         }
     }
 
@@ -207,15 +207,15 @@ export class AuthManager {
         if (this.authSubtitle) {
             this.authSubtitle.textContent =
                 mode === 'signup'
-                    ? 'Tao tai khoan phu huynh de dong hanh cung be.'
-                    : 'Dang nhap de tiep tuc cuoc phieu luu.';
+                    ? 'Create a parent account to accompany your child.'
+                    : 'Log in to continue the adventure.';
         }
 
         if (this.authSubtitleMobile) {
             this.authSubtitleMobile.textContent =
                 mode === 'signup'
-                    ? 'Tao tai khoan phu huynh de dong hanh cung be.'
-                    : 'Dang nhap de tiep tuc cuoc phieu luu.';
+                    ? 'Create a parent account to accompany your child.'
+                    : 'Log in to continue the adventure.';
         }
 
         this.showMessage('', false);
@@ -272,12 +272,12 @@ export class AuthManager {
 
         if (this.strengthLabel) {
             const labels = [
-                'Bắt đầu nhập để xem độ mạnh',
-                'Quá ngắn',
-                'Thêm ký tự đa dạng hơn',
-                'Đang mạnh dần',
-                'Mật khẩu rất tốt',
-                'Sẵn sàng sử dụng'
+                'Start typing to see password strength',
+                'Too short',
+                'Add more character types',
+                'Getting stronger',
+                'Very good password',
+                'Ready to use'
             ];
             this.strengthLabel.textContent = labels[meterIndex];
         }
@@ -301,7 +301,7 @@ export class AuthManager {
         const matches = password === confirm && confirm.length > 0;
         if (!this.signupConfirmInput) return true;
         if (!matches && showError) {
-            this.showFieldError(this.signupConfirmInput, 'Mật khẩu xác nhận chưa khớp');
+            this.showFieldError(this.signupConfirmInput, 'Passwords do not match');
         } else if (matches) {
             this.showFieldError(this.signupConfirmInput, '');
         }
@@ -314,19 +314,19 @@ export class AuthManager {
         const email = this.signupEmailInput?.value.trim() || '';
 
         if (!name) {
-            this.showFieldError(this.signupNameInput, 'Vui lòng nhập biệt danh');
+            this.showFieldError(this.signupNameInput, 'Please enter a nickname');
             isValid = false;
         }
 
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            this.showFieldError(this.signupEmailInput, 'Vui lòng nhập email hợp lệ');
+            this.showFieldError(this.signupEmailInput, 'Please enter a valid email');
             isValid = false;
         }
 
         const rules = this.updateStrength();
         const unmet = Object.keys(rules).filter((key) => !rules[key]);
         if (unmet.length > 0) {
-            this.showFieldError(this.signupPasswordInput, 'Vui lòng đáp ứng đầy đủ yêu cầu mật khẩu');
+            this.showFieldError(this.signupPasswordInput, 'Please meet all password requirements');
             isValid = false;
         }
 
@@ -359,20 +359,20 @@ export class AuthManager {
     async handleReset() {
         const email = this.resetEmailInput?.value.trim() || '';
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            this.showFieldError(this.resetEmailInput, 'Vui lòng nhập email hợp lệ');
+            this.showFieldError(this.resetEmailInput, 'Please enter a valid email');
             return;
         }
 
         try {
             await this.authService.forgotPassword(email);
             if (this.resetMessage) {
-                this.resetMessage.textContent = 'Đã gửi liên kết đặt lại. Vui lòng kiểm tra hộp thư.';
+                this.resetMessage.textContent = 'Reset link sent. Please check your email.';
                 this.resetMessage.style.color = '#16a34a';
             }
             setTimeout(() => this.closeResetModal(), 1200);
         } catch (error) {
             if (this.resetMessage) {
-                this.resetMessage.textContent = error.message || 'Không thể gửi liên kết đặt lại.';
+                this.resetMessage.textContent = error.message || 'Failed to send reset link.';
                 this.resetMessage.style.color = '#e36464';
             }
         }
@@ -411,7 +411,7 @@ export class AuthManager {
 
     handleGoogleClick() {
         if (!this.googleClientId || this.googleClientId === 'PENDING_CLIENT_ID') {
-            this.showMessage('Google login chưa được cấu hình. Hãy đặt VITE_GOOGLE_CLIENT_ID trong web env.', true);
+            this.showMessage('Google login not configured. Set VITE_GOOGLE_CLIENT_ID in env.', true);
             return;
         }
 
@@ -428,12 +428,12 @@ export class AuthManager {
     async handleGoogleCallback(response) {
         if (response.error) {
             const detail = response.error_description || response.error;
-            this.showMessage(`Đăng nhập Google thất bại: ${detail}`, true);
+            this.showMessage(`Google login failed: ${detail}`, true);
             return;
         }
 
         if (!response.access_token) {
-            this.showMessage('Đăng nhập Google thất bại: Thiếu access token từ Google.', true);
+            this.showMessage('Google login failed: Missing access token from Google.', true);
             return;
         }
 
@@ -444,7 +444,7 @@ export class AuthManager {
         if (response.status === 'connected') {
             await this.processSocialLogin('facebook', response.authResponse.accessToken);
         } else {
-            this.showMessage('Đăng nhập Facebook thất bại hoặc đã bị hủy', true);
+            this.showMessage('Facebook login failed or was cancelled', true);
         }
     }
 
@@ -457,7 +457,7 @@ export class AuthManager {
             }
         } catch (error) {
             console.error(`[Auth] ${provider} login failed`, error);
-            this.showMessage(error.message || `Đăng nhập ${provider} thất bại.`);
+            this.showMessage(error.message || `${provider} login failed.`);
         }
     }
 
@@ -516,6 +516,6 @@ export class AuthManager {
         if (this.loginOverlay) this.loginOverlay.style.display = 'block';
         if (this.usernameInput) this.usernameInput.value = '';
         if (this.passwordInput) this.passwordInput.value = '';
-        this.showMessage('Đã đăng xuất', false);
+        this.showMessage('Logged out', false);
     }
 }
