@@ -3,6 +3,7 @@ import { HandShootingController } from './HandControl';
 import { Target } from './Target';
 import { quizService } from '../../core/services/QuizService';
 import { Logger } from '../../utils/Logger';
+import { i18n } from '../../core/services/I18nService';
 
 export class ShootingScene extends Scene {
     constructor() {
@@ -10,6 +11,9 @@ export class ShootingScene extends Scene {
         this.handController = null;
         this.videoTexture = null;
         this.reticle = null;
+
+        // Input Fallback State
+        this.inputMode = 'CAMERA'; // 'CAMERA' or 'MOUSE'
 
         // Game State
         this.selectedHand = null;
@@ -19,12 +23,19 @@ export class ShootingScene extends Scene {
         this.scoreText = null;
         this.spawnTimer = null;
 
+        // Overlay & State UI
+        this.minimap = null;
+        this.minimapBorder = null;
+        this.skeletonGraphics = null;
+        this.stateWarningText = null;
+        this.wasLost = false;
+
         // Quiz State
         this.currentQuestion = null;
         this.questionText = null;
-        this.answerQueue = []; // Answers waiting to be spawned
-        this.spawnedAnswers = []; // Currently on screen
-        this.questionDelay = 3000; // Delay between questions
+        this.answerQueue = [];
+        this.spawnedAnswers = [];
+        this.questionDelay = 3000;
         this.isWaitingForQuestion = false;
 
         this.lastShotTime = 0;
@@ -41,8 +52,29 @@ export class ShootingScene extends Scene {
     create() {
         Logger.info('ShootingScene', 'Initializing Shooting Scene');
 
-        // Background
-        this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000).setOrigin(0);
+        // Dark minimalist background instead of noisy camera
+        this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x111827).setOrigin(0);
+
+        // Fallback Mouse listener
+        this.input.on('pointermove', (pointer) => {
+            if (this.inputMode === 'CAMERA' && this.handController && this.handController.currentState === 'LOST') {
+                this.inputMode = 'MOUSE';
+                this.showFloatingText(this.scale.width / 2, this.scale.height - 100, i18n.t('scene.shooting.mouseMode'), '#4CAF50');
+                if (this.reticle) this.reticle.setAlpha(0.2); // Dim hand cursor
+            } else if (this.inputMode === 'MOUSE' && this.handController && this.handController.currentState === 'TRACKING') {
+                // Auto recover to camera
+                this.inputMode = 'CAMERA';
+                this.showFloatingText(this.scale.width / 2, this.scale.height - 100, i18n.t('scene.shooting.cameraMode'), '#00FFFF');
+                if (this.reticle) this.reticle.setAlpha(1.0);
+            }
+        });
+
+        this.input.on('pointerdown', (pointer) => {
+            if (this.inputMode === 'MOUSE' && this.isPlaying && this.time.now > this.lastShotTime + this.shootCooldown) {
+                this.fireShot(pointer.x, pointer.y);
+                this.lastShotTime = this.time.now;
+            }
+        });
 
         // Hand Selection UI
         this.createHandSelectionUI();
@@ -53,17 +85,17 @@ export class ShootingScene extends Scene {
         const cx = this.scale.width / 2;
         const cy = this.scale.height / 2;
 
-        const title = this.add.text(cx, cy - 150, 'SELECT YOUR HAND', {
+        const title = this.add.text(cx, cy - 150, i18n.t('scene.shooting.selectHand'), {
             fontFamily: '"Monospace"',
             fontSize: '36px',
             color: '#00ffff',
             fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        const btnLeft = this.createCyberButton(cx - 150, cy, 'LEFT HAND', () => this.startGame('Left'));
-        const btnRight = this.createCyberButton(cx + 150, cy, 'RIGHT HAND', () => this.startGame('Right'));
+        const btnLeft = this.createCyberButton(cx - 150, cy, i18n.t('scene.shooting.leftHand'), () => this.startGame('Left'));
+        const btnRight = this.createCyberButton(cx + 150, cy, i18n.t('scene.shooting.rightHand'), () => this.startGame('Right'));
 
-        const exit = this.add.text(cx, cy + 150, 'BACK TO MENU', {
+        const exit = this.add.text(cx, cy + 150, i18n.t('scene.shooting.backMenu'), {
             fontFamily: 'Monospace',
             fontSize: '20px',
             color: '#888888'
@@ -98,11 +130,19 @@ export class ShootingScene extends Scene {
     async startGame(hand) {
         this.selectedHand = hand;
         this.selectionGroup.destroy();
-        this.isPlaying = true;
+
+        // Show Loading
+        const loadingText = this.add.text(this.scale.width / 2, this.scale.height / 2, i18n.t('scene.shooting.loadingModel'), {
+            fontFamily: 'Monospace', fontSize: '24px', color: '#00ffff', fontStyle: 'bold'
+        }).setOrigin(0.5);
 
         // Init Controller
         this.handController = new HandShootingController(this.selectedHand);
         await this.handController.init();
+        loadingText.destroy();
+
+        this.isPlaying = true;
+        this.inputMode = 'CAMERA';
 
         // Init Game UI
         this.createGameUI();
@@ -114,19 +154,17 @@ export class ShootingScene extends Scene {
         if (!questions || questions.length === 0) {
             this.isPlaying = false;
             if (this.spawnTimer) this.spawnTimer.remove();
-            this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, 'No questions available for this mode', {
-                fontFamily: '"Monospace"',
-                fontSize: '24px',
-                color: '#ff5555'
+            this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, i18n.t('scene.shooting.noQuestions'), {
+                fontFamily: '"Monospace"', fontSize: '24px', color: '#ff5555'
             }).setOrigin(0.5);
-            const backBtn = this.createCyberButton(this.scale.width / 2, this.scale.height / 2 + 30, 'BACK TO MENU', () => this.returnToMenu());
+            const backBtn = this.createCyberButton(this.scale.width / 2, this.scale.height / 2 + 30, i18n.t('scene.shooting.backMenu'), () => this.returnToMenu());
             this.add.existing(backBtn);
             return;
         }
 
         // Start Loops
         this.spawnTimer = this.time.addEvent({
-            delay: 1500, // Faster spawn
+            delay: 1500,
             callback: this.spawnTarget,
             callbackScope: this,
             loop: true
@@ -136,7 +174,7 @@ export class ShootingScene extends Scene {
     }
 
     createGameUI() {
-        this.scoreText = this.add.text(30, 30, 'SCORE: 0', {
+        this.scoreText = this.add.text(30, 30, i18n.t('scene.shooting.score') + '0', {
             fontFamily: '"Monospace"',
             fontSize: '32px',
             color: '#00ffff',
@@ -159,18 +197,24 @@ export class ShootingScene extends Scene {
         this.questionContainer.add([qBg, this.questionText]);
         this.questionContainer.setVisible(false);
 
-        // Instructions
-        this.add.text(this.scale.width / 2, this.scale.height - 40, 'AIM: Thumb+Index Midpoint | PINCH: Shoot', {
+        // State Warning overlay (hidden by default)
+        this.stateWarningText = this.add.text(this.scale.width / 2, this.scale.height / 2, i18n.t('scene.shooting.lostWarning'), {
+            fontFamily: 'Monospace', fontSize: '36px', color: '#ff4444', fontStyle: 'bold', align: 'center',
+            backgroundColor: '#000000dd', padding: { x: 40, y: 30 }
+        }).setOrigin(0.5).setDepth(2000).setVisible(false);
+
+        // Exit
+        this.add.text(30, 80, '< ' + i18n.t('scene.shooting.backMenu'), {
+            fontFamily: 'Monospace', fontSize: '20px', color: '#ffffff', backgroundColor: '#333333'
+        }).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.returnToMenu());
+
+        // Instruction
+        this.add.text(this.scale.width / 2, this.scale.height - 40, i18n.t('scene.shooting.instructions'), {
             fontFamily: '"Monospace"',
             fontSize: '18px',
             color: '#ffffff',
             backgroundColor: '#00000088'
         }).setOrigin(0.5);
-
-        // Exit
-        this.add.text(30, 80, '< EXIT', {
-            fontFamily: 'Monospace', fontSize: '20px', color: '#ffffff', backgroundColor: '#333333'
-        }).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.returnToMenu());
     }
 
     createReticle() {
@@ -204,7 +248,6 @@ export class ShootingScene extends Scene {
         this.questionText.setText(q.questionText);
         this.questionContainer.setVisible(true);
 
-        // improved animation for new question
         this.tweens.add({
             targets: this.questionContainer,
             scale: { from: 0.8, to: 1 },
@@ -213,27 +256,21 @@ export class ShootingScene extends Scene {
             ease: 'Back.out'
         });
 
-        // Prepare answer queue
-        // Mix correct and wrong answers
         const answers = [];
         answers.push({ text: q.correctAnswer, isCorrect: true });
         q.wrongAnswers.forEach(ans => answers.push({ text: ans, isCorrect: false }));
-
-        // Shuffle
         this.answerQueue = Phaser.Utils.Array.Shuffle(answers);
     }
 
     spawnTarget() {
-        if (!this.isPlaying) return;
+        // Pause spawning if lost or not playing
+        if (!this.isPlaying || (this.handController && this.handController.currentState === 'LOST' && this.inputMode !== 'MOUSE')) return;
 
-        // Determine Type
         let type = 'standard';
         let answerData = null;
 
-        // Higher chance for answer if queue has items and we are not waiting
         if (!this.isWaitingForQuestion && this.answerQueue.length > 0 && Math.random() < 0.6) {
             type = 'answer';
-            // Use GetRandom instead of pop() so answers can persist/respawn until question is answered
             answerData = Phaser.Utils.Array.GetRandom(this.answerQueue);
         } else if (Math.random() < 0.2) {
             type = 'mystery';
@@ -244,40 +281,45 @@ export class ShootingScene extends Scene {
         const startY = Phaser.Math.Between(150, this.scale.height - 100);
 
         const target = new Target(
-            this,
-            startX,
-            startY,
-            type,
+            this, startX, startY, type,
             answerData ? answerData.text : '',
             answerData ? answerData.isCorrect : false
         );
 
         const speed = target.speed;
         target.setVelocity(side === 'left' ? speed : -speed, Phaser.Math.Between(-20, 20));
-
         this.targets.push(target);
     }
 
     update(time, delta) {
         if (!this.isPlaying || !this.handController) return;
 
-        // Video Texture
         const input = this.handController.getInput();
-        if (input.video && input.video.readyState >= 2) {
-            if (!this.videoTexture) {
-                this.videoTexture = this.textures.createCanvas('webcam', input.video.videoWidth, input.video.videoHeight);
-                this.add.image(this.scale.width / 2, this.scale.height / 2, 'webcam').setDisplaySize(this.scale.width, this.scale.height).setDepth(-10);
-            }
-            this.videoTexture.context.drawImage(input.video, 0, 0);
-            this.videoTexture.refresh();
+        this.updateMiniMap(input);
+        this.handleStateLogic(input);
+
+        // Pause Game Elements if signal lost and no mouse fallback available
+        if (input.state === 'LOST' && this.inputMode !== 'MOUSE') {
+            this.targets.forEach(t => t.body.setVelocity(0, 0));
+            return; // Pause processing aims
         }
 
-        // Targets
+        // Restore target velocities if recovered
+        if (this.wasLost && (input.state === 'TRACKING' || this.inputMode === 'MOUSE')) {
+            this.wasLost = false;
+            this.targets.forEach(t => {
+                const speed = t.speed;
+                // Simple assumption: resume x direction
+                t.body.setVelocityX(t.x < this.scale.width / 2 ? speed : -speed);
+            });
+        }
+
+        // Targets update
         this.targets = this.targets.filter(t => t.active);
         this.targets.forEach(t => t.update(delta));
 
         // Reticle
-        if (this.reticle) {
+        if (this.reticle && this.inputMode === 'CAMERA') {
             let rx = input.x * this.scale.width;
             let ry = input.y * this.scale.height;
 
@@ -305,6 +347,92 @@ export class ShootingScene extends Scene {
                 this.lastShotTime = time;
             }
             this.reticle.setScale(input.isShooting ? 0.8 : 1.0);
+        } else if (this.reticle && this.inputMode === 'MOUSE') {
+            // MOUSE Reticle moves directly to mouse
+            this.reticle.setPosition(this.input.x, this.input.y);
+            this.reticleDot.setPosition(this.input.x, this.input.y);
+            this.reticle.setScale(this.input.activePointer.isDown ? 0.8 : 1.0);
+        }
+    }
+
+    handleStateLogic(input) {
+        if (input.state === 'LOST' && this.inputMode !== 'MOUSE') {
+            this.wasLost = true;
+            this.stateWarningText.setVisible(true);
+            if (this.minimapBorder) this.minimapBorder.lineStyle(4, 0xff4444); // Red
+        } else {
+            this.stateWarningText.setVisible(false);
+            if (this.minimapBorder) this.minimapBorder.lineStyle(4, 0x4CAF50); // Green
+        }
+    }
+
+    updateMiniMap(input) {
+        if (input.video && input.video.readyState >= 2) {
+            const minimapW = 320;
+            const minimapH = 240;
+            const mx = this.scale.width - minimapW / 2 - 30;
+            const my = this.scale.height - minimapH / 2 - 30;
+
+            if (!this.videoTexture) {
+                this.videoTexture = this.textures.createCanvas('webcam', input.video.videoWidth, input.video.videoHeight);
+                this.minimap = this.add.image(mx, my, 'webcam').setDisplaySize(minimapW, minimapH).setDepth(1000).setAlpha(0.6);
+                
+                this.minimapBorder = this.add.graphics().setDepth(1001);
+                this.minimapBorder.lineStyle(4, 0x4CAF50);
+                this.minimapBorder.strokeRect(mx - minimapW / 2, my - minimapH / 2, minimapW, minimapH);
+
+                this.skeletonGraphics = this.add.graphics().setDepth(1002);
+            }
+
+            this.videoTexture.context.drawImage(input.video, 0, 0);
+            
+            // Draw skeleton
+            this.skeletonGraphics.clear();
+            if (input.landmarks && input.state === 'TRACKING') {
+                const ctxWidth = input.video.videoWidth;
+                const ctxHeight = input.video.videoHeight;
+                const scaleX = minimapW / ctxWidth;
+                const scaleY = minimapH / ctxHeight;
+
+                const ox = mx - minimapW / 2;
+                const oy = my - minimapH / 2;
+
+                this.skeletonGraphics.lineStyle(2, 0xffffff, 0.8);
+                this.skeletonGraphics.fillStyle(0x00ffff, 1);
+
+                // Helper to map and mirror X
+                const mapPoint = (lm) => {
+                    return {
+                        x: ox + (1.0 - lm.x) * ctxWidth * scaleX,
+                        y: oy + lm.y * ctxHeight * scaleY
+                    };
+                };
+
+                // MediaPipe HAND_CONNECTIONS
+                const connections = [
+                    [0,1], [1,2], [2,3], [3,4], // Thumb
+                    [0,5], [5,6], [6,7], [7,8], // Index
+                    [5,9], [9,10], [10,11], [11,12], // Middle
+                    [9,13], [13,14], [14,15], [15,16], // Ring
+                    [13,17], [0,17], [17,18], [18,19], [19,20] // Pinky & Palm
+                ];
+
+                connections.forEach(conn => {
+                    const p1 = mapPoint(input.landmarks[conn[0]]);
+                    const p2 = mapPoint(input.landmarks[conn[1]]);
+                    this.skeletonGraphics.beginPath();
+                    this.skeletonGraphics.moveTo(p1.x, p1.y);
+                    this.skeletonGraphics.lineTo(p2.x, p2.y);
+                    this.skeletonGraphics.strokePath();
+                });
+
+                // Nodes
+                input.landmarks.forEach(lm => {
+                    const p = mapPoint(lm);
+                    this.skeletonGraphics.fillCircle(p.x, p.y, 3);
+                });
+            }
+            this.videoTexture.refresh();
         }
     }
 
@@ -324,45 +452,37 @@ export class ShootingScene extends Scene {
     }
 
     handleHit(target) {
-        // Points
         let points = target.hit();
 
-        // Logic for Answer
         if (target.type === 'answer') {
             if (target.isCorrect) {
-                // Correct!
                 points = 100;
                 this.showFloatingText(target.x, target.y, 'CORRECT!', '#00ff00');
                 this.explosionManager.emitParticleAt(target.x, target.y, 40);
 
-                // Clear other answers for this question to avoid confusion?
-                // Or just move to next question
                 this.time.delayedCall(500, () => this.nextQuestion());
                 this.isWaitingForQuestion = true;
 
-                // Destroy other answer targets currently on screen?
                 this.targets.forEach(t => {
                     if (t.type === 'answer') t.destroy();
                 });
             } else {
-                // Wrong!
                 points = -50;
                 this.showFloatingText(target.x, target.y, 'WRONG!', '#ff0000');
                 this.cameras.main.shake(300, 0.02);
             }
         } else {
-            // Normal hit
             this.explosionManager.emitParticleAt(target.x, target.y, 20);
             this.showFloatingText(target.x, target.y, `+${points}`, '#ffff00');
             if (target.type === 'mystery') this.cameras.main.shake(100, 0.005);
         }
 
         this.score += points;
-        this.scoreText.setText(`SCORE: ${this.score}`);
+        this.scoreText.setText(i18n.t('scene.shooting.score') + this.score);
     }
 
     showFloatingText(x, y, msg, color) {
-        const text = this.add.text(x, y, msg, { fontSize: '32px', color: color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5);
+        const text = this.add.text(x, y, msg, { fontSize: '32px', color: color, fontStyle: 'bold', stroke: '#000000', strokeThickness: 4 }).setOrigin(0.5).setDepth(3000);
         this.tweens.add({ targets: text, y: y - 60, alpha: 0, duration: 800, onComplete: () => text.destroy() });
     }
 

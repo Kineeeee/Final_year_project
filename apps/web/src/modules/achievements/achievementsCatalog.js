@@ -3,7 +3,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'first_bite',
         name: 'First Bite',
-        description: 'Eat 1 correct answer',
+        description: 'Ăn 1 đáp án đúng',
         category: 'progress',
         type: 'counter',
         metric: 'totalCorrect',
@@ -14,7 +14,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'knowledge_snack',
         name: 'Knowledge Snack',
-        description: 'Eat 10 correct answers',
+        description: 'Ăn 10 đáp án đúng',
         category: 'progress',
         type: 'counter',
         metric: 'totalCorrect',
@@ -25,7 +25,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'answer_hunter_bronze',
         name: 'Answer Hunter · Bronze',
-        description: 'Eat 50 correct answers',
+        description: 'Ăn 50 đáp án đúng',
         category: 'progress',
         type: 'counter',
         metric: 'totalCorrect',
@@ -36,7 +36,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'answer_hunter_silver',
         name: 'Answer Hunter · Silver',
-        description: 'Eat 200 correct answers',
+        description: 'Ăn 200 đáp án đúng',
         category: 'progress',
         type: 'counter',
         metric: 'totalCorrect',
@@ -47,7 +47,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'answer_hunter_gold',
         name: 'Answer Hunter · Gold',
-        description: 'Eat 500 correct answers',
+        description: 'Ăn 500 đáp án đúng',
         category: 'progress',
         type: 'counter',
         metric: 'totalCorrect',
@@ -58,7 +58,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'master_of_answers',
         name: 'Master of Answers',
-        description: 'Eat 1000 correct answers',
+        description: 'Ăn 1000 đáp án đúng',
         category: 'progress',
         type: 'counter',
         metric: 'totalCorrect',
@@ -69,7 +69,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'answer_hunter_diamond',
         name: 'Answer Hunter · Diamond',
-        description: 'Eat 1000 correct answers',
+        description: 'Ăn 1000 đáp án đúng',
         category: 'progress',
         type: 'counter',
         metric: 'totalCorrect',
@@ -82,7 +82,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'perfect_mind',
         name: 'Perfect Mind',
-        description: '10 correct answers in a row',
+        description: '10 câu đúng liên tiếp',
         category: 'learning',
         type: 'streak',
         metric: 'bestStreak',
@@ -93,7 +93,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'genius_mode',
         name: 'Genius Mode',
-        description: '20 correct answers in a row',
+        description: '20 câu đúng liên tiếp',
         category: 'learning',
         type: 'streak',
         metric: 'bestStreak',
@@ -105,7 +105,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'no_mistakes',
         name: 'No Mistakes',
-        description: 'Finish a match without eating any wrong answers',
+        description: 'Hoàn thành trận mà không ăn đáp án sai',
         category: 'learning',
         type: 'flag',
         metric: 'flawlessMatch',
@@ -116,7 +116,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'quick_thinker',
         name: 'Quick Thinker',
-        description: 'Answer correctly in <3s',
+        description: 'Trả lời đúng trong <3s',
         category: 'learning',
         type: 'custom',
         metric: 'quickAnswer',
@@ -127,7 +127,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'lightning_brain',
         name: 'Lightning Brain',
-        description: '5 correct answers in 10s',
+        description: '5 câu đúng trong 10s',
         category: 'learning',
         type: 'custom',
         metric: 'lightningWindow',
@@ -140,7 +140,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'tiny_snake',
         name: 'Tiny Snake',
-        description: 'Reach length 50',
+        description: 'Đạt độ dài 50',
         category: 'growth',
         type: 'counter',
         metric: 'maxLength',
@@ -151,7 +151,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'growing_brain',
         name: 'Growing Brain',
-        description: 'Reach length 200',
+        description: 'Đạt độ dài 200',
         category: 'growth',
         type: 'counter',
         metric: 'maxLength',
@@ -162,7 +162,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'knowledge_giant',
         name: 'Knowledge Giant',
-        description: 'Reach length 500',
+        description: 'Đạt độ dài 500',
         category: 'growth',
         type: 'counter',
         metric: 'maxLength',
@@ -173,7 +173,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'mega_brain_snake',
         name: 'Mega Brain Snake',
-        description: 'Reach length 1000',
+        description: 'Đạt độ dài 1000',
         category: 'growth',
         type: 'counter',
         metric: 'maxLength',
@@ -186,7 +186,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'survivor',
         name: 'Survivor',
-        description: 'Survive for 3 minutes',
+        description: 'Sống sót 3 phút',
         category: 'skill',
         type: 'counter',
         metric: 'survivalSeconds',
@@ -197,7 +197,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'unstoppable',
         name: 'Unstoppable',
-        description: 'Survive for 10 minutes',
+        description: 'Sống sót 10 phút',
         category: 'skill',
         type: 'counter',
         metric: 'survivalSeconds',
@@ -208,7 +208,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'arena_king',
         name: 'Arena King',
-        description: 'Reach #1 on the leaderboard',
+        description: 'Đứng top 1 bảng xếp hạng',
         category: 'skill',
         type: 'rank',
         metric: 'bestRank',
@@ -220,7 +220,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'comeback_kid',
         name: 'Comeback Kid',
-        description: 'Go from top 20 to top 5 in the same match',
+        description: 'Từ top 20 lên top 5 trong cùng trận',
         category: 'skill',
         type: 'custom',
         metric: 'comeback',
@@ -233,7 +233,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'first_game',
         name: 'First Game',
-        description: 'Play your first game',
+        description: 'Chơi trận đầu tiên',
         category: 'exploration',
         type: 'counter',
         metric: 'matchesPlayed',
@@ -244,7 +244,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'night_learner',
         name: 'Night Learner',
-        description: 'Play after 10 PM',
+        description: 'Chơi sau 22h',
         category: 'exploration',
         type: 'custom',
         metric: 'night',
@@ -255,7 +255,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'study_marathon',
         name: 'Study Marathon',
-        description: 'Play 5 matches in a row',
+        description: 'Chơi 5 trận liên tiếp',
         category: 'exploration',
         type: 'counter',
         metric: 'consecutiveMatches',
@@ -266,7 +266,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'knowledge_explorer',
         name: 'Knowledge Explorer',
-        description: 'Play 5 different topics',
+        description: 'Chơi 5 chủ đề khác nhau',
         category: 'exploration',
         type: 'counter',
         metric: 'uniqueTopics',
@@ -279,7 +279,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'math_wizard',
         name: 'Math Wizard',
-        description: 'Eat 50 Math answers',
+        description: 'Ăn 50 đáp án toán',
         category: 'subject',
         type: 'counter',
         metric: 'mathCorrect',
@@ -290,7 +290,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'vocabulary_king',
         name: 'Vocabulary King',
-        description: 'Eat 50 English answers',
+        description: 'Ăn 50 đáp án tiếng Anh',
         category: 'subject',
         type: 'counter',
         metric: 'englishCorrect',
@@ -301,7 +301,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'science_brain',
         name: 'Science Brain',
-        description: 'Eat 50 Science answers',
+        description: 'Ăn 50 câu khoa học',
         category: 'subject',
         type: 'counter',
         metric: 'scienceCorrect',
@@ -312,7 +312,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'all_rounder',
         name: 'All-rounder',
-        description: 'Get correct answers in 5 different subjects',
+        description: 'Ăn đúng trong 5 môn khác nhau',
         category: 'subject',
         type: 'counter',
         metric: 'uniqueSubjects',
@@ -325,7 +325,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'last_survivor',
         name: 'Last Survivor',
-        description: 'Be the last one in the room',
+        description: 'Là người cuối cùng trong phòng',
         category: 'secret',
         type: 'custom',
         metric: 'lastSurvivor',
@@ -337,7 +337,7 @@ export const ACHIEVEMENTS = [
     {
         id: 'brain_explosion',
         name: 'Brain Explosion',
-        description: 'Extremely fast growth in 30s',
+        description: 'Tăng trưởng cực nhanh trong 30s',
         category: 'secret',
         type: 'custom',
         metric: 'burstGrowth',

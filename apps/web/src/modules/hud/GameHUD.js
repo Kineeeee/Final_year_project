@@ -225,7 +225,7 @@ export class GameHUD {
 
     setQuizSourceLabel(source) {
         if (!this.quizSourceLabel) return;
-        this.quizSourceLabel.setText(source === 'USER' ? 'Your Quiz' : 'System Quiz');
+        this.quizSourceLabel.setText(source === 'USER' ? 'Đề của bạn' : 'Đề hệ thống');
     }
 
     updateRank(rank, total) {
