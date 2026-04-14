@@ -79,17 +79,22 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           script_stop: true
           script: |
-            mkdir -p ${{ secrets.APP_DIR }}
-            sudo chown -R "${{ secrets.SSH_USER }}":"${{ secrets.SSH_USER }}" "${{ secrets.APP_DIR }}" || true
-            chmod -R u+rwX "${{ secrets.APP_DIR }}" || true
+            set -euo pipefail
 
-      - name: Debug local files before SCP
+            APP_DIR="${{ secrets.APP_DIR }}"
+            USER="${{ secrets.SSH_USER }}"
+
+            sudo mkdir -p "$APP_DIR"
+            sudo chown -R "$USER":"$USER" "$APP_DIR"
+            sudo chmod -R u+rwX "$APP_DIR"
+            ls -ld "$APP_DIR"
+
+      - name: Validate deploy files exist
         run: |
-          echo "Current Path: $(pwd)"
-          echo "Listing root directory:"
-          ls -la
-          echo "Listing apps/deploy directory:"
-          ls -la apps/deploy || echo "Directory not found!"
+          test -d apps/deploy
+          ls -la apps/deploy
+          # fail if no files to upload
+          test -n "$(ls -A apps/deploy)"
 
       - name: Upload deploy config files
         uses: appleboy/scp-action@v0.1.7
@@ -98,8 +103,8 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "apps/deploy/*"
-          target: ${{ secrets.APP_DIR }}
+          source: "apps/deploy"
+          target: "/home/${{ secrets.SSH_USER }}/deploy_upload"
           overwrite: true
 
       - name: Deploy on EC2
@@ -120,12 +125,20 @@ jobs:
           script: |
             set -euo pipefail
 
-            # The SCP action uploaded the files preserving the path. Move them up!
-            if [ -d "$APP_DIR/apps/deploy" ]; then
-              echo "Moving deployed files out of apps/deploy..."
-              mv -f "$APP_DIR/apps/deploy/"* "$APP_DIR/" || true
-              rm -rf "$APP_DIR/apps" || true
+            APP_DIR="${{ secrets.APP_DIR }}"
+            USER="${{ secrets.SSH_USER }}"
+
+            sudo mkdir -p "$APP_DIR"
+            sudo chown -R "${USER}":"${USER}" "$APP_DIR" || true
+
+            # Move uploaded files into APP_DIR
+            if [ -d "/home/${USER}/deploy_upload/apps/deploy" ]; then
+              sudo mv -f "/home/${USER}/deploy_upload/apps/deploy/"* "$APP_DIR/" || true
+            else
+              sudo mv -f "/home/${USER}/deploy_upload/"* "$APP_DIR/" || true
             fi
+
+            rm -rf "/home/${USER}/deploy_upload" || true
 
             cd "$APP_DIR"
 
