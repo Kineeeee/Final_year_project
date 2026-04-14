@@ -1,22 +1,14 @@
-import '../style.css';
 import { Boot } from '../scenes/Boot';
 import { Game } from '../scenes/Game';
 import { UIScene } from '../scenes/UIScene';
 import { GameOver } from '../scenes/GameOver';
 import { MainMenu } from '../scenes/MainMenu';
 import { Preloader } from '../scenes/Preloader';
-import { ChatbotScene } from '../scenes/ChatbotScene';
 import { CustomizeScene } from '../scenes/CustomizeScene';
 import { ShopScene } from '../modules/shop/ShopScene';
 import { ShootingScene } from '../modules/combat/ShootingScene';
 import { HowToPlayScene } from '../scenes/HowToPlayScene';
 import { AuthManager } from '../modules/auth/AuthManager';
-import { AchievementsScene } from '../modules/achievements/AchievementsScene';
-import { SettingsScene } from '../scenes/SettingsScene';
-import { i18n } from '../core/services/I18nService';
-
-const BASE_WIDTH = 1920;
-const BASE_HEIGHT = 1080;
 
 // Detect Mobile Device
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -24,20 +16,30 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 const pixelRatio = window.devicePixelRatio || 1;
 const resolution = Math.max(pixelRatio, 2.0);
 
-// Keep a fixed reference canvas (1280x720) and scale to FIT the screen.
-const scaleConfig = {
-    mode: Phaser.Scale.FIT,
+// Config for Desktop (Responsive Full Screen)
+let scaleConfig = {
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: BASE_WIDTH,
-    height: BASE_HEIGHT
+    width: '100%',
+    height: '100%'
 };
+
+// Config for Mobile (High Definition)
+if (isMobile) {
+    scaleConfig = {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: '100%',
+        height: '100%'
+    };
+}
 
 const config = {
     type: Phaser.AUTO,
     resolution: resolution,
     render: {
         antialias: true,
-        pixelArt: true,   // keep sprites/text crisp when scaled down
+        pixelArt: false,
         roundPixels: true
     },
     scale: scaleConfig,
@@ -49,21 +51,15 @@ const config = {
             debug: false
         }
     },
-    dom: {
-        createContainer: true
-    },
     scene: [
         Boot,
         Preloader,
         MainMenu,
-        ChatbotScene,
         CustomizeScene,
         Game,
         UIScene,
         ShopScene,
         ShootingScene,
-        AchievementsScene,
-        SettingsScene,
         HowToPlayScene,
         GameOver
     ]
@@ -75,40 +71,7 @@ function startGame() {
     }
 }
 
-let authManager = null;
-
-function initializeAuth() {
-    if (authManager || typeof document === 'undefined') {
-        return;
-    }
-    authManager = new AuthManager(startGame);
-}
-
-// Global binding for Language Switcher in HTML
-if (typeof window !== 'undefined') {
-    window.switchLanguage = (e) => {
-        const lang = e.target.value || e;
-        i18n.setLanguage(lang);
-    };
-}
-
-// Match body/background color to game to mask letterboxing areas on extreme aspect ratios.
-if (typeof document !== 'undefined') {
-    const container = document.getElementById('game-container');
-    if (container) {
-        container.style.backgroundColor = '#028af8';
-    }
-    document.body.style.backgroundColor = '#028af8';
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            i18n.localizeDOM();
-            initializeAuth();
-        }, { once: true });
-    } else {
-        i18n.localizeDOM();
-        initializeAuth();
-    }
-}
+// Initialize Auth Manager (handles Login UI and calls startGame on success)
+new AuthManager(startGame);
 
 export { startGame };

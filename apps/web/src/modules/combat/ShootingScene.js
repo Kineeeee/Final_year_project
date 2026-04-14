@@ -3,7 +3,6 @@ import { HandShootingController } from './HandControl';
 import { Target } from './Target';
 import { quizService } from '../../core/services/QuizService';
 import { Logger } from '../../utils/Logger';
-import { i18n } from '../../core/services/I18nService';
 
 export class ShootingScene extends Scene {
     constructor() {
@@ -54,17 +53,17 @@ export class ShootingScene extends Scene {
         const cx = this.scale.width / 2;
         const cy = this.scale.height / 2;
 
-        const title = this.add.text(cx, cy - 150, i18n.t('scene.shooting.selectHand'), {
+        const title = this.add.text(cx, cy - 150, 'SELECT YOUR HAND', {
             fontFamily: '"Monospace"',
             fontSize: '36px',
             color: '#00ffff',
             fontStyle: 'bold'
         }).setOrigin(0.5);
 
-        const btnLeft = this.createCyberButton(cx - 150, cy, i18n.t('scene.shooting.leftHand'), () => this.startGame('Left'));
-        const btnRight = this.createCyberButton(cx + 150, cy, i18n.t('scene.shooting.rightHand'), () => this.startGame('Right'));
+        const btnLeft = this.createCyberButton(cx - 150, cy, 'LEFT HAND', () => this.startGame('Left'));
+        const btnRight = this.createCyberButton(cx + 150, cy, 'RIGHT HAND', () => this.startGame('Right'));
 
-        const exit = this.add.text(cx, cy + 150, i18n.t('scene.shooting.backMenu'), {
+        const exit = this.add.text(cx, cy + 150, 'BACK TO MENU', {
             fontFamily: 'Monospace',
             fontSize: '20px',
             color: '#888888'
@@ -115,12 +114,12 @@ export class ShootingScene extends Scene {
         if (!questions || questions.length === 0) {
             this.isPlaying = false;
             if (this.spawnTimer) this.spawnTimer.remove();
-            this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, i18n.t('scene.shooting.noQuestions'), {
+            this.add.text(this.scale.width / 2, this.scale.height / 2 - 40, 'Chưa có câu hỏi cho chế độ này', {
                 fontFamily: '"Monospace"',
                 fontSize: '24px',
                 color: '#ff5555'
             }).setOrigin(0.5);
-            const backBtn = this.createCyberButton(this.scale.width / 2, this.scale.height / 2 + 30, i18n.t('scene.shooting.backMenu'), () => this.returnToMenu());
+            const backBtn = this.createCyberButton(this.scale.width / 2, this.scale.height / 2 + 30, 'BACK TO MENU', () => this.returnToMenu());
             this.add.existing(backBtn);
             return;
         }
@@ -137,7 +136,7 @@ export class ShootingScene extends Scene {
     }
 
     createGameUI() {
-        this.scoreText = this.add.text(30, 30, i18n.t('scene.shooting.score') + '0', {
+        this.scoreText = this.add.text(30, 30, 'SCORE: 0', {
             fontFamily: '"Monospace"',
             fontSize: '32px',
             color: '#00ffff',
@@ -161,7 +160,7 @@ export class ShootingScene extends Scene {
         this.questionContainer.setVisible(false);
 
         // Instructions
-        this.add.text(this.scale.width / 2, this.scale.height - 40, i18n.t('scene.shooting.instructions'), {
+        this.add.text(this.scale.width / 2, this.scale.height - 40, 'AIM: Thumb+Index Midpoint | PINCH: Shoot', {
             fontFamily: '"Monospace"',
             fontSize: '18px',
             color: '#ffffff',
@@ -169,7 +168,7 @@ export class ShootingScene extends Scene {
         }).setOrigin(0.5);
 
         // Exit
-        this.add.text(30, 80, '< ' + i18n.t('scene.shooting.backMenu'), {
+        this.add.text(30, 80, '< EXIT', {
             fontFamily: 'Monospace', fontSize: '20px', color: '#ffffff', backgroundColor: '#333333'
         }).setInteractive({ useHandCursor: true }).on('pointerdown', () => this.returnToMenu());
     }
@@ -359,7 +358,7 @@ export class ShootingScene extends Scene {
         }
 
         this.score += points;
-        this.scoreText.setText(i18n.t('scene.shooting.score') + this.score);
+        this.scoreText.setText(`SCORE: ${this.score}`);
     }
 
     showFloatingText(x, y, msg, color) {
