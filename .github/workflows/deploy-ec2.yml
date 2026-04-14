@@ -83,6 +83,14 @@ jobs:
             sudo chown -R "${{ secrets.SSH_USER }}":"${{ secrets.SSH_USER }}" "${{ secrets.APP_DIR }}" || true
             chmod -R u+rwX "${{ secrets.APP_DIR }}" || true
 
+      - name: Debug local files before SCP
+        run: |
+          echo "Current Path: $(pwd)"
+          echo "Listing root directory:"
+          ls -la
+          echo "Listing apps/deploy directory:"
+          ls -la apps/deploy || echo "Directory not found!"
+
       - name: Upload deploy config files
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -90,7 +98,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "apps/deploy"
+          source: "apps/deploy/*"
           target: ${{ secrets.APP_DIR }}
           strip_components: 2
           overwrite: true
