@@ -3,34 +3,25 @@ import { Logger } from '../../utils/Logger';
 
 export class HandShootingController {
     constructor(targetHand = 'Right') {
-        this.targetHand = targetHand;
+        this.targetHand = targetHand; // 'Left' or 'Right'
         this.video = null;
         this.landmarker = null;
         this.running = false;
         this.lastVideoTime = -1;
 
-        // State Machine
-        this.STATE_IDLE = 'IDLE';
-        this.STATE_TRACKING = 'TRACKING';
-        this.STATE_LOST = 'LOST';
-        this.currentState = this.STATE_IDLE;
-
         // Performance Throttling
         this.lastDetectionTime = 0;
-        this.detectionInterval = 33;
+        this.detectionInterval = 33; // ~30 FPS (1000ms / 30)
 
         // Output state
-        this.reticlePosition = { x: 0.5, y: 0.5 };
-        this.targetReticle = { x: 0.5, y: 0.5 };
-        this.rawLandmarks = null; // For skeleton rendering
+        this.reticlePosition = { x: 0.5, y: 0.5 }; // Smoothed (Game uses this)
+        this.targetReticle = { x: 0.5, y: 0.5 };   // Raw (From Vision)
 
-        // Gesture Debounce
         this.isShooting = false;
-        this.pinchHistory = [];
-        this.pinchConfirmFrames = 3;
+        this.gestureConfidence = 0;
 
-        // EMA Smoothing Config
-        this.alpha = 0.3; // Responsive but smooth
+        // Smoothing Config
+        this.alpha = 0.1; // Lower alpha for smoother movement at high framerate
 
         // Config
         this.width = 640;
@@ -40,7 +31,6 @@ export class HandShootingController {
     async init() {
         try {
             Logger.info('HandShootingController', `Initializing MediaPipe HandLandmarker (Target: ${this.targetHand})...`);
-            this.currentState = this.STATE_IDLE;
             const vision = await FilesetResolver.forVisionTasks(
                 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
             );
@@ -51,7 +41,7 @@ export class HandShootingController {
                     delegate: "GPU"
                 },
                 runningMode: "VIDEO",
-                numHands: 2
+                numHands: 2 // Detect both to filter correctly
             });
 
             await this.setupCamera();
@@ -60,13 +50,12 @@ export class HandShootingController {
             Logger.info('HandShootingController', 'Initialization Complete');
         } catch (error) {
             Logger.error('HandShootingController', 'Failed to init', error);
-            this.currentState = this.STATE_LOST;
         }
     }
 
     async setupCamera() {
         this.video = document.createElement('video');
-        this.video.style.display = 'none';
+        this.video.style.display = 'none'; // Hidden, we render to scene texture
         this.video.autoplay = true;
         this.video.playsInline = true;
 
@@ -93,13 +82,31 @@ export class HandShootingController {
         if (this.video.currentTime !== this.lastVideoTime && this.video.readyState >= 2) {
             this.lastVideoTime = this.video.currentTime;
 
+            // Run detection with Throttling
             const now = performance.now();
             if (now - this.lastDetectionTime >= this.detectionInterval) {
                 this.lastDetectionTime = now;
                 const results = this.landmarker.detectForVideo(this.video, now);
 
                 if (results.landmarks && results.landmarks.length > 0) {
+                    // Filter by Handedness
+                    // MediaPipe Handedness: Label is 'Left' or 'Right'.
+                    // IMPORTANT: In Selfie Mode (Mirrored), Left Hand appears as Right in image, but MediaPipe usually corrects this?
+                    // Actually MediaPipe 'Left' usually means it LOOKS like a left hand (Thumb on right side of palm).
+                    // But in mirrored video, your actual Left Hand appears on the Right side of the screen.
+                    // MediaPipe analyzes the geometry.
+                    // Let's rely on the label matching the "User's Intent".
+                    // If user selects "Right Hand", they raise their physical Right Hand.
+                    // In mirrored selfie video, that hand appears on the LEFT of the screen.
+                    // MediaPipe labels it 'Left' usually because of the mirror.
+                    // RULE OF THUMB: MediaPipe Label is usually the OPPOSITE of physical hand in selfie mode.
+                    // Target: 'Right' (Physical) -> Search for 'Left' (Label)
+
+                    // Let's stick to the prompt's warning:
+                    // "Logic controls Left/Right match the user's perception (usually MediaPipe label will be opposite when mirror)"
+
                     const expectedLabel = this.targetHand === 'Right' ? 'Left' : 'Right';
+
                     let foundHand = null;
 
                     for (let i = 0; i < results.handedness.length; i++) {
@@ -112,23 +119,15 @@ export class HandShootingController {
 
                     if (foundHand) {
                         this.updateTarget(foundHand);
-                        this.currentState = this.STATE_TRACKING;
                     } else {
-                        // Hand not logic-matched
-                        this.currentState = this.STATE_LOST;
-                        this.detectGesture(false); // Force release
-                        this.rawLandmarks = null;
+                        // Start easing off shooting if hand lost?
+                        // Keep last position for smoothing but stop shooting
+                        this.isShooting = false;
                     }
-                } else {
-                    // No hands in frame at all
-                    this.currentState = this.STATE_LOST;
-                    this.detectGesture(false);
-                    this.rawLandmarks = null;
                 }
             }
         }
-        
-        // SMOOTHING (Exponential Moving Average)
+        // SMOOTHING (Interpolate towards target every frame)
         this.reticlePosition.x += (this.targetReticle.x - this.reticlePosition.x) * this.alpha;
         this.reticlePosition.y += (this.targetReticle.y - this.reticlePosition.y) * this.alpha;
 
@@ -136,58 +135,50 @@ export class HandShootingController {
     }
 
     updateTarget(landmarks) {
-        this.rawLandmarks = landmarks;
-
+        // 1. Aiming: Midpoint between Thumb Tip (4) and Index Tip (8)
         const thumbTip = landmarks[4];
         const indexTip = landmarks[8];
 
+        // Midpoint
         const midX = (thumbTip.x + indexTip.x) / 2;
         const midY = (thumbTip.y + indexTip.y) / 2;
 
-        // Mirror for selfie camera
-        this.targetReticle.x = 1.0 - midX;
-        this.targetReticle.y = midY;
+        // Mirror X because it's a selfie camera
+        const targetX = 1.0 - midX;
+        const targetY = midY;
 
+        // Set Raw Target (Smoothing handled in loop)
+        this.targetReticle.x = targetX;
+        this.targetReticle.y = targetY;
+
+        // 2. Shooting Gesture: Pinch (Distance between 4 and 8)
         const distance = Math.sqrt(
             Math.pow(thumbTip.x - indexTip.x, 2) +
             Math.pow(thumbTip.y - indexTip.y, 2)
         );
 
-        // Raw pinch detection
+        // Fixed Threshold as requested
         const PINCH_THRESHOLD = 0.05;
+        // Optional hysteresis? "Release threshold"
         const RELEASE_THRESHOLD = 0.08;
-        
-        let rawPinching = this.isShooting;
+
         if (this.isShooting) {
-            if (distance > RELEASE_THRESHOLD) rawPinching = false;
+            if (distance > RELEASE_THRESHOLD) this.isShooting = false;
         } else {
-            if (distance < PINCH_THRESHOLD) rawPinching = true;
+            if (distance < PINCH_THRESHOLD) this.isShooting = true;
         }
-
-        this.detectGesture(rawPinching);
     }
 
-    detectGesture(rawIsPinching) {
-        this.pinchHistory.push(rawIsPinching);
-        if (this.pinchHistory.length > this.pinchConfirmFrames) {
-            this.pinchHistory.shift();
-        }
-
-        const stablePinch = this.pinchHistory.every(Boolean) && this.pinchHistory.length === this.pinchConfirmFrames;
-        const stableRelease = this.pinchHistory.every(val => !val) && this.pinchHistory.length === this.pinchConfirmFrames;
-
-        if (stablePinch) this.isShooting = true;
-        if (stableRelease) this.isShooting = false;
-    }
-
+    /**
+     * Returns the current state of input
+     * @returns {Object} { x: number (0-1), y: number (0-1), isShooting: boolean, video: HTMLVideoElement }
+     */
     getInput() {
         return {
             x: this.reticlePosition.x,
             y: this.reticlePosition.y,
             isShooting: this.isShooting,
-            video: this.video,
-            state: this.currentState,
-            landmarks: this.rawLandmarks
+            video: this.video
         };
     }
 
@@ -195,10 +186,14 @@ export class HandShootingController {
         this.running = false;
         if (this.video) {
             const stream = this.video.srcObject;
-            if (stream) stream.getTracks().forEach(track => track.stop());
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
             this.video.srcObject = null;
         }
-        if (this.landmarker) this.landmarker.close();
+        if (this.landmarker) {
+            this.landmarker.close();
+        }
     }
 }
 
