@@ -100,7 +100,6 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           source: "apps/deploy/*"
           target: ${{ secrets.APP_DIR }}
-          strip_components: 2
           overwrite: true
 
       - name: Deploy on EC2
@@ -120,6 +119,14 @@ jobs:
           envs: GHCR_USERNAME,GHCR_TOKEN,APP_DIR,GHCR_OWNER,IMAGE_TAG
           script: |
             set -euo pipefail
+
+            # The SCP action uploaded the files preserving the path. Move them up!
+            if [ -d "$APP_DIR/apps/deploy" ]; then
+              echo "Moving deployed files out of apps/deploy..."
+              mv -f "$APP_DIR/apps/deploy/"* "$APP_DIR/" || true
+              rm -rf "$APP_DIR/apps" || true
+            fi
+
             cd "$APP_DIR"
 
             if [ ! -f .env ]; then
