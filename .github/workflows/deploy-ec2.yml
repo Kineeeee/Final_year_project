@@ -80,6 +80,8 @@ jobs:
           script_stop: true
           script: |
             mkdir -p ${{ secrets.APP_DIR }}
+            sudo chown -R "${{ secrets.SSH_USER }}":"${{ secrets.SSH_USER }}" "${{ secrets.APP_DIR }}" || true
+            chmod -R u+rwX "${{ secrets.APP_DIR }}" || true
 
       - name: Upload deploy config files
         uses: appleboy/scp-action@v0.1.7
@@ -88,7 +90,9 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "apps/deploy/compose.prod.yml,apps/deploy/Caddyfile"
+          source: |
+            apps/deploy/compose.prod.yml
+            apps/deploy/Caddyfile
           target: ${{ secrets.APP_DIR }}
           strip_components: 2
           overwrite: true
