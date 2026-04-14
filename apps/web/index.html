@@ -112,6 +112,10 @@
                 <div class="mx-auto flex w-full max-w-7xl items-center justify-between">
                     <div class="text-2xl font-black tracking-tighter text-[#2a3127] font-headline dark:text-[#e2e3dd]">Snake Study</div>
                     <div class="flex items-center gap-4">
+                        <select id="lang-switcher" onchange="window.switchLanguage(this)" class="bg-surface border border-outline rounded p-1 text-sm font-bold text-on-surface">
+                            <option value="vi">🇻🇳 VI</option>
+                            <option value="en">🇬🇧 EN</option>
+                        </select>
                         <span class="material-symbols-outlined text-3xl text-[#4CAF50]">school</span>
                     </div>
                 </div>
@@ -130,21 +134,21 @@
                         </div>
                         <div class="space-y-4 px-6">
                             <h1 id="auth-title" class="font-headline text-5xl font-extrabold leading-tight tracking-tight text-on-surface">
-                                Chao mung ban den voi <span class="text-primary">Snake Study!</span>
+                                <span data-i18n="login.title">Chao mung ban den voi</span> <span class="text-primary">Snake Study!</span>
                             </h1>
-                            <p id="auth-toggle-text" class="text-xl font-medium text-on-surface-variant">Kham pha the gioi tri thuc cung nguoi ban ran nho thong thai.</p>
+                            <p id="auth-toggle-text" data-i18n="login.subtitle" class="text-xl font-medium text-on-surface-variant">Kham pha the gioi tri thuc cung nguoi ban ran nho thong thai.</p>
                         </div>
                     </div>
 
                     <div class="rounded-xl border border-outline-variant/5 bg-surface-container-lowest p-8 shadow-[0_24px_48px_rgba(42,49,39,0.06)] md:p-12">
                         <div class="mb-8 text-center lg:hidden">
-                            <h1 id="auth-title-mobile" class="font-headline text-3xl font-extrabold tracking-tight text-on-surface">Chao mung tro lai!</h1>
-                            <p id="auth-toggle-text-mobile" class="mt-1 text-sm font-medium text-on-surface-variant">Dang nhap de tiep tuc cuoc phieu luu.</p>
+                            <h1 id="auth-title-mobile" data-i18n="login.title" class="font-headline text-3xl font-extrabold tracking-tight text-on-surface">Chao mung tro lai!</h1>
+                            <p id="auth-toggle-text-mobile" data-i18n="login.subtitle" class="mt-1 text-sm font-medium text-on-surface-variant">Dang nhap de tiep tuc cuoc phieu luu.</p>
                         </div>
 
                         <form id="login-form" data-auth-form class="space-y-6" novalidate aria-label="Login form">
                             <div data-auth-field class="space-y-2">
-                                <label for="username" class="ml-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Ten dang nhap</label>
+                                <label for="username" data-i18n="login.username" class="ml-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Ten dang nhap</label>
                                 <div class="group relative">
                                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
                                         <span class="material-symbols-outlined text-outline transition-colors group-focus-within:text-primary">person</span>
@@ -156,7 +160,7 @@
                             </div>
 
                             <div data-auth-field class="space-y-2">
-                                <label for="password" class="ml-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Mat khau</label>
+                                <label for="password" data-i18n="login.password" class="ml-2 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Mat khau</label>
                                 <div class="group relative">
                                     <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
                                         <span class="material-symbols-outlined text-outline transition-colors group-focus-within:text-primary">key</span>
@@ -178,14 +182,14 @@
                                             <span class="material-symbols-outlined scale-0 text-sm text-white transition-transform peer-checked:scale-100">check</span>
                                         </div>
                                     </div>
-                                    <span class="select-none font-medium text-on-surface-variant group-hover:text-on-surface">Ghi nho minh nhe!</span>
+                                    <span data-i18n="login.remember" class="select-none font-medium text-on-surface-variant group-hover:text-on-surface">Ghi nho minh nhe!</span>
                                 </label>
-                                <a href="#" id="forgot-password" class="font-bold text-secondary decoration-2 underline-offset-4 hover:underline">Quen mat khau roi a?</a>
+                                <a href="#" id="forgot-password" data-i18n="login.forgot" class="font-bold text-secondary decoration-2 underline-offset-4 hover:underline">Quen mat khau roi a?</a>
                             </div>
 
                             <button type="button" id="btn-login"
                                 class="flex w-full items-center justify-center gap-3 rounded-full bg-primary px-8 py-5 font-headline text-xl font-extrabold text-white shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
-                                Dang nhap
+                                <span data-i18n="login.submit">Dang nhap</span>
                                 <span class="material-symbols-outlined text-2xl" data-weight="fill">play_arrow</span>
                             </button>
 
@@ -197,7 +201,7 @@
                                 <div class="w-full border-t border-outline-variant/30"></div>
                             </div>
                             <div class="relative flex justify-center text-sm">
-                                <span class="bg-surface-container-lowest px-4 text-outline font-bold uppercase tracking-widest">Hoac dang nhap bang</span>
+                                <span data-i18n="login.or" class="bg-surface-container-lowest px-4 text-outline font-bold uppercase tracking-widest">Hoac dang nhap bang</span>
                             </div>
                         </div>
 
@@ -225,16 +229,16 @@
                         </div>
 
                         <div class="mt-12 space-y-4 rounded-xl border border-outline-variant/10 bg-surface-container-low p-8 text-center">
-                            <p class="font-semibold text-on-surface-variant">Chua co tai khoan? Tham gia ngay!</p>
+                            <p data-i18n="login.noAccount" class="font-semibold text-on-surface-variant">Chua co tai khoan? Tham gia ngay!</p>
                             <button type="button" id="to-signup" data-auth-tab="signup"
                                 data-active-classes="text-[#4CAF50] font-extrabold border-b-4 border-[#4CAF50] pb-1"
                                 data-inactive-classes="font-medium text-[#2a3127] dark:text-[#c4c8ba]"
                                 class="w-full rounded-full bg-tertiary-container px-8 py-4 font-headline text-lg font-extrabold text-on-tertiary-container shadow-md transition-all hover:scale-[1.02] active:scale-95">
-                                Dang ky tai khoan moi
+                                <span data-i18n="login.signup">Dang ky tai khoan moi</span>
                             </button>
                             <button type="button" id="btn-guest"
                                 class="w-full rounded-full border-2 border-outline-variant bg-surface px-8 py-4 text-sm font-bold text-on-surface transition-all hover:scale-[1.02] active:scale-95">
-                                Choi voi tai khoan khach
+                                <span data-i18n="login.guest">Choi voi tai khoan khach</span>
                             </button>
                         </div>
                     </div>
@@ -293,9 +297,9 @@
                         </div>
                         <div class="space-y-4">
                             <h1 class="font-headline text-4xl font-extrabold leading-tight tracking-tight text-on-surface md:text-5xl lg:text-6xl">
-                                Bat dau chuyen <span class="italic text-primary">phieu luu</span> hoc tap cung Snake Study!
+                                <span data-i18n="signup.title">Bat dau chuyen phieu luu voi</span> <span class="italic text-primary">Snake Study!</span>
                             </h1>
-                            <p class="max-w-md text-lg font-medium text-on-surface-variant">
+                            <p data-i18n="signup.subtitle" class="max-w-md text-lg font-medium text-on-surface-variant">
                                 Kham pha the gioi tri thuc ky thu qua tung bai hoc sinh dong va phan thuong hap dan.
                             </p>
                         </div>
@@ -309,7 +313,7 @@
                                 <div data-auth-field class="space-y-2">
                                     <label for="signup-name" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
                                         <span class="material-symbols-outlined text-sm" data-icon="face">face</span>
-                                        BIET DANH
+                                        <span data-i18n="signup.name">BIET DANH</span>
                                     </label>
                                     <input type="text" id="signup-name" name="signup-name" autocomplete="name" placeholder="Ten cua be la gi nhi?"
                                         class="w-full rounded-lg border-none bg-surface-container px-5 py-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:scale-[1.02] focus:ring-2 focus:ring-primary/20" required />
@@ -319,7 +323,7 @@
                                 <div data-auth-field class="space-y-2">
                                     <label for="signup-email" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
                                         <span class="material-symbols-outlined text-sm" data-icon="mail">mail</span>
-                                        EMAIL (Danh cho phu huynh)
+                                        <span data-i18n="signup.email">EMAIL (Danh cho phu huynh)</span>
                                     </label>
                                     <input type="email" id="signup-email" name="signup-email" autocomplete="email" placeholder="email@phuhuynh.com"
                                         class="w-full rounded-lg border-none bg-surface-container px-5 py-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:scale-[1.02] focus:ring-2 focus:ring-primary/20" required />
@@ -329,7 +333,7 @@
                                 <div data-auth-field class="space-y-2">
                                     <label for="signup-password" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
                                         <span class="material-symbols-outlined text-sm" data-icon="lock">lock</span>
-                                        MAT KHAU
+                                        <span data-i18n="signup.password">MAT KHAU</span>
                                     </label>
                                     <div class="relative">
                                         <input type="password" id="signup-password" name="signup-password" autocomplete="new-password" minlength="8" maxlength="12" placeholder="••••••••"
@@ -370,7 +374,7 @@
                                 <div data-auth-field class="space-y-2">
                                     <label for="signup-confirm" class="flex items-center gap-2 text-sm font-bold text-on-surface-variant">
                                         <span class="material-symbols-outlined text-sm" data-icon="verified">verified</span>
-                                        XAC NHAN MAT KHAU
+                                        <span data-i18n="signup.confirm">XAC NHAN MAT KHAU</span>
                                     </label>
                                     <input type="password" id="signup-confirm" name="signup-confirm" autocomplete="new-password" placeholder="Nhap lai mat khau"
                                         class="w-full rounded-lg border-none bg-surface-container px-5 py-4 font-medium text-on-surface placeholder:text-outline-variant transition-all focus:scale-[1.02] focus:ring-2 focus:ring-primary/20" required />
@@ -380,7 +384,7 @@
                                 <div class="pt-4">
                                     <button type="button" id="btn-register"
                                         class="flex w-full items-center justify-center gap-3 rounded-full bg-tertiary-container py-5 font-headline text-xl font-black text-on-tertiary-container shadow-lg shadow-tertiary-container/30 transition-all duration-300 hover:scale-105 active:scale-95">
-                                        Tham gia ngay!
+                                        <span data-i18n="signup.submit">Tham gia ngay!</span>
                                         <span class="material-symbols-outlined font-bold" data-icon="rocket_launch" style="font-variation-settings: 'FILL' 1;">rocket_launch</span>
                                     </button>
                                 </div>
@@ -389,12 +393,12 @@
 
                                 <div class="pt-2 text-center">
                                     <p class="text-sm font-medium text-on-surface-variant">
-                                        Da co tai khoan?
+                                        <span data-i18n="signup.hasAccount">Da co tai khoan?</span>
                                         <button type="button" data-auth-tab="login"
                                             data-active-classes="text-[#4CAF50] font-extrabold border-b-4 border-[#4CAF50] pb-1"
                                             data-inactive-classes="text-primary font-bold underline underline-offset-4"
                                             class="font-bold text-primary underline-offset-4 hover:underline">
-                                            Dang nhap tai day
+                                            <span data-i18n="signup.loginHere">Dang nhap tai day</span>
                                         </button>
                                     </p>
                                 </div>
@@ -404,11 +408,11 @@
                         <div class="mt-8 flex items-center justify-center gap-6 opacity-60">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-lg" data-icon="verified_user">verified_user</span>
-                                <span class="text-xs font-bold uppercase tracking-wider">An toan tuyet doi</span>
+                                <span data-i18n="auth.safety" class="text-xs font-bold uppercase tracking-wider">An toan tuyet doi</span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-lg" data-icon="kid_star">kid_star</span>
-                                <span class="text-xs font-bold uppercase tracking-wider">Cho tre 4-12 tuoi</span>
+                                <span data-i18n="auth.age" class="text-xs font-bold uppercase tracking-wider">Cho tre 4-12 tuoi</span>
                             </div>
                         </div>
                     </div>

@@ -13,6 +13,7 @@ import { HowToPlayScene } from '../scenes/HowToPlayScene';
 import { AuthManager } from '../modules/auth/AuthManager';
 import { AchievementsScene } from '../modules/achievements/AchievementsScene';
 import { SettingsScene } from '../scenes/SettingsScene';
+import { i18n } from '../core/services/I18nService';
 
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
@@ -24,7 +25,6 @@ const pixelRatio = window.devicePixelRatio || 1;
 const resolution = Math.max(pixelRatio, 2.0);
 
 // Keep a fixed reference canvas (1280x720) and scale to FIT the screen.
-// FIT shows all content (no cropping); side letterboxing is filled with page background.
 const scaleConfig = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -81,8 +81,15 @@ function initializeAuth() {
     if (authManager || typeof document === 'undefined') {
         return;
     }
-
     authManager = new AuthManager(startGame);
+}
+
+// Global binding for Language Switcher in HTML
+if (typeof window !== 'undefined') {
+    window.switchLanguage = (e) => {
+        const lang = e.target.value || e;
+        i18n.setLanguage(lang);
+    };
 }
 
 // Match body/background color to game to mask letterboxing areas on extreme aspect ratios.
@@ -94,8 +101,12 @@ if (typeof document !== 'undefined') {
     document.body.style.backgroundColor = '#028af8';
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeAuth, { once: true });
+        document.addEventListener('DOMContentLoaded', () => {
+            i18n.localizeDOM();
+            initializeAuth();
+        }, { once: true });
     } else {
+        i18n.localizeDOM();
         initializeAuth();
     }
 }
