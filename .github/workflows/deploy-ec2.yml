@@ -84,10 +84,16 @@ jobs:
             APP_DIR="${{ secrets.APP_DIR }}"
             USER="${{ secrets.SSH_USER }}"
 
+            # app dir (used later by deploy step)
             sudo mkdir -p "$APP_DIR"
             sudo chown -R "$USER":"$USER" "$APP_DIR"
             sudo chmod -R u+rwX "$APP_DIR"
-            ls -ld "$APP_DIR"
+
+            # upload staging dir (this is the missing piece)
+            mkdir -p "/home/${USER}/deploy_upload"
+            chmod -R u+rwX "/home/${USER}/deploy_upload"
+
+            ls -ld "$APP_DIR" "/home/${USER}/deploy_upload"
 
       - name: Validate deploy files exist
         run: |
