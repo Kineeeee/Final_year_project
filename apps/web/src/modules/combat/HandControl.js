@@ -18,6 +18,7 @@ export class HandShootingController {
         this.targetReticle = { x: 0.5, y: 0.5 };   // Raw (From Vision)
 
         this.isShooting = false;
+        this.currentLandmarks = null;
         this.gestureConfidence = 0;
 
         // Smoothing Config
@@ -118,12 +119,17 @@ export class HandShootingController {
                     }
 
                     if (foundHand) {
+                        this.currentLandmarks = foundHand;
                         this.updateTarget(foundHand);
                     } else {
+                        this.currentLandmarks = null;
                         // Start easing off shooting if hand lost?
                         // Keep last position for smoothing but stop shooting
                         this.isShooting = false;
                     }
+                } else {
+                    this.currentLandmarks = null;
+                    this.isShooting = false;
                 }
             }
         }
@@ -178,7 +184,8 @@ export class HandShootingController {
             x: this.reticlePosition.x,
             y: this.reticlePosition.y,
             isShooting: this.isShooting,
-            video: this.video
+            video: this.video,
+            landmarks: this.currentLandmarks
         };
     }
 

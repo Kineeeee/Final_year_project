@@ -261,15 +261,94 @@ export class ShootingScene extends Scene {
     update(time, delta) {
         if (!this.isPlaying || !this.handController) return;
 
-        // Video Texture
+        // Video Texture & PiP Hand Overlay
         const input = this.handController.getInput();
         if (input.video && input.video.readyState >= 2) {
             if (!this.videoTexture) {
                 this.videoTexture = this.textures.createCanvas('webcam', input.video.videoWidth, input.video.videoHeight);
-                this.add.image(this.scale.width / 2, this.scale.height / 2, 'webcam').setDisplaySize(this.scale.width, this.scale.height).setDepth(-10);
+                
+                // PiP Dimensions
+                const maxPipWidth = this.scale.width * 0.25;
+                const aspect = input.video.videoHeight / input.video.videoWidth;
+                const pipW = maxPipWidth;
+                const pipH = maxPipWidth * aspect;
+                const padding = 20;
+
+                // Position at Bottom Right
+                const pipX = this.scale.width - pipW / 2 - padding;
+                const pipY = this.scale.height - pipH / 2 - padding;
+
+                this.pipImage = this.add.image(pipX, pipY, 'webcam')
+                    .setDisplaySize(pipW, pipH)
+                    .setFlipX(true) // Mirror for selfie
+                    .setDepth(90);
+
+                this.pipBorder = this.add.rectangle(pipX, pipY, pipW, pipH)
+                    .setStrokeStyle(3, 0x00ffff)
+                    .setDepth(90);
+
+                this.pipGraphics = this.add.graphics().setDepth(91);
+
+                this.pipWarningText = this.add.text(pipX, pipY, 'HAND NOT DETECTED', {
+                    fontFamily: '"Monospace"',
+                    fontSize: '14px',
+                    color: '#ff5555',
+                    backgroundColor: '#000000aa',
+                    padding: { x: 4, y: 4 }
+                }).setOrigin(0.5).setDepth(92).setVisible(false);
+
+                this.pipData = { x: pipX - pipW / 2, y: pipY - pipH / 2, w: pipW, h: pipH };
             }
             this.videoTexture.context.drawImage(input.video, 0, 0);
             this.videoTexture.refresh();
+
+            // Draw Skeleton Update
+            if (this.pipGraphics) {
+                this.pipGraphics.clear();
+                if (input.landmarks && input.landmarks.length > 0) {
+                    if (this.pipWarningText) this.pipWarningText.setVisible(false);
+                    const connections = [
+                        [0, 1], [1, 2], [2, 3], [3, 4],     // Thumb
+                        [0, 5], [5, 6], [6, 7], [7, 8],     // Index
+                        [5, 9], [9, 10], [10, 11], [11, 12], // Middle
+                        [9, 13], [13, 14], [14, 15], [15, 16], // Ring
+                        [13, 17], [0, 17], [17, 18], [18, 19], [19, 20] // Pinky & Palm
+                    ];
+
+                    this.pipGraphics.lineStyle(2, 0x00ff00, 1);
+                    this.pipGraphics.fillStyle(0xff0000, 1);
+
+                    const getPoint = (lm) => {
+                        const flipX = 1.0 - lm.x; // Because camera is mirrored (setFlipX)
+                        return {
+                            x: this.pipData.x + flipX * this.pipData.w,
+                            y: this.pipData.y + lm.y * this.pipData.h
+                        };
+                    };
+
+                    // Draw connections
+                    for (const [startIdx, endIdx] of connections) {
+                        const p1 = getPoint(input.landmarks[startIdx]);
+                        const p2 = getPoint(input.landmarks[endIdx]);
+                        this.pipGraphics.strokeLineShape(new Phaser.Geom.Line(p1.x, p1.y, p2.x, p2.y));
+                    }
+
+                    // Draw joints
+                    for (const lm of input.landmarks) {
+                        const p = getPoint(lm);
+                        this.pipGraphics.fillCircle(p.x, p.y, 3);
+                    }
+                    
+                    // Highlight thumb tip (4) and index tip (8) for pinch visualization
+                    this.pipGraphics.fillStyle(0xffff00, 1); // Yellow for aiming points
+                    const tTip = getPoint(input.landmarks[4]);
+                    const iTip = getPoint(input.landmarks[8]);
+                    this.pipGraphics.fillCircle(tTip.x, tTip.y, 5);
+                    this.pipGraphics.fillCircle(iTip.x, iTip.y, 5);
+                } else {
+                    if (this.pipWarningText) this.pipWarningText.setVisible(true);
+                }
+            }
         }
 
         // Targets
@@ -378,5 +457,9 @@ export class ShootingScene extends Scene {
         this.targets = [];
         if (this.explosionManager) this.explosionManager.destroy();
         if (this.textures.exists('webcam')) this.textures.remove('webcam');
+        if (this.pipGraphics) this.pipGraphics.destroy();
+        if (this.pipImage) this.pipImage.destroy();
+        if (this.pipBorder) this.pipBorder.destroy();
+        if (this.pipWarningText) this.pipWarningText.destroy();
     }
 }
