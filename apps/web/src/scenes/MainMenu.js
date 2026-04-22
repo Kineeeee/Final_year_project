@@ -216,7 +216,7 @@ export class MainMenu extends Scene {
         uiRoot.add(statsContainer);
 
         // --- 4A. GLOBAL LEADERBOARD (REDIS) ---
-        const globalPanelW = Math.min(scaleVal(isMobile ? 310 : 350), width - padding * 2);
+        const globalPanelW = Math.min(scaleVal(isMobile ? 207 : 233), width - padding * 2);
         const globalPanelH = scaleVal(isMobile ? 106 : 128);
         const globalPanelX = width - padding - globalPanelW / 2;
         const globalPanelY = headerY + scaleVal(isMobile ? 56 : 62);
