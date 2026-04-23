@@ -104,8 +104,26 @@ class BotManager {
                     const dx = entity.x - bot.x;
                     const dy = entity.y - bot.y;
                     const d = dx * dx + dy * dy;
-                    if (d < nearestDist) {
-                        nearestDist = d;
+                    
+                    // Lô-gic chống kẹt (Anti-orbiting): Phạt các thức ăn ở góc cua gắt
+                    const angleToFood = Math.atan2(dy, dx);
+                    let angleDiff = angleToFood - bot.rotation;
+                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                    
+                    // Nếu thức ăn ở phía sau (góc lớn hơn 90 độ), tăng khoảng cách ảo lên nhiều lần
+                    // để ưu tiên thức ăn phía trước mặt
+                    let penalty = 1;
+                    if (Math.abs(angleDiff) > Math.PI / 2) {
+                        penalty = 10; 
+                    } else if (Math.abs(angleDiff) > Math.PI / 4) {
+                        penalty = 2;
+                    }
+
+                    const effectiveDist = d * penalty;
+
+                    if (effectiveDist < nearestDist) {
+                        nearestDist = effectiveDist;
                         targetX = entity.x;
                         targetY = entity.y;
                         nearestFood = entity;
@@ -120,8 +138,23 @@ class BotManager {
                 const dx = f.x - bot.x;
                 const dy = f.y - bot.y;
                 const d = dx * dx + dy * dy;
-                if (d < nearestDist) {
-                    nearestDist = d;
+
+                const angleToFood = Math.atan2(dy, dx);
+                let angleDiff = angleToFood - bot.rotation;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                
+                let penalty = 1;
+                if (Math.abs(angleDiff) > Math.PI / 2) {
+                    penalty = 10; 
+                } else if (Math.abs(angleDiff) > Math.PI / 4) {
+                    penalty = 2;
+                }
+
+                const effectiveDist = d * penalty;
+
+                if (effectiveDist < nearestDist) {
+                    nearestDist = effectiveDist;
                     targetX = f.x;
                     targetY = f.y;
                 }
