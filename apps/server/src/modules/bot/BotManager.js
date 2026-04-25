@@ -1,4 +1,4 @@
-const { BOT_COUNT, BOT_NAMES } = require('../../config/ServerConstants');
+const { BOT_COUNT, BOT_NAMES, WORLD_SIZE } = require('../../config/ServerConstants');
 const Logger = require('../../utils/Logger');
 
 class BotManager {
@@ -86,52 +86,81 @@ class BotManager {
     }
 
     updateBotAI(bot) {
-        // Optimized AI: Use Spatial Grid to find nearest food (O(1) instead of O(n))
-        let nearestDist = Infinity;
+        // Optimized AI: Use Spatial Grid to find nearest entities
+        const spatialGrid = this.container.get('spatialGrid');
+        
         let targetX = bot.x;
         let targetY = bot.y;
-        let nearestFood = null;
+        let wantsToBoost = false;
 
-        // Query nearby food using spatial grid (500 unit radius reasonable for search)
-        const spatialGrid = this.container.get('spatialGrid');
+        // Threat & Opportunity detection
+        let nearestThreat = null;
+        let nearestThreatDist = Infinity;
+        let nearestPrey = null;
+        let nearestPreyDist = Infinity;
+        let nearestFoodDist = Infinity;
+        
         if (spatialGrid) {
-            const searchRadius = 800; // Tune based on world density
+            const searchRadius = 1000; // Tune based on world density
             const nearbyEntities = spatialGrid.query(bot.x, bot.y, searchRadius);
             
             for (const entity of nearbyEntities) {
-                // Filter to only foods
-                if (!entity.playerId && entity.type) {
-                    const dx = entity.x - bot.x;
-                    const dy = entity.y - bot.y;
-                    const d = dx * dx + dy * dy;
+                if (entity.id === bot.id) continue; // Bỏ qua bản thân
+
+                const dx = entity.x - bot.x;
+                const dy = entity.y - bot.y;
+                const d = dx * dx + dy * dy;
+
+                // Tính toán góc tương đối
+                const angleToEntity = Math.atan2(dy, dx);
+                let angleDiff = angleToEntity - bot.rotation;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+                if (entity.playerId) {
+                    // Xử lý thực thể là Player hoặc Bot khác
+                    // Chỉ quan tâm nếu họ ở trong góc nhìn phía trước (180 độ)
+                    if (Math.abs(angleDiff) < Math.PI / 2) {
+                        // Nếu là đối thủ có thể gây nguy hiểm (khoảng cách gần)
+                        if (d < 300 * 300) {
+                            if (d < nearestThreatDist) {
+                                nearestThreatDist = d;
+                                nearestThreat = entity;
+                            }
+                        }
+                    }
                     
-                    // Lô-gic chống kẹt (Anti-orbiting): Phạt các thức ăn ở góc cua gắt
-                    const angleToFood = Math.atan2(dy, dx);
-                    let angleDiff = angleToFood - bot.rotation;
-                    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                    
-                    // Nếu thức ăn ở phía sau (góc lớn hơn 90 độ), tăng khoảng cách ảo lên nhiều lần
-                    // để ưu tiên thức ăn phía trước mặt
+                    // Cơ hội tấn công: Nếu đối thủ nhỏ hơn và đang ở gần, ta có thể "tạt đầu"
+                    if (bot.score > (entity.score || 0) + 10 && d < 400 * 400) {
+                         if (d < nearestPreyDist) {
+                             nearestPreyDist = d;
+                             nearestPrey = entity;
+                         }
+                    }
+                } else if (entity.type) {
+                    // Xử lý thực thể là Thức ăn
+                    // Lô-gic chống kẹt: Phạt các thức ăn ở góc cua gắt
                     let penalty = 1;
                     if (Math.abs(angleDiff) > Math.PI / 2) {
-                        penalty = 10; 
+                        penalty = 15; 
                     } else if (Math.abs(angleDiff) > Math.PI / 4) {
-                        penalty = 2;
+                        penalty = 3;
                     }
+
+                    // Ưu tiên thức ăn giá trị cao (coin)
+                    if (entity.type === 'coin') penalty *= 0.3;
 
                     const effectiveDist = d * penalty;
 
-                    if (effectiveDist < nearestDist) {
-                        nearestDist = effectiveDist;
+                    if (effectiveDist < nearestFoodDist) {
+                        nearestFoodDist = effectiveDist;
                         targetX = entity.x;
                         targetY = entity.y;
-                        nearestFood = entity;
                     }
                 }
             }
         } else {
-            // Fallback: simple search if spatial grid not available
+            // Fallback nếu không có SpatialGrid (rất hiếm khi xảy ra)
             const allFood = this.foodManager.getAllFood();
             Object.keys(allFood).forEach((fid) => {
                 const f = allFood[fid];
@@ -146,26 +175,80 @@ class BotManager {
                 
                 let penalty = 1;
                 if (Math.abs(angleDiff) > Math.PI / 2) {
-                    penalty = 10; 
+                    penalty = 15; 
                 } else if (Math.abs(angleDiff) > Math.PI / 4) {
-                    penalty = 2;
+                    penalty = 3;
                 }
 
                 const effectiveDist = d * penalty;
 
-                if (effectiveDist < nearestDist) {
-                    nearestDist = effectiveDist;
+                if (effectiveDist < nearestFoodDist) {
+                    nearestFoodDist = effectiveDist;
                     targetX = f.x;
                     targetY = f.y;
                 }
             });
         }
 
-        // Calculate target angle
-        bot.targetRotation = Math.atan2(targetY - bot.y, targetX - bot.x);
+        // ==========================================
+        // QUYẾT ĐỊNH HÀNH VI (BEHAVIOR HIERARCHY)
+        // ==========================================
+        
+        // 1. Tránh viền bản đồ (Ưu tiên cao nhất)
+        const borderMargin = 300;
+        let borderDanger = false;
+        let evadeX = 0;
+        let evadeY = 0;
 
-        // Boost if close to food and has score > 5
-        if (nearestDist < 200 * 200 && bot.score > 5) {
+        if (bot.x < borderMargin) { evadeX = 1; borderDanger = true; }
+        else if (bot.x > WORLD_SIZE - borderMargin) { evadeX = -1; borderDanger = true; }
+
+        if (bot.y < borderMargin) { evadeY = 1; borderDanger = true; }
+        else if (bot.y > WORLD_SIZE - borderMargin) { evadeY = -1; borderDanger = true; }
+
+        if (borderDanger) {
+            // Quay đầu vào giữa bản đồ
+            targetX = bot.x + evadeX * 200;
+            targetY = bot.y + evadeY * 200;
+            wantsToBoost = false;
+        } 
+        // 2. Né tránh nguy hiểm (Có đối thủ ngay phía trước)
+        else if (nearestThreat) {
+            const dx = nearestThreat.x - bot.x;
+            const dy = nearestThreat.y - bot.y;
+            // Bẻ lái 90 độ để né
+            targetX = bot.x - dy; 
+            targetY = bot.y + dx;
+            wantsToBoost = true; // Tăng tốc để chạy trốn
+        }
+        // 3. Tấn công con mồi (Tạt đầu)
+        else if (nearestPrey && bot.score > 15) {
+            // Dự đoán hướng đi của con mồi và lao lên phía trước họ
+            const preyRot = nearestPrey.rotation || 0;
+            targetX = nearestPrey.x + Math.cos(preyRot) * 200;
+            targetY = nearestPrey.y + Math.sin(preyRot) * 200;
+            wantsToBoost = true;
+        }
+        // 4. Tìm thức ăn
+        else if (nearestFoodDist < Infinity) {
+            // Tăng tốc nếu thức ăn ngay sát và có đủ điểm
+            if (nearestFoodDist < 150 * 150 && bot.score > 5) {
+                wantsToBoost = true;
+            }
+        } 
+        // 5. Đi lang thang (Wander)
+        else {
+            // Không đi thẳng tắp mà hơi uốn lượn để tự nhiên hơn
+            bot.targetRotation = bot.rotation + (Math.random() * 0.4 - 0.2);
+            bot.wantsToBoost = false;
+            return; // Đã gán targetRotation trực tiếp
+        }
+
+        // Tính toán góc mục tiêu cuối cùng
+        bot.targetRotation = Math.atan2(targetY - bot.y, targetX - bot.x);
+        
+        // Quản lý năng lượng (Chỉ boost khi cần thiết và có tỷ lệ random để không bị cạn kiệt khối lượng)
+        if (wantsToBoost && bot.score > 5 && Math.random() < 0.8) {
             bot.wantsToBoost = true;
         } else {
             bot.wantsToBoost = false;
