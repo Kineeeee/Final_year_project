@@ -141,7 +141,7 @@ class BroadcastSystem {
                             id,
                             Math.round(p.x),
                             Math.round(p.y),
-                            parseFloat(p.rotation.toFixed(2)),
+                            Math.round(p.rotation * 100) / 100,
                             p.score,
                             p.isBoosting ? 1 : 0,
                             p.name,

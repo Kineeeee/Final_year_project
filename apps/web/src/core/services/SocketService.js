@@ -29,7 +29,7 @@ class SocketService {
 
         if (!this.socket) {
             Logger.info('Network', `Connecting to ${targetUrl}`);
-            const finalOptions = Object.assign({ parser }, options);
+            const finalOptions = Object.assign({ parser, transports: ['websocket'] }, options);
             this.socket = io(targetUrl, finalOptions);
             this.currentUrl = targetUrl;
 
