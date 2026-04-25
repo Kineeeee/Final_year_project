@@ -7,6 +7,11 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     env_file:
       - .env
     volumes:
@@ -20,10 +25,20 @@ services:
   web:
     image: ghcr.io/${GHCR_OWNER}/phaser3-snake-web:${IMAGE_TAG:-latest}
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   api:
     image: ghcr.io/${GHCR_OWNER}/phaser3-snake-api:${IMAGE_TAG:-latest}
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     env_file:
       - api.env
     depends_on:
@@ -34,6 +49,11 @@ services:
     image: redis:7-alpine
     restart: always
     command: [ "redis-server", "--appendonly", "yes" ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     volumes:
       - redis_data:/data
     healthcheck:

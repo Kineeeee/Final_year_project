@@ -33,7 +33,7 @@ class BotManager {
             return;
         }
 
-        const id = 'bot-' + Math.floor(Math.random() * 1000000);
+        const id = 'bot-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
         const spawnPos = this.spawnManager.getSafeSpawnPosition();
         const rot = Math.random() * Math.PI * 2;
 
