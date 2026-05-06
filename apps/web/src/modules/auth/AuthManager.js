@@ -272,12 +272,12 @@ export class AuthManager {
 
         if (this.strengthLabel) {
             const labels = [
-                'Bắt đầu nhập để xem độ mạnh',
-                'Quá ngắn',
-                'Thêm ký tự đa dạng hơn',
-                'Đang mạnh dần',
-                'Mật khẩu rất tốt',
-                'Sẵn sàng sử dụng'
+                'Start typing to see password strength',
+                'Too short',
+                'Add more diverse characters',
+                'Getting stronger',
+                'Strong password',
+                'Ready to use'
             ];
             this.strengthLabel.textContent = labels[meterIndex];
         }
