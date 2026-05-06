@@ -52,12 +52,18 @@ function pickReplyText(parsed, depth = 0) {
         return nested || str;
     }
 
+    if (typeof parsed === 'number' || typeof parsed === 'boolean') {
+        return String(parsed);
+    }
+
     if (typeof parsed !== 'object') return '';
 
-    const candidates = [parsed.reply, parsed.response, parsed.message, parsed.text];
+    const candidates = [parsed.reply, parsed.response, parsed.message, parsed.text, parsed.answer, parsed.content];
     for (const candidate of candidates) {
-        const value = pickReplyText(candidate, depth + 1);
-        if (value) return value;
+        if (candidate !== undefined) {
+            const value = pickReplyText(candidate, depth + 1);
+            if (value !== '') return value;
+        }
     }
 
     return '';
