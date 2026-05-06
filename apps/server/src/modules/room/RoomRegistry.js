@@ -5,7 +5,7 @@ const { ROOM_LIFECYCLE } = require('../../core/GamePhases');
 class RoomRegistry {
     constructor() {
         this.rooms = new Map(); // code -> room data
-        this.maxCustomRooms = 2;
+        this.maxCustomRooms = 10;
         this.emptyTtlMs = 5 * 60 * 1000; // close after 5m empty
         this.joinGraceMs = 2 * 60 * 1000; // close if nobody joins within 2m
         this.userSocketMap = new Map(); // userId -> socketId

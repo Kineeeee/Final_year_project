@@ -116,7 +116,7 @@ export class ChatbotScene extends Scene {
                     height:${inputAreaH}px;
                     background:transparent;
                 ">
-                    <textarea id="chat-input" rows="2" placeholder="Nhap cau hoi..." style="
+                    <textarea id="chat-input" rows="2" placeholder="Type your question..." style="
                         flex:1;
                         height:100%;
                         resize:none;
@@ -211,7 +211,7 @@ export class ChatbotScene extends Scene {
     }
 
     addSeedMessages() {
-        this.messages.push({ role: 'assistant', content: 'Xin chao! Toi la chatbot Snake Arena. Ban co the hoi ve che do choi, meo lam bai quiz, hoac chien thuat sinh ton.' });
+        this.messages.push({ role: 'assistant', content: 'Hello! I am Snake Arena chatbot. You can ask me about game modes, quiz tips, or survival strategies.' });
     }
 
     escapeHtml(text) {
@@ -266,17 +266,17 @@ export class ChatbotScene extends Scene {
 
         this.isSending = true;
         this.setInputsDisabled(true);
-        this.statusText.setText('Dang ket noi LLM...');
+        this.statusText.setText('Waiting for response...');
 
         try {
             const data = await chatbotApi.ask(message, history);
-            const reply = (data?.reply || '').toString().trim() || 'Khong co phan hoi tu chatbot.';
+            const reply = (data?.reply || '').toString().trim() || 'No response from chatbot.';
             this.messages.push({ role: 'assistant', content: reply });
-            this.statusText.setText('Da nhan phan hoi. Enter de gui tiep, ESC de dong.');
+            this.statusText.setText('Received response. Press Enter to continue, ESC to exit.');
         } catch (err) {
             Logger.error('ChatbotScene', 'Chat request failed', err);
-            this.messages.push({ role: 'assistant', content: `Xin loi, ket noi that bai: ${err.message || 'Unknown error'}` });
-            this.statusText.setText('Loi ket noi chatbot. Thu lai sau.');
+            this.messages.push({ role: 'assistant', content: `Sorry, connection failed: ${err.message || 'Unknown error'}` });
+            this.statusText.setText('Chatbot connection failed. Please try again later.');
         } finally {
             this.isSending = false;
             this.setInputsDisabled(false);
