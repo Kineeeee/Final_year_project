@@ -2,26 +2,26 @@ const CATEGORY_ENUM = ['math', 'english'];
 
 function validateQuestionShape(question, { allowNoCorrect = false } = {}) {
     if (!question || typeof question.question !== 'string' || !question.question.trim()) {
-        return 'Câu hỏi không được để trống';
+        return 'Question cannot be empty';
     }
 
     if (!Array.isArray(question.answers) || question.answers.length < 2) {
-        return 'Mỗi câu hỏi cần ít nhất 2 đáp án';
+        return 'Each question needs at least 2 answers';
     }
 
     let correctCount = 0;
     for (const ans of question.answers) {
         if (!ans || typeof ans.text !== 'string' || !ans.text.trim()) {
-            return 'Đáp án không được để trống';
+            return 'Answer cannot be empty';
         }
         if (ans.isCorrect === true) correctCount += 1;
     }
 
     if (!allowNoCorrect && correctCount !== 1) {
-        return 'Phải có đúng 1 đáp án đúng';
+        return 'Must have exactly one correct answer';
     }
     if (allowNoCorrect && correctCount > 1) {
-        return 'Chỉ được tối đa 1 đáp án đúng';
+        return 'Must have at most one correct answer';
     }
 
     return null;
@@ -52,11 +52,11 @@ function validateQuiz({ questions, category }, { allowNoCorrect = false } = {}) 
     const normalizedCategory = (category || '').toLowerCase();
 
     if (!CATEGORY_ENUM.includes(normalizedCategory)) {
-        return { isValid: false, errors: [{ questionIndex: -1, reason: 'Category không hợp lệ' }] };
+        return { isValid: false, errors: [{ questionIndex: -1, reason: 'Category does not match' }] };
     }
 
     if (!Array.isArray(questions) || questions.length === 0) {
-        return { isValid: false, errors: [{ questionIndex: -1, reason: 'Cần ít nhất 1 câu hỏi' }] };
+        return { isValid: false, errors: [{ questionIndex: -1, reason: 'At least one question is required' }] };
     }
 
     questions.forEach((q, index) => {
@@ -68,7 +68,7 @@ function validateQuiz({ questions, category }, { allowNoCorrect = false } = {}) 
 
         // Category heuristic
         if (isCategoryContentMismatch(q.question, normalizedCategory)) {
-            errors.push({ questionIndex: index, reason: 'Nội dung không khớp category đã chọn' });
+            errors.push({ questionIndex: index, reason: 'Content does not match the selected category' });
         }
     });
 

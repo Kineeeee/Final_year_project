@@ -204,7 +204,7 @@ export class MainMenuFlowController {
         panelBg.fillStyle(0x273043, 1);
         panelBg.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, 12);
 
-        const title = s.add.text(0, -panelH / 2 + 72, 'Chọn Category', {
+        const title = s.add.text(0, -panelH / 2 + 72, 'Choose Category', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: '30px',
             color: '#fff',
