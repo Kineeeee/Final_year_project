@@ -208,7 +208,7 @@ export class MainMenu extends Scene {
         createStatusChip({
             idx: 3,
             icon: '🎒',
-            text: 'Kho do',
+            text: 'Inventory',
             accent: 0xa78bfa,
             onClick: () => this.openInventoryOverlay()
         });
@@ -669,13 +669,13 @@ export class MainMenu extends Scene {
             this._globalLeaderboardCleanup = null;
         }
 
-        this.globalLeaderboardText.setText('Dang tai Global leaderboard...');
+        this.globalLeaderboardText.setText('Loading Global leaderboard...');
         this._globalLeaderboardCleanup = this.flow.requestGlobalLeaderboard({
             limit: 5,
             onSuccess: (payload) => this.renderGlobalLeaderboard(payload),
             onError: () => {
                 if (this.globalLeaderboardText) {
-                    this.globalLeaderboardText.setText('Khong the tai leaderboard\nVui long thu lai sau');
+                    this.globalLeaderboardText.setText('Can’t load leaderboard...');
                 }
             },
         });
@@ -686,7 +686,7 @@ export class MainMenu extends Scene {
 
         const top = payload && Array.isArray(payload.top) ? payload.top : [];
         if (top.length === 0) {
-            this.globalLeaderboardText.setText('Chua co du lieu\nHay choi va leo top!');
+            this.globalLeaderboardText.setText('No data yet\nPlay to climb the leaderboard!');
             return;
         }
 

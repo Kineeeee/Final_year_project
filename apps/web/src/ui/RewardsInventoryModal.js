@@ -45,7 +45,7 @@ export class RewardsInventoryModal extends Phaser.GameObjects.Container {
         this.add(this.panelBg);
 
         const titleFontPx = Math.min(46, Math.round(38 * uiScale));
-        this.title = scene.add.text(0, -panelH/2 + 35, 'KHO ĐỒ & PHẦN THƯỞNG', {
+        this.title = scene.add.text(0, -panelH/2 + 35, 'INVENTORY & REWARDS', {
             fontFamily: '"Press Start 2P", monospace',
             fontSize: `${titleFontPx}px`,
             color: '#34dbcb',
@@ -68,8 +68,8 @@ export class RewardsInventoryModal extends Phaser.GameObjects.Container {
         this.currentTab = 'skin'; 
         this.tabs = [
             { id: 'skin', name: 'SKINS' },
-            { id: 'trail', name: 'HIỆU ỨNG' },
-            { id: 'theme', name: 'SÂN ĐẤU' },
+            { id: 'trail', name: 'TRAILS' },
+            { id: 'theme', name: 'ARENAS' },
         ];
 
         // Setup Scrolling Area
@@ -107,7 +107,7 @@ export class RewardsInventoryModal extends Phaser.GameObjects.Container {
             
             // Show toast popup
             this.scene.events.emit('showToast', {
-                message: 'Đã lưu thay đổi!',
+                message: 'Change saved!',
                 color: '#34dbcb'
             });
         };
@@ -277,7 +277,7 @@ export class RewardsInventoryModal extends Phaser.GameObjects.Container {
                     btnBg.strokeRoundedRect(-btnW/2 + 2, -btnH/2 + 2, btnW - 4, btnH - 4, 3);
                 }
 
-                const btnTxt = this.scene.add.text(btnX, y, isEquipped ? 'BỎ TRANG BỊ' : 'TRANG BỊ', {
+                const btnTxt = this.scene.add.text(btnX, y, isEquipped ? 'UNEQUIP' : 'EQUIP', {
                     fontFamily: '"Press Start 2P", monospace', fontSize: `${actionFontPx}px`, color: isEquipped ? '#e74c3c' : '#ffffff'
                 }).setOrigin(0.5);
                 
@@ -306,7 +306,7 @@ export class RewardsInventoryModal extends Phaser.GameObjects.Container {
                 const lockX = panelW/2 - (panelW < 760 ? 142 : 170);
                 lockedBg.fillRoundedRect(lockX, y - lockH / 2, lockW, lockH, 4);
                 
-                const lockedTxt = this.scene.add.text(lockX + lockW / 2, y, 'KHOÁ', {
+                const lockedTxt = this.scene.add.text(lockX + lockW / 2, y, 'LOCKED', {
                     fontFamily: '"Press Start 2P", monospace', fontSize: `${actionFontPx}px`, color: '#e74c3c'
                 }).setOrigin(0.5);
                 this.scrollContainer.add([lockedBg, lockedTxt]);
