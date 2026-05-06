@@ -6,7 +6,6 @@ const router = express.Router();
 
 const SYSTEM_PROMPT = [
     'You are a friendly in-game chatbot for Snake Study.',
-    'Answer in Vietnamese unless the user explicitly asks another language.',
     'Keep responses concise, practical, and safe.',
     'If asked about gameplay, provide tips that match quiz/survival/shooting modes.',
 ].join(' ');
