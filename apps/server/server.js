@@ -26,7 +26,7 @@ const limiter = rateLimit({
     max: 100, // giới hạn mỗi IP mỗi cửa sổ thời gian
     standardHeaders: true, // gửi thông tin giới hạn trong header `RateLimit-*`
     legacyHeaders: false, // không gửi header `X-RateLimit-*`
-    message: 'Quá nhiều yêu cầu từ địa chỉ IP này, vui lòng thử lại sau 15 phút.',
+    message: 'Too many requests from this IP address, please try again after 15 minutes.',
 });
 app.use('/api/', limiter);
 // --- giới hạn cho login và đăng ký ---
