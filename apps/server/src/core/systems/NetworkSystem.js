@@ -243,14 +243,14 @@ class NetworkSystem {
                             } else {
                                 socket.emit('quizSourceChanged', {
                                     source: 'SYSTEM',
-                                    reason: 'User quiz missing hoặc không hợp lệ',
+                                    reason: 'User quiz missing or invalid',
                                 });
                             }
                         } catch (err) {
                             Logger.error('NetworkSystem', 'Error loading user quiz', err);
                             socket.emit('quizSourceChanged', {
                                 source: 'SYSTEM',
-                                reason: 'Không thể tải đề cá nhân',
+                                reason: 'Can not load user quiz',
                             });
                         }
                     }
@@ -264,7 +264,7 @@ class NetworkSystem {
                     if (requestedQuizSource === 'USER') {
                         socket.emit('quizSourceChanged', {
                             source: 'SYSTEM',
-                            reason: 'Cần đăng nhập để dùng đề của bạn',
+                            reason: 'Need to login to use your quiz',
                         });
                     }
                 }
@@ -291,7 +291,7 @@ class NetworkSystem {
                 if (requestedQuizSource === 'USER') {
                     socket.emit('quizSourceChanged', {
                         source: 'SYSTEM',
-                        reason: 'Cần đăng nhập để dùng đề của bạn',
+                        reason: 'Need to login to use your quiz',
                     });
                 }
             }

@@ -74,7 +74,7 @@ router.get('/status', requireAuth, async (req, res) => {
     try {
         const category = normalizeCategory(req.query.category);
         if (!CATEGORY_ENUM.includes(category)) {
-            return res.status(400).json({ message: 'Category không hợp lệ' });
+            return res.status(400).json({ message: 'Category not valid' });
         }
         const quiz = await getUserQuiz(req.user.userId, category);
         return res.json(buildStatusResponse(quiz, category));
@@ -89,11 +89,11 @@ router.get('/play', requireAuth, async (req, res) => {
     try {
         const category = normalizeCategory(req.query.category);
         if (!CATEGORY_ENUM.includes(category)) {
-            return res.status(400).json({ message: 'Category không hợp lệ' });
+            return res.status(400).json({ message: 'Category not valid' });
         }
         const quiz = await getUserQuiz(req.user.userId, category);
         if (!quiz || !quiz.isValid) {
-            return res.status(400).json({ message: 'Bạn chưa có đề hợp lệ cho category này' });
+            return res.status(400).json({ message: 'You don\'t have a valid quiz for this category' });
         }
         return res.json(quiz.questions || []);
     } catch (err) {
@@ -106,7 +106,7 @@ router.post('/parse', requireAuth, async (req, res) => {
     const { rawText, category } = req.body || {};
     const normalizedCategory = normalizeCategory(category);
     if (!CATEGORY_ENUM.includes(normalizedCategory)) {
-        return res.status(400).json({ message: 'Category không hợp lệ' });
+        return res.status(400).json({ message: 'Category not valid' });
     }
 
     try {
@@ -123,21 +123,21 @@ router.post('/parse', requireAuth, async (req, res) => {
 router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
     const category = normalizeCategory(req.body.category || req.query.category);
     if (!CATEGORY_ENUM.includes(category)) {
-        return res.status(400).json({ message: 'Category không hợp lệ' });
+        return res.status(400).json({ message: 'Category not valid' });
     }
 
     if (!req.file) {
-        return res.status(400).json({ message: 'Thiếu file .docx' });
+        return res.status(400).json({ message: 'Missing .docx file' });
     }
     if (!req.file.originalname.toLowerCase().endsWith('.docx')) {
-        return res.status(400).json({ message: 'Chỉ hỗ trợ file .docx' });
+        return res.status(400).json({ message: 'Only .docx files are supported' });
     }
 
     try {
         const result = await mammoth.extractRawText({ buffer: req.file.buffer });
         const rawText = result.value || '';
         if (!rawText.trim()) {
-            return res.status(400).json({ message: 'File trống hoặc không đọc được nội dung' });
+            return res.status(400).json({ message: 'File is empty or content cannot be read' });
         }
         try {
             const aiResult = await callAiParser(rawText, category);
@@ -145,12 +145,12 @@ router.post('/upload', requireAuth, upload.single('file'), async (req, res) => {
         } catch (e) {
             Logger.warn('UserQuiz', 'DOCX AI parse failed, fallback parser in use', e.message);
             const { questions, errors } = parseTextToQuiz(rawText, category);
-            const notice = 'AI không khả dụng, đã dùng parser nội bộ. Vui lòng kiểm tra preview trước khi lưu.';
+            const notice = 'AI is not available, using internal parser. Please check preview before saving.';
             return res.json({ questions, errors, notice });
         }
     } catch (err) {
         Logger.error('UserQuiz', 'DOCX parse error', err);
-        return res.status(500).json({ message: 'Lỗi đọc file docx' });
+        return res.status(500).json({ message: 'Error reading docx file' });
     }
 });
 
@@ -159,7 +159,7 @@ router.post('/save', requireAuth, async (req, res) => {
         const category = normalizeCategory(req.body.category);
         const questions = normalizeQuestions(req.body.questions || []);
         if (!CATEGORY_ENUM.includes(category)) {
-            return res.status(400).json({ message: 'Category không hợp lệ' });
+            return res.status(400).json({ message: 'Category not valid' });
         }
 
         const validation = validateQuiz({ questions, category });
@@ -206,10 +206,10 @@ router.post('/source', requireAuth, async (req, res) => {
     const category = normalizeCategory(req.body.category);
     const quizSource = (req.body.quizSource || '').toUpperCase();
     if (!CATEGORY_ENUM.includes(category)) {
-        return res.status(400).json({ message: 'Category không hợp lệ' });
+        return res.status(400).json({ message: 'Category not valid' });
     }
     if (!['SYSTEM', 'USER'].includes(quizSource)) {
-        return res.status(400).json({ message: 'quizSource phải là SYSTEM hoặc USER' });
+        return res.status(400).json({ message: 'quizSource must be SYSTEM or USER' });
     }
 
     try {
@@ -217,7 +217,7 @@ router.post('/source', requireAuth, async (req, res) => {
         if (quizSource === 'USER') {
             activeQuizDoc = await getUserQuiz(req.user.userId, category);
             if (!activeQuizDoc || !activeQuizDoc.isValid) {
-                return res.status(400).json({ message: 'Quiz cá nhân không hợp lệ cho category này' });
+                return res.status(400).json({ message: 'User quiz not valid for this category' });
             }
         }
 

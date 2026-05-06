@@ -155,12 +155,12 @@ export class QuizSetupOverlay {
     async loadStatus() {
         const token = localStorage.getItem('token');
         if (!token) {
-            this.setStatusText('Vui lòng đăng nhập để dùng đề của bạn', 'danger');
+            this.setStatusText('Please login to use your questions', 'danger');
             this.toggleInput.disabled = true;
             this.playButton.disabled = false; // system still playable
             return;
         }
-        this.setStatusText('Đang tải...', 'muted');
+        this.setStatusText('Loading...', 'muted');
         this.playButton.disabled = true;
         try {
             this.status = await userQuizApi.getStatus(this.category);
@@ -174,14 +174,14 @@ export class QuizSetupOverlay {
             this.updatePlayButtonState();
         } catch (err) {
             Logger.error('QuizOverlay', 'Status error', err);
-            this.setStatusText(err.message || 'Không tải được trạng thái', 'danger');
+            this.setStatusText(err.message || 'Cannot load status', 'danger');
             this.toggleInput.checked = false;
             this.toggleInput.disabled = true;
             this.selectedQuizSource = 'SYSTEM';
             this.updateSourceLabel();
-            // Cho phép chơi với đề hệ thống ngay cả khi không fetch được trạng thái
+            // Allow playing with system questions even if status cannot be fetched
             this.updatePlayButtonState();
-            this.showErrors([{ questionIndex: -1, reason: err.message || 'Không tải được trạng thái (có thể thiếu đăng nhập)' }]);
+            this.showErrors([{ questionIndex: -1, reason: err.message || 'Cannot load status (may lack login)' }]);
         }
     }
 
@@ -193,7 +193,7 @@ export class QuizSetupOverlay {
                 this.previewQuestions = questions;
                 this.previewErrors = this.status.errors || [];
                 this.renderPreview();
-                this.showErrors([{ questionIndex: -1, reason: 'Đang hiển thị đề đã lưu. Lưu mới sẽ thay thế đề cũ.' }], 'success');
+                this.showErrors([{ questionIndex: -1, reason: 'Now showing saved questions. Saving will replace old questions.' }], 'success');
             }
         } catch (err) {
             Logger.warn('QuizOverlay', 'Load existing quiz failed', err);
@@ -203,13 +203,13 @@ export class QuizSetupOverlay {
     updateStatusBadge() {
         if (!this.statusBadge) return;
         const { isValid, hasQuiz, userQuizStatus } = this.status || {};
-        let text = 'Chưa có đề';
+        let text = 'No questions';
         let cls = 'muted';
         if (hasQuiz && isValid) {
-            text = 'Đề hợp lệ';
+            text = 'Valid questions';
             cls = 'success';
         } else if (hasQuiz && !isValid) {
-            text = 'Đề không hợp lệ';
+            text = 'Invalid questions';
             cls = 'danger';
         }
         this.setStatusText(text, cls);
@@ -231,7 +231,7 @@ export class QuizSetupOverlay {
             if (!this.status?.isValid) {
                 this.toggleInput.checked = false;
                 this.showErrors([
-                    { questionIndex: -1, reason: 'Bạn chưa có đề cho category này. Vui lòng thêm đề trước.' },
+                    { questionIndex: -1, reason: 'You don\'t have valid questions for this category. Please add questions first.' },
                 ]);
                 return;
             }
@@ -248,14 +248,14 @@ export class QuizSetupOverlay {
     async handleParse() {
         const text = this.normalizeText(this.textarea.value);
         if (!text) {
-            this.showErrors([{ questionIndex: -1, reason: 'Nội dung trống' }]);
+            this.showErrors([{ questionIndex: -1, reason: 'Empty content' }]);
             return;
         }
         this.setLoading(true);
-        this.setProgress(['1) Gửi AI chuẩn hoá (LM Studio)...'], 'muted');
+        this.setProgress(['1) Sending to AI...'], 'muted');
         try {
             const res = await userQuizApi.parseText(this.category, text);
-            this.setProgress(['2) AI trả về, đang kiểm tra cấu trúc...'], 'muted');
+            this.setProgress(['2) AI response, checking structure...'], 'muted');
             this.previewQuestions = res.questions || [];
             this.previewErrors = res.errors || [];
             if (res.notice) {
@@ -263,19 +263,19 @@ export class QuizSetupOverlay {
             }
             this.renderPreview();
             if (this.previewErrors.length === 0 && this.previewQuestions.length > 0) {
-                this.showErrors([{ questionIndex: -1, reason: 'Parse thành công. Bạn hãy lưu đề.' }], 'success');
+                this.showErrors([{ questionIndex: -1, reason: 'Parse successfully. Please save the questions.' }], 'success');
                 this.setProgress([
-                    '1) Gửi AI chuẩn hoá: ✔',
-                    '2) Kiểm tra cấu trúc: ✔',
-                    '3) Hiển thị preview: ✔'
+                    '1) Sending to AI: ✔',
+                    '2) Checking structure: ✔',
+                    '3) Displaying preview: ✔'
                 ], 'success');
             } else {
                 this.showErrors(this.previewErrors);
-                this.setProgress(['Quá trình dừng do lỗi kiểm tra cấu trúc.'], 'danger');
+                this.setProgress(['Process stopped due to structure check errors.'], 'danger');
             }
         } catch (err) {
             this.showErrors([{ questionIndex: -1, reason: err.message }]);
-            this.setProgress(['Lỗi AI/Server: ' + (err.message || 'Không xác định')], 'danger');
+            this.setProgress(['AI/Server error: ' + (err.message || 'Unknown error')], 'danger');
         }
         this.setLoading(false);
     }
@@ -283,27 +283,27 @@ export class QuizSetupOverlay {
     async handleDocx(file) {
         if (!file) return;
         this.setLoading(true);
-        this.setProgress(['1) Đọc file DOCX...', '2) Gửi AI chuẩn hoá (LM Studio)...'], 'muted');
+        this.setProgress(['1) Reading DOCX file...', '2) Sending to AI...'], 'muted');
         try {
             const res = await userQuizApi.uploadDocx(this.category, file);
-            this.setProgress(['3) AI trả về, đang kiểm tra cấu trúc...'], 'muted');
+            this.setProgress(['3) AI response, checking structure...'], 'muted');
             this.previewQuestions = res.questions || [];
             this.previewErrors = res.errors || [];
             this.renderPreview();
             if (this.previewErrors.length === 0 && this.previewQuestions.length > 0) {
-                this.showErrors([{ questionIndex: -1, reason: 'Đã đọc file. Bấm Lưu đề.' }], 'success');
+                this.showErrors([{ questionIndex: -1, reason: 'File read successfully. Please save the questions.' }], 'success');
                 this.setProgress([
-                    '1) Đọc file DOCX: ✔',
-                    '2) Gửi AI chuẩn hoá: ✔',
-                    '3) Kiểm tra cấu trúc & hiển thị preview: ✔'
+                    '1) Reading DOCX: ✔',
+                    '2) Sending to AI: ✔',
+                    '3) Checking structure & displaying preview: ✔'
                 ], 'success');
             } else {
                 this.showErrors(this.previewErrors);
-                this.setProgress(['Quá trình dừng do lỗi kiểm tra cấu trúc.'], 'danger');
+                this.setProgress(['Process stopped due to structure check errors.'], 'danger');
             }
         } catch (err) {
             this.showErrors([{ questionIndex: -1, reason: err.message }]);
-            this.setProgress(['Lỗi AI/Server: ' + (err.message || 'Không xác định')], 'danger');
+            this.setProgress(['AI/Server error: ' + (err.message || 'Unknown error')], 'danger');
         } finally {
             this.docInput.value = '';
             this.updatePlayButtonState();
@@ -313,7 +313,7 @@ export class QuizSetupOverlay {
 
     async handleSave() {
         if (!this.previewQuestions.length || this.previewErrors.length) {
-            this.showErrors([{ questionIndex: -1, reason: 'Cần parse hợp lệ trước khi lưu' }]);
+            this.showErrors([{ questionIndex: -1, reason: 'Need to parse valid questions before saving' }]);
             return;
         }
         try {
@@ -327,7 +327,7 @@ export class QuizSetupOverlay {
                 await userQuizApi.setQuizSource(this.category, 'USER');
                 globalQuizPrefs.setQuizSource('USER'); // ensure MainMenu uses your quiz on next start
                 this.showErrors(
-                    [{ questionIndex: -1, reason: 'Đã lưu & bật đề của bạn (đề cũ đã được thay thế)' }],
+                    [{ questionIndex: -1, reason: 'Saved and enabled your quiz (old questions replaced)' }],
                     'success'
                 );
             } else {
@@ -346,7 +346,7 @@ export class QuizSetupOverlay {
     async handleStart() {
         if (this.playButton.disabled) return;
         if (this.selectedQuizSource === 'USER' && !this.status?.isValid) {
-            this.showErrors([{ questionIndex: -1, reason: 'Không thể chơi với đề cá nhân chưa hợp lệ' }]);
+            this.showErrors([{ questionIndex: -1, reason: 'Cannot play with invalid user quiz' }]);
             return;
         }
 
@@ -370,7 +370,7 @@ export class QuizSetupOverlay {
         if (!this.previewBox) return;
         this.previewBox.innerHTML = '';
         if (!this.previewQuestions.length) {
-            this.previewBox.innerHTML = '<div class="muted-text">Chưa có preview</div>';
+            this.previewBox.innerHTML = '<div class="muted-text">No preview yet </div>';
             return;
         }
         const list = document.createElement('div');
@@ -384,7 +384,7 @@ export class QuizSetupOverlay {
 
             const title = document.createElement('div');
             title.className = 'q-title';
-            title.textContent = `Câu ${idx + 1}`;
+            title.textContent = `Question ${idx + 1}`;
             item.appendChild(title);
 
             const sanitizedQuestion = this.cleanQuestionText(q.question || '');
@@ -417,21 +417,21 @@ export class QuizSetupOverlay {
                         const b = rowEl.querySelector('.badge');
                         const r = rowEl.querySelector('input[type=radio]');
                         b.className = r.checked ? 'badge success' : 'badge muted';
-                        b.textContent = r.checked ? 'Đúng' : 'Sai';
+                        b.textContent = r.checked ? 'Correct' : 'Wrong';
                     });
                 });
 
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.value = sanitizedText;
-                input.placeholder = `Đáp án ${aIdx + 1}`;
+                input.placeholder = `Answer ${aIdx + 1}`;
                 input.addEventListener('input', () => {
                     this.previewQuestions[idx].answers[aIdx].text = input.value;
                 });
 
                 const badge = document.createElement('span');
                 badge.className = radio.checked ? 'badge success' : 'badge muted';
-                badge.textContent = radio.checked ? 'Đúng' : 'Sai';
+                badge.textContent = radio.checked ? 'Correct' : 'Wrong';
 
                 row.appendChild(radio);
                 row.appendChild(badge);
@@ -471,8 +471,8 @@ export class QuizSetupOverlay {
         if (this.warningBox) {
             this.warningBox.innerHTML = `
                 <div class="warning-box">
-                    AI có thể trả lời sai. Vui lòng kiểm tra lại câu hỏi/đáp án trước khi bấm Lưu.
-                    ${isLoading ? '<div class="loading-pill"><span class="loading-dot"></span> Đang xử lý...</div>' : ''}
+                    AI can make mistakes. Please check the questions and answers before saving.
+                    ${isLoading ? '<div class="loading-pill"><span class="loading-dot"></span> Processing...</div>' : ''}
                 </div>
             `;
         }
@@ -514,7 +514,7 @@ export class QuizSetupOverlay {
                     await userQuizApi.setQuizSource(this.category, 'USER');
                 } catch (e) {
                     Logger.warn('QuizOverlay', 'Failed to set USER source', e);
-                    this.showErrors([{ questionIndex: -1, reason: e.message || 'Không chuyển được sang đề của bạn' }]);
+                    this.showErrors([{ questionIndex: -1, reason: e.message || 'Can not switch to user quiz' }]);
                 }
             }
         } else {
@@ -572,7 +572,7 @@ export class QuizSetupOverlay {
             <div class="quiz-overlay__header">
                 <div>
                     <div class="eyebrow">Quiz Mode</div>
-                    <h2>Chọn category & đề</h2>
+                    <h2>Choose category & quiz</h2>
                     <div data-role="status" class="status-pill muted">--</div>
                 </div>
                 <button class="ghost-btn" data-action="close">✕</button>
@@ -587,34 +587,34 @@ export class QuizSetupOverlay {
                         <label class="toggle">
                             <input type="checkbox" id="use-my-quiz" />
                             <span class="toggle__slider"></span>
-                            <span>Đề của bạn – <span data-role="category-label">Math</span></span>
+                            <span>Custom your quiz – <span data-role="category-label">Math</span></span>
                         </label>
                     </div>
                 </div>
                 <div class="quiz-overlay__section grid">
                     <div>
                         <div class="field">
-                            <label>Nội dung đề (paste)</label>
+                            <label>Paste your quiz</label>
                             <textarea id="quiz-raw-text" rows="8" placeholder=""></textarea>
                         </div>
                         <div class="actions-inline">
                             <button class="primary" data-action="parse">Parse & Preview</button>
                             <label class="secondary file-label">
-                                Tải DOCX
+                                Upload DOCX
                                 <input type="file" id="quiz-docx" accept=".docx" hidden />
                             </label>
-                            <button class="ghost" data-action="save">Lưu đề</button>
+                            <button class="ghost" data-action="save">Save quiz</button>
                         </div>
                         <div class="upload-hint">
-                            <strong>Hướng dẫn nhanh:</strong>
+                            <strong>Quick guide:</strong>
                             <ul>
-                                <li>Chọn category phù hợp.</li>
-                                <li>Bật <em>Đề của bạn</em> nếu muốn dùng đề cá nhân đã lưu.</li>
-                                <li>Định dạng câu hỏi: câu hỏi ? | đáp án 1 [ĐÚNG]| đáp án 2 | đáp án 3. đây là định dạng câu hỏi trắc nghiệm </li>
-                                <li>Bạn có thể nhờ AI chuẩn bị đề dựa theo định dạng trên.</li>
-                                <li>Hoặc chỉ cần dán nội dung hoặc chọn file DOCX có đánh dấu [ĐÚNG] nếu có.</li>
-                                <li>Nhấn <em>Parse & Preview</em> để hệ thống chuẩn hoá.</li>
-                                <li>Kiểm tra & chọn đáp án đúng trong preview trước khi <em>Lưu đề</em>.</li>
+                                <li>Choose category.</li>
+                                <li>Enable <em>Custom your quiz</em> if you want to use your own quiz.</li>
+                                <li>Question format: question ? | answer 1 [TRUE]| answer 2 | answer 3. This is the format for multiple-choice questions.</li>
+                                <li>You can ask AI to prepare a quiz based on the format above.</li>
+                                <li>Or simply paste the content or select a DOCX file with [TRUE] marked if available.</li>
+                                <li>Press <em>Parse & Preview</em> to let the system standardize.</li>
+                                <li>Check & select the correct answer in the preview before <em>Save quiz</em>.</li>
                             </ul>
                         </div>
                         <div data-role="warn"></div>
@@ -628,9 +628,9 @@ export class QuizSetupOverlay {
                 </div>
             </div>
             <div class="quiz-overlay__footer">
-                <div class="hint">Nguồn đề hiện tại: <strong data-role="source-label">${this.selectedQuizSource}</strong>. Category ưu tiên cao hơn nguồn đề.</div>
+                <div class="hint">Current quiz source: <strong data-role="source-label">${this.selectedQuizSource}</strong>. Category priority is higher than the quiz source.</div>
                 <div class="footer-actions">
-                    <button class="ghost" data-action="close">Huỷ</button>
+                    <button class="ghost" data-action="close">Cancel</button>
                     <button class="primary" data-action="start">Play</button>
                 </div>
             </div>

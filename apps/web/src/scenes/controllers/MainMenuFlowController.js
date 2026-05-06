@@ -110,13 +110,13 @@ export class MainMenuFlowController {
                     ]);
                 const hasValid = (mathStatus && mathStatus.isValid) || (engStatus && engStatus.isValid);
                 if (!hasValid) {
-                    this.showNetworkErrorModal('Bạn chưa có đề hợp lệ cho Math hoặc English. Tiếp tục dùng Đề hệ thống.');
+                    this.showNetworkErrorModal('You don\'t have valid questions for Math or English. Using system questions.');
                     this.refreshSourceChips();
                     return;
                 }
                 s.userQuizStatus = { math: mathStatus, english: engStatus };
             } catch (e) {
-                this.showNetworkErrorModal('Không kiểm tra được đề của bạn. Tiếp tục dùng Đề hệ thống.');
+                this.showNetworkErrorModal('Cannot check your questions. Using system questions.');
                 this.refreshSourceChips();
                 return;
             }
@@ -159,7 +159,7 @@ export class MainMenuFlowController {
         const s = this.scene;
         const token = localStorage.getItem('token');
         if (!token) {
-            this.showNetworkErrorModal('Vui lòng đăng nhập để upload đề của bạn.');
+            this.showNetworkErrorModal('Please login to upload your questions.');
             return;
         }
         const mountNode = document.getElementById('game-container') || document.body;
@@ -267,11 +267,11 @@ export class MainMenuFlowController {
                         const status = await userQuizApi.getStatus(category);
                         if (!status?.isValid) {
                             finalSource = 'SYSTEM';
-                            this.showNetworkErrorModal('Bạn chưa có đề cho category này. Tạm dùng đề hệ thống.');
+                            this.showNetworkErrorModal('You don\'t have valid questions for this category. Using system questions.');
                         }
                     } catch (e) {
                         finalSource = 'SYSTEM';
-                        this.showNetworkErrorModal('Không kiểm tra được đề của bạn. Tạm dùng đề hệ thống.');
+                        this.showNetworkErrorModal('Cannot check your questions. Using system questions.');
                     }
                 }
             }
