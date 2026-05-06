@@ -76,19 +76,8 @@ async function callLlmChat(messages, options = {}) {
 
         // Keep JSON-shape control in prompt text for maximum compatibility across v1 models.
         if (responseFormat?.type === 'json_schema') {
-            let schemaHint = '';
-            if (responseFormat.json_schema?.schema) {
-                schemaHint = ` Ensure the JSON exactly matches this schema: ${JSON.stringify(responseFormat.json_schema.schema)}`;
-            }
             // Gemini may return markdown fences; force plain JSON response in prompt.
-            prompt = `${basePrompt}\n\nReturn ONLY valid JSON. Do not include markdown fences or explanation text.${schemaHint}`;
-
-            if (GEMINI_API_VERSION.includes('v1beta')) {
-                generationConfig.responseMimeType = 'application/json';
-                if (responseFormat.json_schema?.schema) {
-                    generationConfig.responseSchema = responseFormat.json_schema.schema;
-                }
-            }
+            prompt = `${basePrompt}\n\nReturn ONLY valid JSON. Do not include markdown fences or explanation text.`;
         }
 
     if (typeof maxTokens === 'number' && Number.isFinite(maxTokens)) {
