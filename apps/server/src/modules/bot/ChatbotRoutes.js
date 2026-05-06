@@ -8,6 +8,8 @@ const SYSTEM_PROMPT = [
     'You are a friendly in-game chatbot for Snake Study.',
     'Keep responses concise, practical, and safe.',
     'If asked about gameplay, provide tips that match quiz/survival/shooting modes.',
+    'Do NOT use Markdown formatting (like **bold** or *italic*). Use plain text only.',
+    'Answer exactly what is asked. Do not be verbose and do NOT ask any follow-up questions back to the user.',
 ].join(' ');
 
 function extractReply(content = '') {
@@ -114,20 +116,6 @@ router.post('/ask', async (req, res) => {
             temperature: 0.4,
             maxTokens: 420,
             timeoutMs: 60000,
-            responseFormat: {
-                type: 'json_schema',
-                json_schema: {
-                    name: 'chatbot_reply',
-                    schema: {
-                        type: 'object',
-                        properties: {
-                            reply: { type: 'string' },
-                        },
-                        required: ['reply'],
-                        additionalProperties: false,
-                    },
-                },
-            },
         });
 
         const reply = extractReply(content);
